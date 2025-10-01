@@ -1,51 +1,1001 @@
 sku,nome,categoria,estoque_atual,estoque_minimo
-SKU-1001,"Garrafa Térmica Inox 1L","Utilidades Domésticas",120,25
-SKU-1002,"Kit Ferramentas 32 Peças","Ferramentas",80,15
-SKU-1003,"Parafuso Aço Inox M8 x 30mm","Fixadores",500,75
-SKU-1004,"Porca Sextavada M8 Zincada","Fixadores",420,60
-SKU-1005,"Chave Inglesa Ajustável 10""","Ferramentas",90,20
-SKU-1006,"Broca Aço Rápido 10mm","Ferramentas",200,40
-SKU-1007,"Luva Nitrílica Reforçada G","EPIs",300,80
-SKU-1008,"Máscara Respiratória PFF2","EPIs",450,100
-SKU-1009,"Fita Isolante PVC 19mm x 20m","Elétrica",350,70
-SKU-1010,"Cabo Flexível 2,5mm Vermelho 100m","Elétrica",180,30
-SKU-1011,"Relé Térmico Trifásico 25A","Automação Industrial",60,15
-SKU-1012,"Contato Auxiliar para Contatora","Automação Industrial",150,30
-SKU-1013,"Sensor Indutivo M12 5mm NPN","Automação Industrial",110,20
-SKU-1014,"Esteira Modular Plástica 2""","Movimentação",75,15
-SKU-1015,"Motorredutor 0,5CV 220V","Movimentação",40,8
-SKU-1016,"Correia Sincronizada HTD 8M 640mm","Movimentação",95,20
-SKU-1017,"Óleo Hidráulico ISO 68 20L","Manutenção",55,10
-SKU-1018,"Graxa Multipropósito 2kg","Manutenção",130,25
-SKU-1019,"Limpa Contato Spray 300ml","Manutenção",210,40
-SKU-1020,"Solução Anticorrosiva 5L","Manutenção",70,12
-SKU-1021,"Placa Controladora PLC Compacto","Automação Industrial",45,10
-SKU-1022,"Inversor de Frequência 2CV 220V","Automação Industrial",35,8
-SKU-1023,"Soft Starter 5CV","Automação Industrial",22,5
-SKU-1024,"Chave Seccionadora 32A","Elétrica",95,20
-SKU-1025,"Disjuntor Tripolar 32A","Elétrica",140,30
-SKU-1026,"Contatora Tripolar 18A 220V","Automação Industrial",115,25
-SKU-1027,"CLP Modular Expansão 8 Entradas","Automação Industrial",50,12
-SKU-1028,"Bomba D'água Centrífuga 1CV","Hidráulica",48,10
-SKU-1029,"Válvula Solenoide 1"" Latão","Hidráulica",85,18
-SKU-1030,"Mangueira Pneumática PU 8mm x 100m","Pneumática",160,35
-SKU-1031,"Conector Rápido Pneumático 8mm","Pneumática",240,50
-SKU-1032,"Cilindro Pneumático 50mm x 100mm","Pneumática",70,15
-SKU-1033,"Compressor de Ar 20 pés 220V","Pneumática",18,5
-SKU-1034,"Transmissor de Pressão 0-10bar","Instrumentação",42,10
-SKU-1035,"Termopar Tipo K 1m","Instrumentação",220,45
-SKU-1036,"Controlador de Temperatura PID","Instrumentação",65,12
-SKU-1037,"Data Logger 4 Canais","Instrumentação",32,8
-SKU-1038,"Barra de Alumínio 1"" x 6m","Matéria-Prima",95,20
-SKU-1039,"Chapa Aço Carbono 2mm x 3m","Matéria-Prima",75,15
-SKU-1040,"Perfil U Laminado 100mm x 6m","Matéria-Prima",60,12
-SKU-1041,"Fio de Cobre Esmaltado 18 AWG","Matéria-Prima",210,45
-SKU-1042,"Tinta Epóxi Cinza 18L","Acabamento",55,10
-SKU-1043,"Solvente Desengraxante 5L","Acabamento",85,18
-SKU-1044,"Adesivo Epóxi Estrutural 3kg","Acabamento",65,14
-SKU-1045,"Resina Poliéster 5kg","Acabamento",90,20
-SKU-1046,"Rolo de Pintura Antigotas 23cm","Acabamento",180,35
-SKU-1047,"Pincel Cerda Sintética 2""","Acabamento",260,50
-SKU-1048,"Eletrodo Revestido 6013 3,25mm","Soldagem",320,65
-SKU-1049,"Arame MIG ER70S-6 15kg","Soldagem",140,30
-SKU-1050,"Maçarico de Corte Oxicorte","Soldagem",28,6
+AUT-0001,Filtro de Combustível Original Chevrolet Código 623,Autopeças Industriais,297,18
+AUT-0002,Correia Dentada Linha Leve Iveco Código 101,Autopeças Industriais,105,35
+AUT-0003,Amortecedor Agrícola Mercedes Código 205,Autopeças Industriais,162,54
+AUT-0004,Filtro de Combustível Linha Leve Iveco Código 623,Autopeças Industriais,380,17
+AUT-0005,Pastilha de Freio Utilitário Mercedes Código 842,Autopeças Industriais,295,37
+AUT-0006,Correia Dentada Linha Pesada Fiat Código 411,Autopeças Industriais,96,32
+AUT-0007,Filtro de Óleo Linha Pesada Mercedes Código 735,Autopeças Industriais,126,42
+AUT-0008,Filtro de Óleo Industrial Fiat Código 735,Autopeças Industriais,169,56
+AUT-0009,Filtro de Ar Reforçado Iveco Código 411,Autopeças Industriais,292,71
+AUT-0010,Bucha de Suspensão Original Volkswagen Código 518,Autopeças Industriais,80,26
+AUT-0011,Filtro de Ar Linha Pesada Ford Código 411,Autopeças Industriais,228,42
+AUT-0012,Filtro de Óleo Original Fiat Código 518,Autopeças Industriais,445,54
+AUT-0013,Filtro de Ar Original Ford Código 623,Autopeças Industriais,282,63
+AUT-0014,Filtro de Óleo Agrícola Volkswagen Código 735,Autopeças Industriais,252,78
+AUT-0015,Pastilha de Freio Reforçado Ford Código 411,Autopeças Industriais,103,34
+AUT-0016,Amortecedor Industrial Volkswagen Código 101,Autopeças Industriais,167,52
+AUT-0017,Pastilha de Freio Industrial Fiat Código 307,Autopeças Industriais,97,32
+AUT-0018,Filtro de Combustível Linha Leve Iveco Código 307,Autopeças Industriais,95,31
+AUT-0019,Pastilha de Freio Linha Pesada Ford Código 623,Autopeças Industriais,400,62
+AUT-0020,Correia Dentada Agrícola Chevrolet Código 307,Autopeças Industriais,267,65
+AUT-0021,Bucha de Suspensão Reforçado Scania Código 205,Autopeças Industriais,95,22
+AUT-0022,Correia Dentada Original Volvo Código 307,Autopeças Industriais,143,35
+AUT-0023,Filtro de Óleo Industrial Scania Código 842,Autopeças Industriais,439,83
+AUT-0024,Filtro de Ar Original Scania Código 735,Autopeças Industriais,226,46
+AUT-0025,Filtro de Óleo Linha Pesada Volkswagen Código 205,Autopeças Industriais,101,33
+AUT-0026,Bucha de Suspensão Industrial Scania Código 735,Autopeças Industriais,200,66
+AUT-0027,Rolamento Industrial Mercedes Código 411,Autopeças Industriais,125,41
+AUT-0028,Filtro de Ar Original Fiat Código 411,Autopeças Industriais,420,55
+AUT-0029,Bucha de Suspensão Linha Pesada Volvo Código 307,Autopeças Industriais,364,77
+AUT-0030,Amortecedor Alta Performance Ford Código 623,Autopeças Industriais,241,75
+AUT-0031,Amortecedor Linha Leve Fiat Código 101,Autopeças Industriais,324,81
+AUT-0032,Filtro de Óleo Industrial Chevrolet Código 205,Autopeças Industriais,114,38
+AUT-0033,Pastilha de Freio Alta Performance Volkswagen Código 735,Autopeças Industriais,431,85
+AUT-0034,Pastilha de Freio Agrícola Chevrolet Código 623,Autopeças Industriais,132,44
+AUT-0035,Filtro de Ar Reforçado Ford Código 411,Autopeças Industriais,365,27
+AUT-0036,Amortecedor Industrial Iveco Código 307,Autopeças Industriais,273,49
+AUT-0037,Amortecedor Linha Pesada Scania Código 518,Autopeças Industriais,185,61
+AUT-0038,Filtro de Ar Utilitário Ford Código 101,Autopeças Industriais,236,57
+AUT-0039,Correia Dentada Utilitário Volvo Código 307,Autopeças Industriais,259,47
+AUT-0040,Filtro de Óleo Reforçado Ford Código 101,Autopeças Industriais,268,25
+AUT-0041,Amortecedor Linha Pesada Chevrolet Código 623,Autopeças Industriais,312,27
+AUT-0042,Pastilha de Freio Utilitário Volkswagen Código 205,Autopeças Industriais,178,50
+AUT-0043,Filtro de Ar Agrícola Scania Código 205,Autopeças Industriais,118,34
+AUT-0044,Bucha de Suspensão Agrícola Scania Código 842,Autopeças Industriais,249,83
+AUT-0045,Filtro de Ar Alta Performance Iveco Código 101,Autopeças Industriais,425,23
+AUT-0046,Amortecedor Linha Leve Volvo Código 623,Autopeças Industriais,368,57
+AUT-0047,Amortecedor Original Chevrolet Código 518,Autopeças Industriais,261,19
+AUT-0048,Amortecedor Linha Pesada Ford Código 623,Autopeças Industriais,101,33
+AUT-0049,Filtro de Óleo Linha Leve Ford Código 307,Autopeças Industriais,82,27
+AUT-0050,Filtro de Combustível Reforçado Fiat Código 411,Autopeças Industriais,392,75
+AUT-0051,Filtro de Óleo Linha Pesada Volkswagen Código 735,Autopeças Industriais,278,87
+AUT-0052,Amortecedor Alta Performance Volkswagen Código 735,Autopeças Industriais,400,57
+AUT-0053,Filtro de Ar Linha Leve Scania Código 518,Autopeças Industriais,429,53
+AUT-0054,Rolamento Linha Leve Volvo Código 205,Autopeças Industriais,438,72
+AUT-0055,Filtro de Ar Linha Leve Fiat Código 842,Autopeças Industriais,301,56
+AUT-0056,Pastilha de Freio Agrícola Fiat Código 623,Autopeças Industriais,362,15
+AUT-0057,Filtro de Óleo Agrícola Chevrolet Código 518,Autopeças Industriais,327,32
+AUT-0058,Amortecedor Linha Leve Fiat Código 735,Autopeças Industriais,316,82
+AUT-0059,Filtro de Ar Reforçado Fiat Código 101,Autopeças Industriais,240,80
+AUT-0060,Filtro de Combustível Original Ford Código 735,Autopeças Industriais,106,35
+AUT-0061,Filtro de Ar Reforçado Volvo Código 205,Autopeças Industriais,210,15
+AUT-0062,Filtro de Óleo Utilitário Mercedes Código 735,Autopeças Industriais,156,52
+AUT-0063,Filtro de Óleo Linha Leve Fiat Código 518,Autopeças Industriais,318,51
+AUT-0064,Pastilha de Freio Alta Performance Volkswagen Código 518,Autopeças Industriais,368,28
+AUT-0065,Amortecedor Alta Performance Volvo Código 101,Autopeças Industriais,185,61
+AUT-0066,Filtro de Ar Linha Leve Volkswagen Código 411,Autopeças Industriais,147,49
+AUT-0067,Pastilha de Freio Industrial Mercedes Código 623,Autopeças Industriais,159,27
+AUT-0068,Amortecedor Agrícola Chevrolet Código 735,Autopeças Industriais,122,39
+AUT-0069,Filtro de Combustível Original Ford Código 411,Autopeças Industriais,384,67
+AUT-0070,Filtro de Combustível Original Iveco Código 307,Autopeças Industriais,224,34
+AUT-0071,Filtro de Óleo Alta Performance Scania Código 307,Autopeças Industriais,125,41
+AUT-0072,Pastilha de Freio Utilitário Scania Código 411,Autopeças Industriais,341,57
+AUT-0073,Filtro de Óleo Linha Leve Iveco Código 518,Autopeças Industriais,396,52
+AUT-0074,Filtro de Combustível Original Chevrolet Código 735,Autopeças Industriais,352,31
+AUT-0075,Filtro de Ar Linha Pesada Scania Código 205,Autopeças Industriais,135,18
+AUT-0076,Rolamento Original Volvo Código 518,Autopeças Industriais,426,63
+AUT-0077,Correia Dentada Utilitário Iveco Código 518,Autopeças Industriais,387,30
+AUT-0078,Filtro de Combustível Linha Pesada Scania Código 842,Autopeças Industriais,178,23
+AUT-0079,Filtro de Óleo Original Scania Código 518,Autopeças Industriais,94,31
+AUT-0080,Filtro de Combustível Utilitário Fiat Código 101,Autopeças Industriais,135,21
+AUT-0081,Amortecedor Linha Pesada Fiat Código 101,Autopeças Industriais,301,66
+AUT-0082,Filtro de Óleo Agrícola Volvo Código 518,Autopeças Industriais,420,28
+AUT-0083,Filtro de Combustível Alta Performance Ford Código 518,Autopeças Industriais,244,48
+AUT-0084,Pastilha de Freio Industrial Volvo Código 205,Autopeças Industriais,442,77
+AUT-0085,Filtro de Ar Agrícola Scania Código 623,Autopeças Industriais,151,27
+AUT-0086,Bucha de Suspensão Reforçado Volvo Código 307,Autopeças Industriais,306,80
+AUT-0087,Filtro de Óleo Utilitário Iveco Código 307,Autopeças Industriais,421,46
+AUT-0088,Rolamento Industrial Mercedes Código 101,Autopeças Industriais,103,34
+AUT-0089,Amortecedor Original Scania Código 205,Autopeças Industriais,420,30
+AUT-0090,Pastilha de Freio Linha Pesada Iveco Código 205,Autopeças Industriais,373,59
+AUT-0091,Filtro de Combustível Alta Performance Volkswagen Código 411,Autopeças Industriais,356,83
+AUT-0092,Bucha de Suspensão Original Ford Código 735,Autopeças Industriais,418,51
+AUT-0093,Filtro de Óleo Reforçado Mercedes Código 518,Autopeças Industriais,351,32
+AUT-0094,Rolamento Industrial Mercedes Código 307,Autopeças Industriais,194,64
+AUT-0095,Filtro de Ar Linha Leve Volkswagen Código 307,Autopeças Industriais,265,48
+AUT-0096,Rolamento Agrícola Iveco Código 623,Autopeças Industriais,257,85
+AUT-0097,Filtro de Ar Alta Performance Iveco Código 735,Autopeças Industriais,129,17
+AUT-0098,Filtro de Óleo Utilitário Iveco Código 842,Autopeças Industriais,134,40
+AUT-0099,Filtro de Ar Linha Pesada Ford Código 735,Autopeças Industriais,164,20
+AUT-0100,Bucha de Suspensão Industrial Ford Código 623,Autopeças Industriais,149,49
+AUT-0101,Pastilha de Freio Linha Leve Fiat Código 518,Autopeças Industriais,259,38
+AUT-0102,Amortecedor Reforçado Scania Código 307,Autopeças Industriais,181,60
+AUT-0103,Correia Dentada Linha Leve Ford Código 518,Autopeças Industriais,130,16
+AUT-0104,Correia Dentada Agrícola Mercedes Código 411,Autopeças Industriais,390,87
+AUT-0105,Filtro de Óleo Agrícola Volkswagen Código 623,Autopeças Industriais,348,16
+AUT-0106,Amortecedor Industrial Volkswagen Código 411,Autopeças Industriais,413,79
+AUT-0107,Amortecedor Utilitário Mercedes Código 307,Autopeças Industriais,250,68
+AUT-0108,Filtro de Ar Linha Pesada Mercedes Código 411,Autopeças Industriais,141,35
+AUT-0109,Bucha de Suspensão Reforçado Volkswagen Código 101,Autopeças Industriais,355,29
+AUT-0110,Rolamento Alta Performance Volkswagen Código 518,Autopeças Industriais,94,19
+AUT-0111,Filtro de Combustível Linha Pesada Iveco Código 411,Autopeças Industriais,349,42
+AUT-0112,Pastilha de Freio Linha Leve Fiat Código 623,Autopeças Industriais,114,35
+AUT-0113,Filtro de Óleo Original Ford Código 518,Autopeças Industriais,94,31
+AUT-0114,Filtro de Óleo Linha Leve Volvo Código 735,Autopeças Industriais,242,21
+AUT-0115,Amortecedor Industrial Chevrolet Código 411,Autopeças Industriais,186,20
+AUT-0116,Correia Dentada Agrícola Volkswagen Código 735,Autopeças Industriais,373,88
+AUT-0117,Filtro de Ar Utilitário Volvo Código 411,Autopeças Industriais,214,71
+AUT-0118,Filtro de Ar Utilitário Fiat Código 842,Autopeças Industriais,130,32
+AUT-0119,Filtro de Combustível Industrial Volkswagen Código 518,Autopeças Industriais,443,21
+AUT-0120,Bucha de Suspensão Linha Pesada Volkswagen Código 623,Autopeças Industriais,80,26
+AUT-0121,Bucha de Suspensão Original Mercedes Código 411,Autopeças Industriais,252,66
+AUT-0122,Pastilha de Freio Linha Leve Ford Código 411,Autopeças Industriais,280,35
+AUT-0123,Rolamento Alta Performance Volvo Código 307,Autopeças Industriais,287,33
+AUT-0124,Pastilha de Freio Utilitário Scania Código 101,Autopeças Industriais,166,55
+AUT-0125,Pastilha de Freio Utilitário Chevrolet Código 735,Autopeças Industriais,301,90
+AUT-0126,Rolamento Industrial Fiat Código 411,Autopeças Industriais,140,46
+AUT-0127,Bucha de Suspensão Reforçado Mercedes Código 518,Autopeças Industriais,172,57
+AUT-0128,Filtro de Ar Reforçado Fiat Código 842,Autopeças Industriais,372,88
+AUT-0129,Filtro de Combustível Industrial Iveco Código 411,Autopeças Industriais,254,82
+AUT-0130,Pastilha de Freio Industrial Scania Código 205,Autopeças Industriais,147,46
+AUT-0131,Pastilha de Freio Linha Leve Fiat Código 735,Autopeças Industriais,193,64
+AUT-0132,Pastilha de Freio Reforçado Scania Código 205,Autopeças Industriais,217,72
+AUT-0133,Filtro de Combustível Agrícola Volvo Código 842,Autopeças Industriais,237,74
+AUT-0134,Filtro de Combustível Original Iveco Código 411,Autopeças Industriais,312,63
+AUT-0135,Filtro de Óleo Reforçado Iveco Código 842,Autopeças Industriais,158,39
+AUT-0136,Correia Dentada Linha Pesada Fiat Código 518,Autopeças Industriais,303,24
+AUT-0137,Filtro de Ar Reforçado Fiat Código 205,Autopeças Industriais,203,65
+AUT-0138,Correia Dentada Utilitário Volvo Código 623,Autopeças Industriais,322,35
+AUT-0139,Filtro de Ar Industrial Scania Código 205,Autopeças Industriais,420,18
+AUT-0140,Filtro de Combustível Reforçado Volkswagen Código 101,Autopeças Industriais,100,28
+AUT-0141,Bucha de Suspensão Original Scania Código 205,Autopeças Industriais,402,58
+AUT-0142,Bucha de Suspensão Linha Leve Volvo Código 842,Autopeças Industriais,217,47
+AUT-0143,Filtro de Óleo Industrial Chevrolet Código 411,Autopeças Industriais,410,28
+AUT-0144,Bucha de Suspensão Utilitário Volvo Código 518,Autopeças Industriais,292,66
+AUT-0145,Amortecedor Reforçado Scania Código 205,Autopeças Industriais,437,35
+AUT-0146,Rolamento Original Volvo Código 411,Autopeças Industriais,229,56
+AUT-0147,Filtro de Óleo Reforçado Volkswagen Código 307,Autopeças Industriais,445,31
+AUT-0148,Filtro de Ar Original Ford Código 842,Autopeças Industriais,360,19
+AUT-0149,Pastilha de Freio Original Mercedes Código 623,Autopeças Industriais,338,17
+AUT-0150,Filtro de Combustível Industrial Iveco Código 101,Autopeças Industriais,202,19
+AUT-0151,Pastilha de Freio Original Volkswagen Código 842,Autopeças Industriais,369,39
+AUT-0152,Filtro de Óleo Alta Performance Ford Código 735,Autopeças Industriais,397,37
+AUT-0153,Amortecedor Industrial Chevrolet Código 842,Autopeças Industriais,115,32
+AUT-0154,Amortecedor Original Volvo Código 623,Autopeças Industriais,81,27
+AUT-0155,Filtro de Ar Linha Pesada Ford Código 205,Autopeças Industriais,318,40
+AUT-0156,Correia Dentada Linha Pesada Chevrolet Código 307,Autopeças Industriais,152,50
+AUT-0157,Pastilha de Freio Linha Leve Iveco Código 205,Autopeças Industriais,257,18
+AUT-0158,Bucha de Suspensão Agrícola Iveco Código 101,Autopeças Industriais,285,78
+AUT-0159,Pastilha de Freio Reforçado Chevrolet Código 101,Autopeças Industriais,413,89
+AUT-0160,Filtro de Óleo Industrial Scania Código 623,Autopeças Industriais,226,73
+AUT-0161,Amortecedor Utilitário Scania Código 842,Autopeças Industriais,309,82
+AUT-0162,Filtro de Combustível Original Volvo Código 411,Autopeças Industriais,111,37
+AUT-0163,Amortecedor Agrícola Volvo Código 411,Autopeças Industriais,202,67
+AUT-0164,Bucha de Suspensão Agrícola Volvo Código 411,Autopeças Industriais,226,25
+AUT-0165,Pastilha de Freio Original Volvo Código 735,Autopeças Industriais,361,80
+AUT-0166,Correia Dentada Industrial Ford Código 307,Autopeças Industriais,369,50
+AUT-0167,Bucha de Suspensão Reforçado Scania Código 307,Autopeças Industriais,151,32
+AUT-0168,Bucha de Suspensão Original Mercedes Código 101,Autopeças Industriais,226,17
+AUT-0169,Filtro de Combustível Reforçado Chevrolet Código 518,Autopeças Industriais,263,22
+AUT-0170,Pastilha de Freio Reforçado Fiat Código 307,Autopeças Industriais,102,34
+AUT-0171,Bucha de Suspensão Utilitário Volvo Código 101,Autopeças Industriais,114,38
+AUT-0172,Rolamento Agrícola Volkswagen Código 101,Autopeças Industriais,85,28
+AUT-0173,Bucha de Suspensão Alta Performance Fiat Código 307,Autopeças Industriais,346,60
+AUT-0174,Filtro de Ar Industrial Volkswagen Código 307,Autopeças Industriais,88,29
+AUT-0175,Filtro de Óleo Reforçado Volvo Código 735,Autopeças Industriais,281,31
+AUT-0176,Filtro de Combustível Reforçado Fiat Código 205,Autopeças Industriais,436,25
+AUT-0177,Rolamento Industrial Iveco Código 735,Autopeças Industriais,398,29
+AUT-0178,Bucha de Suspensão Original Scania Código 518,Autopeças Industriais,376,88
+AUT-0179,Rolamento Reforçado Volkswagen Código 307,Autopeças Industriais,389,65
+AUT-0180,Amortecedor Alta Performance Fiat Código 735,Autopeças Industriais,387,28
+AUT-0181,Amortecedor Linha Pesada Volkswagen Código 735,Autopeças Industriais,432,77
+AUT-0182,Bucha de Suspensão Alta Performance Mercedes Código 411,Autopeças Industriais,337,49
+AUT-0183,Amortecedor Alta Performance Ford Código 307,Autopeças Industriais,420,31
+AUT-0184,Filtro de Combustível Original Iveco Código 205,Autopeças Industriais,307,56
+AUT-0185,Pastilha de Freio Alta Performance Volkswagen Código 411,Autopeças Industriais,450,23
+AUT-0186,Filtro de Óleo Reforçado Volkswagen Código 842,Autopeças Industriais,321,77
+AUT-0187,Amortecedor Reforçado Ford Código 623,Autopeças Industriais,247,82
+AUT-0188,Filtro de Combustível Agrícola Chevrolet Código 101,Autopeças Industriais,374,81
+AUT-0189,Correia Dentada Agrícola Iveco Código 842,Autopeças Industriais,132,44
+AUT-0190,Rolamento Reforçado Iveco Código 307,Autopeças Industriais,106,35
+AUT-0191,Amortecedor Reforçado Chevrolet Código 307,Autopeças Industriais,285,72
+AUT-0192,Rolamento Reforçado Volkswagen Código 735,Autopeças Industriais,82,25
+AUT-0193,Correia Dentada Agrícola Scania Código 205,Autopeças Industriais,190,63
+AUT-0194,Rolamento Alta Performance Scania Código 205,Autopeças Industriais,368,54
+AUT-0195,Filtro de Ar Industrial Volkswagen Código 518,Autopeças Industriais,308,51
+AUT-0196,Correia Dentada Linha Leve Chevrolet Código 101,Autopeças Industriais,328,46
+AUT-0197,Rolamento Original Chevrolet Código 411,Autopeças Industriais,276,18
+AUT-0198,Pastilha de Freio Agrícola Mercedes Código 411,Autopeças Industriais,231,50
+AUT-0199,Rolamento Agrícola Scania Código 307,Autopeças Industriais,441,77
+AUT-0200,Filtro de Ar Industrial Volkswagen Código 411,Autopeças Industriais,359,29
+EST-0001,"Fibra Siliconada Densidade 23 Marrom 1,20m x 2,00m",Indústria de Estofados,525,151
+EST-0002,"Couro Sintético Impermeável Cinza 1,80m x 2,40m",Indústria de Estofados,841,108
+EST-0003,"Manta Acrílica Impermeável Marrom 1,40m x 2,10m",Indústria de Estofados,605,77
+EST-0004,"Fibra Siliconada Impermeável Cinza 1,00m x 1,50m",Indústria de Estofados,727,115
+EST-0005,"Tecido Suede Densidade 33 Verde 1,80m x 2,40m",Indústria de Estofados,871,70
+EST-0006,"Tecido Chenille Premium Vinho 1,50m x 2,20m",Indústria de Estofados,524,85
+EST-0007,"Manta Acrílica Densidade 33 Verde 1,40m x 2,10m",Indústria de Estofados,539,103
+EST-0008,"Percal Densidade 45 Marrom 1,80m x 2,40m",Indústria de Estofados,782,44
+EST-0009,"Espuma Impermeável Bege 1,50m x 2,20m",Indústria de Estofados,417,67
+EST-0010,"Percal Densidade 45 Verde 1,50m x 2,20m",Indústria de Estofados,805,113
+EST-0011,"Tecido Jacquard Premium Azul 1,50m x 2,20m",Indústria de Estofados,662,153
+EST-0012,"Tecido Jacquard Antichama Verde 1,00m x 1,50m",Indústria de Estofados,699,50
+EST-0013,"Tecido Chenille Densidade 33 Cinza 1,20m x 2,00m",Indústria de Estofados,868,155
+EST-0014,"Tecido Chenille Premium Azul 1,40m x 2,10m",Indústria de Estofados,615,146
+EST-0015,"Fibra Siliconada Densidade 45 Marrom 1,00m x 1,50m",Indústria de Estofados,801,143
+EST-0016,"Tecido Suede Soft Grafite 1,40m x 2,10m",Indústria de Estofados,539,72
+EST-0017,"Tecido Suede Impermeável Vinho 1,50m x 2,20m",Indústria de Estofados,691,45
+EST-0018,"Manta Acrílica Densidade 33 Cinza 1,20m x 2,00m",Indústria de Estofados,849,97
+EST-0019,"Manta Acrílica Impermeável Vinho 1,80m x 2,40m",Indústria de Estofados,709,107
+EST-0020,"Tecido Jacquard Densidade 45 Verde 1,00m x 1,50m",Indústria de Estofados,722,91
+EST-0021,"Tecido Suede Densidade 33 Bege 1,40m x 2,10m",Indústria de Estofados,535,143
+EST-0022,"Tecido Suede Soft Bege 1,00m x 1,50m",Indústria de Estofados,276,92
+EST-0023,"Tecido Chenille Antichama Azul 1,80m x 2,40m",Indústria de Estofados,335,78
+EST-0024,"Tecido Jacquard Densidade 28 Grafite 1,80m x 2,40m",Indústria de Estofados,261,87
+EST-0025,"Tecido Jacquard Antichama Bege 1,50m x 2,20m",Indústria de Estofados,735,82
+EST-0026,"Manta Acrílica Densidade 45 Vinho 1,40m x 2,10m",Indústria de Estofados,407,74
+EST-0027,"Tecido Jacquard Densidade 28 Azul 1,50m x 2,20m",Indústria de Estofados,488,141
+EST-0028,"Tecido Jacquard Densidade 33 Caramelo 1,50m x 2,20m",Indústria de Estofados,879,63
+EST-0029,"Espuma Impermeável Vinho 1,00m x 1,50m",Indústria de Estofados,489,122
+EST-0030,"Tecido Suede Densidade 45 Bege 1,20m x 2,00m",Indústria de Estofados,603,50
+EST-0031,"Espuma Densidade 33 Grafite 1,00m x 1,50m",Indústria de Estofados,807,146
+EST-0032,"Percal Premium Bege 1,50m x 2,20m",Indústria de Estofados,769,73
+EST-0033,"Espuma Antichama Vinho 1,40m x 2,10m",Indústria de Estofados,606,121
+EST-0034,"Tecido Jacquard Soft Azul 1,00m x 1,50m",Indústria de Estofados,523,113
+EST-0035,"Tecido Suede Impermeável Cinza 1,40m x 2,10m",Indústria de Estofados,643,47
+EST-0036,"Fibra Siliconada Densidade 45 Cinza 1,40m x 2,10m",Indústria de Estofados,623,104
+EST-0037,"Fibra Siliconada Densidade 23 Verde 1,50m x 2,20m",Indústria de Estofados,465,144
+EST-0038,"Tecido Suede Soft Bege 1,80m x 2,40m",Indústria de Estofados,636,49
+EST-0039,"Percal Soft Caramelo 1,00m x 1,50m",Indústria de Estofados,768,127
+EST-0040,"Espuma Densidade 33 Grafite 1,80m x 2,40m",Indústria de Estofados,307,97
+EST-0041,"Manta Acrílica Densidade 28 Azul 1,50m x 2,20m",Indústria de Estofados,691,80
+EST-0042,"Manta Acrílica Densidade 45 Grafite 1,50m x 2,20m",Indústria de Estofados,585,113
+EST-0043,"Couro Sintético Densidade 33 Marrom 1,20m x 2,00m",Indústria de Estofados,612,131
+EST-0044,"Percal Densidade 33 Marrom 1,50m x 2,20m",Indústria de Estofados,352,117
+EST-0045,"Manta Acrílica Soft Cinza 1,80m x 2,40m",Indústria de Estofados,281,80
+EST-0046,"Manta Acrílica Impermeável Caramelo 1,50m x 2,20m",Indústria de Estofados,686,58
+EST-0047,"Espuma Soft Verde 1,80m x 2,40m",Indústria de Estofados,446,67
+EST-0048,"Couro Sintético Densidade 23 Vinho 1,00m x 1,50m",Indústria de Estofados,829,52
+EST-0049,"Tecido Jacquard Densidade 28 Azul 1,00m x 1,50m",Indústria de Estofados,358,46
+EST-0050,"Manta Acrílica Densidade 23 Caramelo 1,40m x 2,10m",Indústria de Estofados,528,115
+EST-0051,"Manta Acrílica Densidade 45 Grafite 1,80m x 2,40m",Indústria de Estofados,484,144
+EST-0052,"Percal Antichama Marrom 1,40m x 2,10m",Indústria de Estofados,285,95
+EST-0053,"Manta Acrílica Densidade 28 Bege 1,80m x 2,40m",Indústria de Estofados,451,40
+EST-0054,"Manta Acrílica Premium Cinza 1,20m x 2,00m",Indústria de Estofados,400,133
+EST-0055,"Espuma Impermeável Verde 1,80m x 2,40m",Indústria de Estofados,608,89
+EST-0056,"Couro Sintético Impermeável Cinza 1,40m x 2,10m",Indústria de Estofados,492,106
+EST-0057,"Fibra Siliconada Densidade 23 Grafite 1,00m x 1,50m",Indústria de Estofados,787,95
+EST-0058,"Espuma Densidade 33 Grafite 1,40m x 2,10m",Indústria de Estofados,450,120
+EST-0059,"Tecido Jacquard Densidade 45 Grafite 1,50m x 2,20m",Indústria de Estofados,405,43
+EST-0060,"Percal Densidade 45 Marrom 1,20m x 2,00m",Indústria de Estofados,593,135
+EST-0061,"Tecido Suede Densidade 45 Azul 1,40m x 2,10m",Indústria de Estofados,346,75
+EST-0062,"Couro Sintético Densidade 28 Grafite 1,20m x 2,00m",Indústria de Estofados,674,142
+EST-0063,"Tecido Jacquard Densidade 33 Vinho 1,80m x 2,40m",Indústria de Estofados,829,116
+EST-0064,"Percal Soft Vinho 1,50m x 2,20m",Indústria de Estofados,576,127
+EST-0065,"Tecido Suede Densidade 33 Grafite 1,00m x 1,50m",Indústria de Estofados,606,134
+EST-0066,"Manta Acrílica Antichama Azul 1,80m x 2,40m",Indústria de Estofados,699,57
+EST-0067,"Couro Sintético Soft Bege 1,00m x 1,50m",Indústria de Estofados,511,77
+EST-0068,"Fibra Siliconada Soft Bege 1,40m x 2,10m",Indústria de Estofados,422,140
+EST-0069,"Tecido Chenille Densidade 45 Caramelo 1,50m x 2,20m",Indústria de Estofados,506,86
+EST-0070,"Couro Sintético Densidade 45 Marrom 1,50m x 2,20m",Indústria de Estofados,718,63
+EST-0071,"Tecido Suede Densidade 23 Cinza 1,40m x 2,10m",Indústria de Estofados,653,56
+EST-0072,"Couro Sintético Densidade 33 Azul 1,40m x 2,10m",Indústria de Estofados,527,88
+EST-0073,"Espuma Impermeável Cinza 1,00m x 1,50m",Indústria de Estofados,386,63
+EST-0074,"Couro Sintético Densidade 33 Azul 1,50m x 2,20m",Indústria de Estofados,760,100
+EST-0075,"Couro Sintético Densidade 23 Caramelo 1,40m x 2,10m",Indústria de Estofados,859,105
+EST-0076,"Espuma Densidade 28 Cinza 1,00m x 1,50m",Indústria de Estofados,686,125
+EST-0077,"Manta Acrílica Antichama Azul 1,40m x 2,10m",Indústria de Estofados,344,114
+EST-0078,"Couro Sintético Premium Cinza 1,20m x 2,00m",Indústria de Estofados,709,114
+EST-0079,"Espuma Premium Azul 1,20m x 2,00m",Indústria de Estofados,812,151
+EST-0080,"Tecido Chenille Densidade 45 Bege 1,80m x 2,40m",Indústria de Estofados,447,148
+EST-0081,"Fibra Siliconada Densidade 45 Bege 1,40m x 2,10m",Indústria de Estofados,871,154
+EST-0082,"Tecido Jacquard Premium Vinho 1,20m x 2,00m",Indústria de Estofados,501,132
+EST-0083,"Percal Soft Azul 1,40m x 2,10m",Indústria de Estofados,638,119
+EST-0084,"Tecido Chenille Premium Grafite 1,40m x 2,10m",Indústria de Estofados,318,69
+EST-0085,"Couro Sintético Impermeável Caramelo 1,50m x 2,20m",Indústria de Estofados,323,107
+EST-0086,"Tecido Chenille Antichama Caramelo 1,80m x 2,40m",Indústria de Estofados,267,89
+EST-0087,"Tecido Suede Densidade 23 Azul 1,20m x 2,00m",Indústria de Estofados,489,76
+EST-0088,"Couro Sintético Densidade 45 Azul 1,40m x 2,10m",Indústria de Estofados,852,40
+EST-0089,"Tecido Chenille Impermeável Cinza 1,40m x 2,10m",Indústria de Estofados,877,105
+EST-0090,"Fibra Siliconada Densidade 28 Marrom 1,20m x 2,00m",Indústria de Estofados,271,90
+EST-0091,"Manta Acrílica Densidade 28 Azul 1,20m x 2,00m",Indústria de Estofados,386,98
+EST-0092,"Couro Sintético Impermeável Grafite 1,00m x 1,50m",Indústria de Estofados,884,74
+EST-0093,"Couro Sintético Antichama Verde 1,00m x 1,50m",Indústria de Estofados,746,158
+EST-0094,"Manta Acrílica Densidade 28 Azul 1,40m x 2,10m",Indústria de Estofados,485,119
+EST-0095,"Tecido Chenille Impermeável Marrom 1,50m x 2,20m",Indústria de Estofados,279,93
+EST-0096,"Percal Antichama Grafite 1,20m x 2,00m",Indústria de Estofados,828,138
+EST-0097,"Fibra Siliconada Soft Grafite 1,80m x 2,40m",Indústria de Estofados,434,122
+EST-0098,"Couro Sintético Impermeável Marrom 1,00m x 1,50m",Indústria de Estofados,689,42
+EST-0099,"Tecido Jacquard Densidade 23 Vinho 1,80m x 2,40m",Indústria de Estofados,381,127
+EST-0100,"Tecido Suede Premium Marrom 1,50m x 2,20m",Indústria de Estofados,790,53
+EST-0101,"Couro Sintético Impermeável Grafite 1,20m x 2,00m",Indústria de Estofados,664,147
+EST-0102,"Tecido Suede Densidade 33 Azul 1,20m x 2,00m",Indústria de Estofados,494,86
+EST-0103,"Tecido Jacquard Densidade 23 Vinho 1,00m x 1,50m",Indústria de Estofados,277,92
+EST-0104,"Fibra Siliconada Premium Vinho 1,40m x 2,10m",Indústria de Estofados,417,108
+EST-0105,"Fibra Siliconada Densidade 28 Grafite 1,50m x 2,20m",Indústria de Estofados,511,59
+EST-0106,"Fibra Siliconada Impermeável Vinho 1,80m x 2,40m",Indústria de Estofados,325,108
+EST-0107,"Tecido Jacquard Densidade 45 Grafite 1,20m x 2,00m",Indústria de Estofados,836,96
+EST-0108,"Manta Acrílica Soft Bege 1,40m x 2,10m",Indústria de Estofados,821,106
+EST-0109,"Tecido Suede Antichama Cinza 1,50m x 2,20m",Indústria de Estofados,309,82
+EST-0110,"Tecido Jacquard Densidade 33 Caramelo 1,00m x 1,50m",Indústria de Estofados,591,110
+EST-0111,"Percal Soft Marrom 1,00m x 1,50m",Indústria de Estofados,618,113
+EST-0112,"Fibra Siliconada Impermeável Caramelo 1,80m x 2,40m",Indústria de Estofados,371,72
+EST-0113,"Couro Sintético Densidade 28 Marrom 1,20m x 2,00m",Indústria de Estofados,678,64
+EST-0114,"Espuma Densidade 28 Vinho 1,50m x 2,20m",Indústria de Estofados,290,85
+EST-0115,"Tecido Chenille Densidade 28 Vinho 1,80m x 2,40m",Indústria de Estofados,830,54
+EST-0116,"Tecido Suede Impermeável Grafite 1,40m x 2,10m",Indústria de Estofados,693,151
+EST-0117,"Couro Sintético Densidade 33 Bege 1,20m x 2,00m",Indústria de Estofados,328,109
+EST-0118,"Manta Acrílica Densidade 28 Verde 1,40m x 2,10m",Indústria de Estofados,326,108
+EST-0119,"Percal Premium Caramelo 1,80m x 2,40m",Indústria de Estofados,795,133
+EST-0120,"Tecido Jacquard Densidade 45 Cinza 1,20m x 2,00m",Indústria de Estofados,498,99
+EST-0121,"Fibra Siliconada Antichama Cinza 1,00m x 1,50m",Indústria de Estofados,770,88
+EST-0122,"Fibra Siliconada Soft Verde 1,00m x 1,50m",Indústria de Estofados,642,47
+EST-0123,"Couro Sintético Densidade 23 Grafite 1,00m x 1,50m",Indústria de Estofados,468,127
+EST-0124,"Tecido Jacquard Densidade 45 Marrom 1,40m x 2,10m",Indústria de Estofados,473,53
+EST-0125,"Percal Densidade 28 Vinho 1,80m x 2,40m",Indústria de Estofados,688,146
+EST-0126,"Couro Sintético Densidade 28 Cinza 1,20m x 2,00m",Indústria de Estofados,620,59
+EST-0127,"Tecido Chenille Densidade 45 Verde 1,50m x 2,20m",Indústria de Estofados,663,139
+EST-0128,"Fibra Siliconada Premium Marrom 1,50m x 2,20m",Indústria de Estofados,649,121
+EST-0129,"Fibra Siliconada Densidade 23 Caramelo 1,20m x 2,00m",Indústria de Estofados,534,50
+EST-0130,"Couro Sintético Premium Bege 1,40m x 2,10m",Indústria de Estofados,483,69
+EST-0131,"Tecido Suede Impermeável Marrom 1,50m x 2,20m",Indústria de Estofados,884,107
+EST-0132,"Tecido Chenille Soft Cinza 1,00m x 1,50m",Indústria de Estofados,358,108
+EST-0133,"Fibra Siliconada Premium Marrom 1,80m x 2,40m",Indústria de Estofados,898,109
+EST-0134,"Fibra Siliconada Antichama Bege 1,40m x 2,10m",Indústria de Estofados,754,154
+EST-0135,"Tecido Chenille Premium Bege 1,80m x 2,40m",Indústria de Estofados,707,94
+EST-0136,"Espuma Antichama Grafite 1,80m x 2,40m",Indústria de Estofados,540,115
+EST-0137,"Tecido Chenille Antichama Verde 1,00m x 1,50m",Indústria de Estofados,640,125
+EST-0138,"Tecido Jacquard Densidade 28 Cinza 1,20m x 2,00m",Indústria de Estofados,870,119
+EST-0139,"Fibra Siliconada Impermeável Verde 1,40m x 2,10m",Indústria de Estofados,547,151
+EST-0140,"Tecido Chenille Densidade 33 Vinho 1,40m x 2,10m",Indústria de Estofados,330,86
+EST-0141,"Manta Acrílica Densidade 45 Azul 1,00m x 1,50m",Indústria de Estofados,851,135
+EST-0142,"Tecido Jacquard Premium Azul 1,80m x 2,40m",Indústria de Estofados,556,135
+EST-0143,"Espuma Soft Grafite 1,00m x 1,50m",Indústria de Estofados,862,124
+EST-0144,"Percal Antichama Bege 1,00m x 1,50m",Indústria de Estofados,753,160
+EST-0145,"Tecido Suede Densidade 45 Marrom 1,00m x 1,50m",Indústria de Estofados,710,88
+EST-0146,"Manta Acrílica Impermeável Azul 1,50m x 2,20m",Indústria de Estofados,320,106
+EST-0147,"Percal Antichama Verde 1,20m x 2,00m",Indústria de Estofados,280,93
+EST-0148,"Tecido Chenille Impermeável Azul 1,00m x 1,50m",Indústria de Estofados,692,71
+EST-0149,"Tecido Jacquard Antichama Marrom 1,80m x 2,40m",Indústria de Estofados,388,84
+EST-0150,"Espuma Soft Verde 1,40m x 2,10m",Indústria de Estofados,674,96
+EST-0151,"Tecido Chenille Densidade 23 Vinho 1,50m x 2,20m",Indústria de Estofados,309,61
+EST-0152,"Manta Acrílica Soft Caramelo 1,20m x 2,00m",Indústria de Estofados,501,60
+EST-0153,"Percal Densidade 45 Bege 1,50m x 2,20m",Indústria de Estofados,471,44
+EST-0154,"Tecido Suede Impermeável Azul 1,40m x 2,10m",Indústria de Estofados,415,67
+EST-0155,"Manta Acrílica Densidade 33 Bege 1,80m x 2,40m",Indústria de Estofados,507,57
+EST-0156,"Tecido Chenille Densidade 28 Grafite 1,80m x 2,40m",Indústria de Estofados,829,112
+EST-0157,"Fibra Siliconada Impermeável Grafite 1,80m x 2,40m",Indústria de Estofados,276,49
+EST-0158,"Couro Sintético Antichama Bege 1,40m x 2,10m",Indústria de Estofados,832,55
+EST-0159,"Manta Acrílica Densidade 28 Bege 1,20m x 2,00m",Indústria de Estofados,605,83
+EST-0160,"Tecido Jacquard Premium Caramelo 1,20m x 2,00m",Indústria de Estofados,605,144
+EST-0161,"Couro Sintético Impermeável Bege 1,00m x 1,50m",Indústria de Estofados,796,100
+EST-0162,"Percal Premium Cinza 1,50m x 2,20m",Indústria de Estofados,402,117
+EST-0163,"Tecido Suede Soft Caramelo 1,00m x 1,50m",Indústria de Estofados,473,65
+EST-0164,"Fibra Siliconada Densidade 33 Azul 1,00m x 1,50m",Indústria de Estofados,388,88
+EST-0165,"Tecido Suede Soft Vinho 1,20m x 2,00m",Indústria de Estofados,784,139
+EST-0166,"Manta Acrílica Impermeável Verde 1,40m x 2,10m",Indústria de Estofados,413,118
+EST-0167,"Tecido Suede Densidade 33 Cinza 1,40m x 2,10m",Indústria de Estofados,740,70
+EST-0168,"Espuma Impermeável Cinza 1,80m x 2,40m",Indústria de Estofados,882,131
+EST-0169,"Fibra Siliconada Densidade 33 Vinho 1,50m x 2,20m",Indústria de Estofados,756,126
+EST-0170,"Tecido Chenille Impermeável Verde 1,20m x 2,00m",Indústria de Estofados,809,119
+EST-0171,"Percal Soft Grafite 1,50m x 2,20m",Indústria de Estofados,577,43
+EST-0172,"Espuma Densidade 45 Vinho 1,00m x 1,50m",Indústria de Estofados,549,85
+EST-0173,"Couro Sintético Densidade 33 Caramelo 1,00m x 1,50m",Indústria de Estofados,418,78
+EST-0174,"Manta Acrílica Antichama Verde 1,80m x 2,40m",Indústria de Estofados,866,71
+EST-0175,"Tecido Chenille Densidade 23 Cinza 1,50m x 2,20m",Indústria de Estofados,743,72
+EST-0176,"Tecido Jacquard Densidade 45 Marrom 1,00m x 1,50m",Indústria de Estofados,786,59
+EST-0177,"Tecido Jacquard Antichama Cinza 1,20m x 2,00m",Indústria de Estofados,692,103
+EST-0178,"Espuma Soft Caramelo 1,80m x 2,40m",Indústria de Estofados,806,129
+EST-0179,"Couro Sintético Premium Vinho 1,20m x 2,00m",Indústria de Estofados,729,82
+EST-0180,"Couro Sintético Soft Cinza 1,80m x 2,40m",Indústria de Estofados,393,86
+EST-0181,"Couro Sintético Premium Vinho 1,50m x 2,20m",Indústria de Estofados,757,81
+EST-0182,"Fibra Siliconada Premium Azul 1,80m x 2,40m",Indústria de Estofados,769,93
+EST-0183,"Percal Antichama Caramelo 1,40m x 2,10m",Indústria de Estofados,777,99
+EST-0184,"Fibra Siliconada Antichama Verde 1,80m x 2,40m",Indústria de Estofados,714,57
+EST-0185,"Tecido Chenille Soft Caramelo 1,40m x 2,10m",Indústria de Estofados,691,122
+EST-0186,"Tecido Jacquard Premium Grafite 1,40m x 2,10m",Indústria de Estofados,823,50
+EST-0187,"Fibra Siliconada Premium Grafite 1,50m x 2,20m",Indústria de Estofados,755,90
+EST-0188,"Manta Acrílica Densidade 45 Marrom 1,50m x 2,20m",Indústria de Estofados,450,138
+EST-0189,"Tecido Jacquard Soft Bege 1,40m x 2,10m",Indústria de Estofados,674,91
+EST-0190,"Tecido Chenille Densidade 45 Caramelo 1,00m x 1,50m",Indústria de Estofados,670,125
+EST-0191,"Percal Densidade 45 Marrom 1,40m x 2,10m",Indústria de Estofados,732,45
+EST-0192,"Espuma Densidade 28 Vinho 1,00m x 1,50m",Indústria de Estofados,464,40
+EST-0193,"Manta Acrílica Densidade 33 Grafite 1,80m x 2,40m",Indústria de Estofados,378,116
+EST-0194,"Espuma Impermeável Verde 1,50m x 2,20m",Indústria de Estofados,414,138
+EST-0195,"Tecido Chenille Densidade 33 Azul 1,20m x 2,00m",Indústria de Estofados,517,110
+EST-0196,"Tecido Jacquard Soft Bege 1,20m x 2,00m",Indústria de Estofados,498,50
+EST-0197,"Fibra Siliconada Densidade 28 Grafite 1,40m x 2,10m",Indústria de Estofados,705,77
+EST-0198,"Fibra Siliconada Premium Verde 1,50m x 2,20m",Indústria de Estofados,526,129
+EST-0199,"Percal Premium Caramelo 1,20m x 2,00m",Indústria de Estofados,587,119
+EST-0200,"Tecido Jacquard Antichama Azul 1,00m x 1,50m",Indústria de Estofados,622,91
+MET-0001,Vergalhão Galvanizado Polido Estrutural Pesado,Indústria Metalúrgica,307,23
+MET-0002,Cantoneira Zincado Frio Estrutural Pesado,Indústria Metalúrgica,566,75
+MET-0003,Tubo Revestido Estanhado 12m,Indústria Metalúrgica,385,58
+MET-0004,Barra Cobre Polido Estrutural Pesado,Indústria Metalúrgica,580,81
+MET-0005,Cantoneira Zincado Frio 8m,Indústria Metalúrgica,559,22
+MET-0006,Chapa Alumínio Quente 6m,Indústria Metalúrgica,671,67
+MET-0007,Fio Máquina Revestido Decapado e Oleado 6m,Indústria Metalúrgica,258,76
+MET-0008,Perfil I Latão Decapado Estrutural Pesado,Indústria Metalúrgica,525,86
+MET-0009,"Perfil U Revestido Laminado 1,20m x 2,40m",Indústria Metalúrgica,655,44
+MET-0010,Cantoneira Galvanizado Frio Estrutural Leve,Indústria Metalúrgica,258,49
+MET-0011,Fio Máquina Revestido Laminado Estrutural Pesado,Indústria Metalúrgica,261,87
+MET-0012,Perfil I Aço Carbono Laminado 10m,Indústria Metalúrgica,391,89
+MET-0013,Perfil U Aço Carbono Frio 8m,Indústria Metalúrgica,583,45
+MET-0014,"Fio Máquina Revestido Tratado 1,20m x 2,40m",Indústria Metalúrgica,189,63
+MET-0015,"Perfil I Latão Decapado 1,50m x 3,00m",Indústria Metalúrgica,481,53
+MET-0016,Perfil U Aço Carbono Frio 10m,Indústria Metalúrgica,293,50
+MET-0017,"Fio Máquina Aço Carbono Decapado 1,50m x 3,00m",Indústria Metalúrgica,262,24
+MET-0018,Chapa Revestido Tratado 10m,Indústria Metalúrgica,378,43
+MET-0019,Chapa Latão Polido Estrutural Leve,Indústria Metalúrgica,123,41
+MET-0020,Barra Aço Carbono Tratado 8m,Indústria Metalúrgica,569,73
+MET-0021,Barra Zincado Decapado e Oleado 10m,Indústria Metalúrgica,146,48
+MET-0022,Perfil I Cobre Tratado 8m,Indústria Metalúrgica,554,107
+MET-0023,"Cantoneira Revestido Frio 1,20m x 2,40m",Indústria Metalúrgica,194,46
+MET-0024,Perfil U Cobre Estanhado 10m,Indústria Metalúrgica,124,41
+MET-0025,Perfil I Cobre Decapado e Oleado Estrutural Pesado,Indústria Metalúrgica,492,90
+MET-0026,Barra Aço Inox Frio Estrutural Leve,Indústria Metalúrgica,506,105
+MET-0027,Chapa Aço Inox Estanhado Estrutural Pesado,Indústria Metalúrgica,338,26
+MET-0028,Vergalhão Revestido Frio 10m,Indústria Metalúrgica,513,55
+MET-0029,Fio Máquina Latão Polido Estrutural Leve,Indústria Metalúrgica,197,65
+MET-0030,Perfil U Galvanizado Frio 12m,Indústria Metalúrgica,214,68
+MET-0031,"Perfil I Aço Inox Tratado 1,50m x 3,00m",Indústria Metalúrgica,316,105
+MET-0032,Barra Alumínio Quente 10m,Indústria Metalúrgica,270,26
+MET-0033,Fio Máquina Alumínio Quente 12m,Indústria Metalúrgica,587,20
+MET-0034,Tubo Aço Carbono Polido 8m,Indústria Metalúrgica,643,82
+MET-0035,Perfil I Alumínio Laminado Estrutural Pesado,Indústria Metalúrgica,175,38
+MET-0036,"Cantoneira Zincado Frio 1,20m x 2,40m",Indústria Metalúrgica,575,85
+MET-0037,Barra Aço Inox Polido 8m,Indústria Metalúrgica,358,55
+MET-0038,Vergalhão Aço Carbono Decapado e Oleado 12m,Indústria Metalúrgica,469,101
+MET-0039,Cantoneira Galvanizado Tratado 10m,Indústria Metalúrgica,495,48
+MET-0040,"Tubo Latão Polido 1,20m x 2,40m",Indústria Metalúrgica,455,73
+MET-0041,Perfil I Zincado Tratado 10m,Indústria Metalúrgica,605,108
+MET-0042,"Chapa Latão Polido 1,20m x 2,40m",Indústria Metalúrgica,446,89
+MET-0043,Tubo Aço Inox Frio Estrutural Pesado,Indústria Metalúrgica,565,71
+MET-0044,"Perfil I Aço Carbono Estanhado 1,50m x 3,00m",Indústria Metalúrgica,316,81
+MET-0045,"Perfil U Zincado Polido 1,50m x 3,00m",Indústria Metalúrgica,322,103
+MET-0046,Perfil U Aço Carbono Frio 6m,Indústria Metalúrgica,379,100
+MET-0047,Vergalhão Aço Carbono Frio 12m,Indústria Metalúrgica,206,68
+MET-0048,Fio Máquina Latão Polido 8m,Indústria Metalúrgica,396,42
+MET-0049,"Cantoneira Aço Carbono Decapado e Oleado 1,20m x 2,40m",Indústria Metalúrgica,370,64
+MET-0050,Perfil I Latão Decapado e Oleado Estrutural Pesado,Indústria Metalúrgica,458,35
+MET-0051,Chapa Aço Carbono Frio Estrutural Leve,Indústria Metalúrgica,326,62
+MET-0052,Chapa Galvanizado Decapado e Oleado Estrutural Pesado,Indústria Metalúrgica,139,46
+MET-0053,Tubo Latão Decapado e Oleado Estrutural Pesado,Indústria Metalúrgica,528,65
+MET-0054,Cantoneira Aço Inox Estanhado Estrutural Pesado,Indústria Metalúrgica,364,93
+MET-0055,Fio Máquina Galvanizado Estanhado 8m,Indústria Metalúrgica,604,62
+MET-0056,"Fio Máquina Aço Carbono Quente 1,20m x 2,40m",Indústria Metalúrgica,473,97
+MET-0057,Barra Galvanizado Tratado 12m,Indústria Metalúrgica,549,85
+MET-0058,Fio Máquina Revestido Polido 6m,Indústria Metalúrgica,263,78
+MET-0059,Fio Máquina Zincado Frio Estrutural Pesado,Indústria Metalúrgica,211,30
+MET-0060,"Perfil I Aço Carbono Polido 1,50m x 3,00m",Indústria Metalúrgica,266,34
+MET-0061,"Cantoneira Aço Carbono Decapado 1,50m x 3,00m",Indústria Metalúrgica,576,96
+MET-0062,Vergalhão Zincado Tratado Estrutural Leve,Indústria Metalúrgica,554,92
+MET-0063,Chapa Revestido Tratado 8m,Indústria Metalúrgica,292,60
+MET-0064,Barra Aço Carbono Decapado e Oleado 12m,Indústria Metalúrgica,237,36
+MET-0065,"Chapa Galvanizado Decapado e Oleado 1,20m x 2,40m",Indústria Metalúrgica,310,101
+MET-0066,Barra Aço Inox Polido 6m,Indústria Metalúrgica,507,76
+MET-0067,Cantoneira Zincado Estanhado 8m,Indústria Metalúrgica,649,75
+MET-0068,"Perfil I Galvanizado Frio 1,50m x 3,00m",Indústria Metalúrgica,545,87
+MET-0069,Perfil U Galvanizado Decapado e Oleado 12m,Indústria Metalúrgica,352,108
+MET-0070,Perfil I Galvanizado Decapado 10m,Indústria Metalúrgica,489,84
+MET-0071,Perfil I Alumínio Decapado Estrutural Pesado,Indústria Metalúrgica,437,65
+MET-0072,Cantoneira Zincado Polido 12m,Indústria Metalúrgica,274,20
+MET-0073,Barra Aço Inox Frio 6m,Indústria Metalúrgica,121,40
+MET-0074,Tubo Aço Carbono Tratado Estrutural Pesado,Indústria Metalúrgica,590,27
+MET-0075,Chapa Aço Carbono Laminado Estrutural Leve,Indústria Metalúrgica,176,58
+MET-0076,Cantoneira Revestido Quente Estrutural Leve,Indústria Metalúrgica,462,106
+MET-0077,Fio Máquina Galvanizado Quente Estrutural Pesado,Indústria Metalúrgica,428,112
+MET-0078,Vergalhão Latão Quente 8m,Indústria Metalúrgica,140,46
+MET-0079,Perfil I Zincado Laminado 8m,Indústria Metalúrgica,377,76
+MET-0080,Tubo Galvanizado Decapado e Oleado Estrutural Pesado,Indústria Metalúrgica,604,83
+MET-0081,Chapa Zincado Frio 6m,Indústria Metalúrgica,521,91
+MET-0082,Perfil I Aço Inox Laminado Estrutural Pesado,Indústria Metalúrgica,642,24
+MET-0083,Cantoneira Aço Carbono Decapado 6m,Indústria Metalúrgica,565,57
+MET-0084,"Tubo Cobre Decapado e Oleado 1,50m x 3,00m",Indústria Metalúrgica,617,20
+MET-0085,Cantoneira Revestido Polido Estrutural Leve,Indústria Metalúrgica,462,68
+MET-0086,"Barra Latão Decapado 1,20m x 2,40m",Indústria Metalúrgica,647,63
+MET-0087,"Vergalhão Zincado Laminado 1,20m x 2,40m",Indústria Metalúrgica,588,112
+MET-0088,Tubo Revestido Tratado Estrutural Leve,Indústria Metalúrgica,523,54
+MET-0089,Cantoneira Galvanizado Quente 12m,Indústria Metalúrgica,171,22
+MET-0090,"Chapa Alumínio Quente 1,50m x 3,00m",Indústria Metalúrgica,320,106
+MET-0091,Cantoneira Galvanizado Frio 10m,Indústria Metalúrgica,589,47
+MET-0092,Perfil I Zincado Laminado Estrutural Pesado,Indústria Metalúrgica,207,41
+MET-0093,Tubo Alumínio Quente 8m,Indústria Metalúrgica,461,63
+MET-0094,"Chapa Zincado Laminado 1,50m x 3,00m",Indústria Metalúrgica,396,57
+MET-0095,"Barra Cobre Frio 1,20m x 2,40m",Indústria Metalúrgica,650,62
+MET-0096,Barra Revestido Frio Estrutural Pesado,Indústria Metalúrgica,411,31
+MET-0097,Chapa Alumínio Tratado 12m,Indústria Metalúrgica,282,94
+MET-0098,Perfil U Galvanizado Quente 10m,Indústria Metalúrgica,648,41
+MET-0099,Cantoneira Aço Inox Frio 12m,Indústria Metalúrgica,400,31
+MET-0100,Cantoneira Latão Decapado e Oleado 6m,Indústria Metalúrgica,524,35
+MET-0101,"Perfil U Cobre Laminado 1,20m x 2,40m",Indústria Metalúrgica,227,33
+MET-0102,Barra Latão Decapado 8m,Indústria Metalúrgica,514,114
+MET-0103,Perfil U Galvanizado Frio Estrutural Leve,Indústria Metalúrgica,581,116
+MET-0104,Cantoneira Cobre Polido 10m,Indústria Metalúrgica,633,76
+MET-0105,Barra Aço Inox Tratado Estrutural Leve,Indústria Metalúrgica,155,47
+MET-0106,Vergalhão Latão Laminado 12m,Indústria Metalúrgica,584,86
+MET-0107,"Perfil I Aço Inox Polido 1,20m x 2,40m",Indústria Metalúrgica,245,52
+MET-0108,Perfil I Revestido Decapado e Oleado Estrutural Leve,Indústria Metalúrgica,567,21
+MET-0109,"Perfil I Cobre Quente 1,20m x 2,40m",Indústria Metalúrgica,475,114
+MET-0110,"Perfil I Zincado Laminado 1,50m x 3,00m",Indústria Metalúrgica,570,51
+MET-0111,Perfil I Cobre Frio 8m,Indústria Metalúrgica,451,111
+MET-0112,"Chapa Latão Decapado e Oleado 1,50m x 3,00m",Indústria Metalúrgica,229,76
+MET-0113,Vergalhão Aço Inox Frio 10m,Indústria Metalúrgica,693,75
+MET-0114,Barra Aço Carbono Decapado Estrutural Leve,Indústria Metalúrgica,133,40
+MET-0115,Chapa Aço Carbono Decapado Estrutural Leve,Indústria Metalúrgica,346,80
+MET-0116,Cantoneira Aço Inox Tratado 6m,Indústria Metalúrgica,677,97
+MET-0117,"Vergalhão Aço Inox Tratado 1,20m x 2,40m",Indústria Metalúrgica,165,55
+MET-0118,Cantoneira Latão Decapado 12m,Indústria Metalúrgica,497,23
+MET-0119,Tubo Revestido Laminado 10m,Indústria Metalúrgica,680,47
+MET-0120,"Barra Revestido Frio 1,50m x 3,00m",Indústria Metalúrgica,431,91
+MET-0121,Barra Aço Carbono Estanhado Estrutural Leve,Indústria Metalúrgica,570,102
+MET-0122,Vergalhão Zincado Decapado e Oleado 12m,Indústria Metalúrgica,243,47
+MET-0123,Fio Máquina Aço Inox Quente 6m,Indústria Metalúrgica,425,23
+MET-0124,Barra Aço Carbono Estanhado 6m,Indústria Metalúrgica,184,61
+MET-0125,Barra Galvanizado Decapado 6m,Indústria Metalúrgica,253,84
+MET-0126,Chapa Cobre Laminado 8m,Indústria Metalúrgica,240,80
+MET-0127,Cantoneira Aço Inox Quente 6m,Indústria Metalúrgica,648,60
+MET-0128,"Perfil I Alumínio Polido 1,50m x 3,00m",Indústria Metalúrgica,288,65
+MET-0129,Chapa Alumínio Polido 6m,Indústria Metalúrgica,585,98
+MET-0130,Cantoneira Aço Carbono Frio Estrutural Leve,Indústria Metalúrgica,623,75
+MET-0131,"Tubo Aço Inox Polido 1,50m x 3,00m",Indústria Metalúrgica,236,69
+MET-0132,"Tubo Revestido Decapado e Oleado 1,50m x 3,00m",Indústria Metalúrgica,134,44
+MET-0133,"Perfil U Zincado Quente 1,50m x 3,00m",Indústria Metalúrgica,563,117
+MET-0134,Perfil U Cobre Estanhado 12m,Indústria Metalúrgica,342,40
+MET-0135,Vergalhão Cobre Decapado e Oleado 6m,Indústria Metalúrgica,676,71
+MET-0136,"Chapa Galvanizado Frio 1,50m x 3,00m",Indústria Metalúrgica,638,42
+MET-0137,Perfil I Aço Carbono Polido 10m,Indústria Metalúrgica,309,26
+MET-0138,Vergalhão Aço Carbono Quente 8m,Indústria Metalúrgica,361,42
+MET-0139,Barra Revestido Polido 10m,Indústria Metalúrgica,212,70
+MET-0140,"Tubo Aço Inox Estanhado 1,50m x 3,00m",Indústria Metalúrgica,632,44
+MET-0141,Fio Máquina Alumínio Polido 6m,Indústria Metalúrgica,520,70
+MET-0142,Chapa Latão Decapado 6m,Indústria Metalúrgica,384,109
+MET-0143,"Vergalhão Latão Quente 1,50m x 3,00m",Indústria Metalúrgica,637,53
+MET-0144,Fio Máquina Latão Decapado e Oleado Estrutural Pesado,Indústria Metalúrgica,365,75
+MET-0145,Fio Máquina Aço Carbono Tratado 6m,Indústria Metalúrgica,588,105
+MET-0146,Tubo Latão Frio Estrutural Pesado,Indústria Metalúrgica,150,48
+MET-0147,Perfil I Revestido Frio 8m,Indústria Metalúrgica,144,38
+MET-0148,Vergalhão Latão Tratado 10m,Indústria Metalúrgica,375,79
+MET-0149,"Perfil I Zincado Tratado 1,20m x 2,40m",Indústria Metalúrgica,156,52
+MET-0150,Vergalhão Alumínio Laminado 8m,Indústria Metalúrgica,652,91
+MET-0151,Chapa Aço Inox Tratado Estrutural Pesado,Indústria Metalúrgica,270,90
+MET-0152,Fio Máquina Cobre Laminado Estrutural Leve,Indústria Metalúrgica,248,82
+MET-0153,Chapa Revestido Polido 12m,Indústria Metalúrgica,484,54
+MET-0154,Vergalhão Aço Inox Decapado 10m,Indústria Metalúrgica,347,28
+MET-0155,Tubo Revestido Quente Estrutural Pesado,Indústria Metalúrgica,300,33
+MET-0156,"Fio Máquina Zincado Decapado e Oleado 1,50m x 3,00m",Indústria Metalúrgica,179,59
+MET-0157,Tubo Revestido Laminado 8m,Indústria Metalúrgica,433,77
+MET-0158,"Tubo Galvanizado Laminado 1,20m x 2,40m",Indústria Metalúrgica,324,108
+MET-0159,Tubo Galvanizado Frio 12m,Indústria Metalúrgica,357,25
+MET-0160,Perfil I Aço Carbono Decapado 12m,Indústria Metalúrgica,291,97
+MET-0161,Vergalhão Revestido Quente 12m,Indústria Metalúrgica,589,31
+MET-0162,Tubo Cobre Decapado Estrutural Pesado,Indústria Metalúrgica,246,82
+MET-0163,Cantoneira Alumínio Decapado Estrutural Pesado,Indústria Metalúrgica,570,68
+MET-0164,Fio Máquina Aço Carbono Decapado 12m,Indústria Metalúrgica,186,33
+MET-0165,Perfil U Revestido Decapado 8m,Indústria Metalúrgica,399,49
+MET-0166,Vergalhão Zincado Quente 8m,Indústria Metalúrgica,435,44
+MET-0167,Fio Máquina Alumínio Frio Estrutural Leve,Indústria Metalúrgica,202,67
+MET-0168,Vergalhão Revestido Decapado e Oleado Estrutural Leve,Indústria Metalúrgica,445,82
+MET-0169,Perfil I Revestido Polido 12m,Indústria Metalúrgica,312,103
+MET-0170,Cantoneira Alumínio Tratado 10m,Indústria Metalúrgica,581,80
+MET-0171,Cantoneira Alumínio Frio 8m,Indústria Metalúrgica,443,24
+MET-0172,Chapa Aço Carbono Tratado 10m,Indústria Metalúrgica,475,43
+MET-0173,"Vergalhão Aço Carbono Tratado 1,20m x 2,40m",Indústria Metalúrgica,147,49
+MET-0174,Tubo Cobre Decapado e Oleado 12m,Indústria Metalúrgica,355,65
+MET-0175,Fio Máquina Aço Inox Estanhado 10m,Indústria Metalúrgica,151,50
+MET-0176,Chapa Zincado Frio 10m,Indústria Metalúrgica,182,44
+MET-0177,Fio Máquina Latão Tratado Estrutural Leve,Indústria Metalúrgica,223,41
+MET-0178,"Fio Máquina Latão Estanhado 1,50m x 3,00m",Indústria Metalúrgica,285,95
+MET-0179,"Fio Máquina Alumínio Decapado e Oleado 1,50m x 3,00m",Indústria Metalúrgica,663,112
+MET-0180,Perfil I Zincado Quente 12m,Indústria Metalúrgica,663,110
+MET-0181,Chapa Cobre Polido 8m,Indústria Metalúrgica,655,80
+MET-0182,Perfil I Zincado Laminado 10m,Indústria Metalúrgica,161,53
+MET-0183,Cantoneira Galvanizado Decapado 6m,Indústria Metalúrgica,202,24
+MET-0184,Cantoneira Cobre Frio 12m,Indústria Metalúrgica,601,55
+MET-0185,Perfil I Revestido Frio 12m,Indústria Metalúrgica,608,76
+MET-0186,Perfil I Zincado Estanhado Estrutural Pesado,Indústria Metalúrgica,208,69
+MET-0187,Tubo Aço Carbono Polido 12m,Indústria Metalúrgica,419,45
+MET-0188,"Cantoneira Alumínio Polido 1,50m x 3,00m",Indústria Metalúrgica,553,111
+MET-0189,"Chapa Aço Carbono Polido 1,50m x 3,00m",Indústria Metalúrgica,233,77
+MET-0190,Cantoneira Aço Inox Polido Estrutural Pesado,Indústria Metalúrgica,658,117
+MET-0191,Fio Máquina Revestido Estanhado Estrutural Leve,Indústria Metalúrgica,524,55
+MET-0192,Tubo Revestido Laminado Estrutural Pesado,Indústria Metalúrgica,588,44
+MET-0193,Perfil U Zincado Polido 8m,Indústria Metalúrgica,537,79
+MET-0194,Perfil I Galvanizado Quente 6m,Indústria Metalúrgica,633,80
+MET-0195,Barra Revestido Decapado 8m,Indústria Metalúrgica,606,49
+MET-0196,"Perfil I Galvanizado Polido 1,20m x 2,40m",Indústria Metalúrgica,478,71
+MET-0197,Tubo Revestido Frio 10m,Indústria Metalúrgica,552,91
+MET-0198,Tubo Latão Quente 10m,Indústria Metalúrgica,687,100
+MET-0199,"Vergalhão Galvanizado Frio 1,20m x 2,40m",Indústria Metalúrgica,625,105
+MET-0200,Tubo Alumínio Decapado Estrutural Pesado,Indústria Metalúrgica,241,80
+MOV-0001,Puxador MDF Verniz Fosco 600mm,Componentes para Indústria de Móveis,1011,129
+MOV-0002,Dobradiça MDF Níquel 400mm,Componentes para Indústria de Móveis,652,173
+MOV-0003,Perfil PVC Aço Carbono Preto Fosco 96mm,Componentes para Indústria de Móveis,462,104
+MOV-0004,Prateleira MDP Aço Inox Texturizado 96mm,Componentes para Indústria de Móveis,764,172
+MOV-0005,Dobradiça Caneco Plástico Branco 128mm,Componentes para Indústria de Móveis,1078,50
+MOV-0006,Prateleira MDP MDP Verniz Fosco 400mm,Componentes para Indústria de Móveis,975,110
+MOV-0007,Dobradiça MDP Branco 128mm,Componentes para Indústria de Móveis,996,154
+MOV-0008,Tampo MDF Metálico Champagne 300mm,Componentes para Indústria de Móveis,1028,166
+MOV-0009,Corrediça Madeira Tauari Preto Fosco 450mm,Componentes para Indústria de Móveis,581,65
+MOV-0010,Corrediça Plástico Champagne 128mm,Componentes para Indústria de Móveis,389,129
+MOV-0011,Puxador Plástico Preto Fosco 500mm,Componentes para Indústria de Móveis,1165,157
+MOV-0012,Prateleira MDP MDF Cromado 128mm,Componentes para Indústria de Móveis,701,71
+MOV-0013,Dobradiça Caneco MDP Champagne 450mm,Componentes para Indústria de Móveis,499,165
+MOV-0014,Parafuso Confirmat Metálico Verniz Fosco 400mm,Componentes para Indústria de Móveis,1064,129
+MOV-0015,Perfil PVC Madeira Tauari Champagne 96mm,Componentes para Indústria de Móveis,789,85
+MOV-0016,Dobradiça Madeira Tauari Branco 600mm,Componentes para Indústria de Móveis,529,61
+MOV-0017,Tampo MDF Plástico Níquel 128mm,Componentes para Indústria de Móveis,917,146
+MOV-0018,Tampo MDF MDP Verniz Fosco 600mm,Componentes para Indústria de Móveis,393,113
+MOV-0019,Puxador MDP Escovado 160mm,Componentes para Indústria de Móveis,778,68
+MOV-0020,Perfil PVC Aço Carbono Texturizado 128mm,Componentes para Indústria de Móveis,695,118
+MOV-0021,Puxador Metálico Branco 500mm,Componentes para Indústria de Móveis,572,67
+MOV-0022,Perfil PVC MDP Preto Fosco 160mm,Componentes para Indústria de Móveis,741,136
+MOV-0023,Perfil PVC Aço Carbono Verniz Fosco 450mm,Componentes para Indústria de Móveis,725,58
+MOV-0024,Prateleira MDP Aço Carbono Preto Fosco 300mm,Componentes para Indústria de Móveis,618,71
+MOV-0025,Parafuso Confirmat Madeira Tauari Escovado 450mm,Componentes para Indústria de Móveis,840,142
+MOV-0026,Puxador Aço Inox Verniz Fosco 300mm,Componentes para Indústria de Móveis,1070,193
+MOV-0027,Perfil PVC MDF Escovado 160mm,Componentes para Indústria de Móveis,364,84
+MOV-0028,Puxador Alumínio Cromado 96mm,Componentes para Indústria de Móveis,495,155
+MOV-0029,Corrediça Madeira Tauari Texturizado 600mm,Componentes para Indústria de Móveis,912,86
+MOV-0030,Perfil PVC Alumínio Verniz Fosco 500mm,Componentes para Indústria de Móveis,632,156
+MOV-0031,Puxador Metálico Cromado 500mm,Componentes para Indústria de Móveis,1013,162
+MOV-0032,Perfil PVC Madeira Tauari Preto Fosco 450mm,Componentes para Indústria de Móveis,690,189
+MOV-0033,Corrediça Aço Inox Cromado 160mm,Componentes para Indústria de Móveis,638,73
+MOV-0034,Perfil PVC Plástico Níquel 300mm,Componentes para Indústria de Móveis,1082,198
+MOV-0035,Puxador Madeira Tauari Cromado 500mm,Componentes para Indústria de Móveis,930,172
+MOV-0036,Prateleira MDP Metálico Níquel 300mm,Componentes para Indústria de Móveis,381,56
+MOV-0037,Tampo MDF Madeira Tauari Texturizado 300mm,Componentes para Indústria de Móveis,923,144
+MOV-0038,Dobradiça Caneco MDF Escovado 600mm,Componentes para Indústria de Móveis,680,186
+MOV-0039,Perfil PVC Metálico Níquel 128mm,Componentes para Indústria de Móveis,485,148
+MOV-0040,Dobradiça Caneco Alumínio Texturizado 450mm,Componentes para Indústria de Móveis,492,89
+MOV-0041,Dobradiça Madeira Tauari Cromado 96mm,Componentes para Indústria de Móveis,767,138
+MOV-0042,Dobradiça MDF Verniz Fosco 96mm,Componentes para Indústria de Móveis,1047,145
+MOV-0043,Corrediça Aço Inox Texturizado 160mm,Componentes para Indústria de Móveis,1125,102
+MOV-0044,Dobradiça Caneco Aço Inox Níquel 400mm,Componentes para Indústria de Móveis,416,138
+MOV-0045,Corrediça MDF Texturizado 500mm,Componentes para Indústria de Móveis,428,142
+MOV-0046,Tampo MDF Plástico Escovado 500mm,Componentes para Indústria de Móveis,945,102
+MOV-0047,Parafuso Confirmat Alumínio Níquel 400mm,Componentes para Indústria de Móveis,520,146
+MOV-0048,Dobradiça Caneco Madeira Tauari Branco 500mm,Componentes para Indústria de Móveis,951,153
+MOV-0049,Tampo MDF Aço Carbono Verniz Fosco 96mm,Componentes para Indústria de Móveis,1047,80
+MOV-0050,Prateleira MDP Madeira Tauari Escovado 600mm,Componentes para Indústria de Móveis,942,135
+MOV-0051,Dobradiça Caneco MDP Texturizado 160mm,Componentes para Indústria de Móveis,557,100
+MOV-0052,Dobradiça Caneco Aço Inox Branco 300mm,Componentes para Indústria de Móveis,445,59
+MOV-0053,Prateleira MDP MDF Escovado 300mm,Componentes para Indústria de Móveis,1198,172
+MOV-0054,Parafuso Confirmat MDF Escovado 300mm,Componentes para Indústria de Móveis,762,156
+MOV-0055,Tampo MDF Plástico Cromado 160mm,Componentes para Indústria de Móveis,557,112
+MOV-0056,Parafuso Confirmat Madeira Tauari Texturizado 300mm,Componentes para Indústria de Móveis,1040,126
+MOV-0057,Dobradiça Caneco MDF Preto Fosco 128mm,Componentes para Indústria de Móveis,945,178
+MOV-0058,Puxador Madeira Tauari Champagne 160mm,Componentes para Indústria de Móveis,1027,192
+MOV-0059,Dobradiça Caneco Plástico Texturizado 500mm,Componentes para Indústria de Móveis,899,112
+MOV-0060,Prateleira MDP Madeira Tauari Champagne 128mm,Componentes para Indústria de Móveis,863,67
+MOV-0061,Tampo MDF Alumínio Escovado 300mm,Componentes para Indústria de Móveis,411,137
+MOV-0062,Perfil PVC Aço Carbono Níquel 600mm,Componentes para Indústria de Móveis,1093,129
+MOV-0063,Parafuso Confirmat MDP Níquel 400mm,Componentes para Indústria de Móveis,1096,177
+MOV-0064,Corrediça MDF Níquel 400mm,Componentes para Indústria de Móveis,891,109
+MOV-0065,Tampo MDF Madeira Tauari Cromado 160mm,Componentes para Indústria de Móveis,583,154
+MOV-0066,Corrediça Metálico Verniz Fosco 600mm,Componentes para Indústria de Móveis,817,198
+MOV-0067,Perfil PVC Plástico Champagne 400mm,Componentes para Indústria de Móveis,827,151
+MOV-0068,Corrediça Madeira Tauari Cromado 300mm,Componentes para Indústria de Móveis,1052,125
+MOV-0069,Puxador Plástico Escovado 160mm,Componentes para Indústria de Móveis,454,151
+MOV-0070,Dobradiça Aço Inox Branco 600mm,Componentes para Indústria de Móveis,452,136
+MOV-0071,Dobradiça Aço Inox Verniz Fosco 600mm,Componentes para Indústria de Móveis,1068,100
+MOV-0072,Corrediça Alumínio Preto Fosco 96mm,Componentes para Indústria de Móveis,473,83
+MOV-0073,Dobradiça Caneco Madeira Tauari Champagne 160mm,Componentes para Indústria de Móveis,971,171
+MOV-0074,Dobradiça Caneco Madeira Tauari Champagne 600mm,Componentes para Indústria de Móveis,797,200
+MOV-0075,Prateleira MDP Alumínio Escovado 500mm,Componentes para Indústria de Móveis,916,126
+MOV-0076,Puxador Alumínio Escovado 400mm,Componentes para Indústria de Móveis,952,135
+MOV-0077,Puxador Aço Carbono Cromado 160mm,Componentes para Indústria de Móveis,929,152
+MOV-0078,Puxador MDF Cromado 160mm,Componentes para Indústria de Móveis,1136,86
+MOV-0079,Parafuso Confirmat Aço Carbono Champagne 300mm,Componentes para Indústria de Móveis,843,172
+MOV-0080,Dobradiça Caneco Metálico Verniz Fosco 96mm,Componentes para Indústria de Móveis,404,74
+MOV-0081,Dobradiça Caneco MDF Texturizado 300mm,Componentes para Indústria de Móveis,857,86
+MOV-0082,Prateleira MDP Aço Inox Níquel 160mm,Componentes para Indústria de Móveis,780,78
+MOV-0083,Parafuso Confirmat Metálico Champagne 160mm,Componentes para Indústria de Móveis,356,102
+MOV-0084,Dobradiça Caneco Alumínio Verniz Fosco 600mm,Componentes para Indústria de Móveis,676,195
+MOV-0085,Dobradiça Madeira Tauari Verniz Fosco 128mm,Componentes para Indústria de Móveis,1041,142
+MOV-0086,Corrediça Plástico Preto Fosco 500mm,Componentes para Indústria de Móveis,584,176
+MOV-0087,Tampo MDF Alumínio Champagne 400mm,Componentes para Indústria de Móveis,856,154
+MOV-0088,Dobradiça Caneco Alumínio Branco 600mm,Componentes para Indústria de Móveis,758,114
+MOV-0089,Parafuso Confirmat MDF Verniz Fosco 500mm,Componentes para Indústria de Móveis,1081,182
+MOV-0090,Perfil PVC Aço Carbono Cromado 600mm,Componentes para Indústria de Móveis,415,138
+MOV-0091,Prateleira MDP Plástico Escovado 600mm,Componentes para Indústria de Móveis,849,93
+MOV-0092,Perfil PVC MDP Texturizado 500mm,Componentes para Indústria de Móveis,789,111
+MOV-0093,Parafuso Confirmat Plástico Níquel 600mm,Componentes para Indústria de Móveis,943,148
+MOV-0094,Parafuso Confirmat MDF Preto Fosco 600mm,Componentes para Indústria de Móveis,1143,63
+MOV-0095,Tampo MDF Madeira Tauari Champagne 300mm,Componentes para Indústria de Móveis,951,53
+MOV-0096,Puxador Alumínio Níquel 128mm,Componentes para Indústria de Móveis,375,125
+MOV-0097,Dobradiça Aço Inox Branco 450mm,Componentes para Indústria de Móveis,403,103
+MOV-0098,Prateleira MDP Metálico Preto Fosco 96mm,Componentes para Indústria de Móveis,667,182
+MOV-0099,Dobradiça Caneco Aço Inox Verniz Fosco 128mm,Componentes para Indústria de Móveis,785,68
+MOV-0100,Perfil PVC Metálico Champagne 96mm,Componentes para Indústria de Móveis,985,152
+MOV-0101,Puxador Aço Carbono Preto Fosco 450mm,Componentes para Indústria de Móveis,989,106
+MOV-0102,Dobradiça Caneco MDF Branco 128mm,Componentes para Indústria de Móveis,920,135
+MOV-0103,Parafuso Confirmat Aço Carbono Preto Fosco 96mm,Componentes para Indústria de Móveis,375,125
+MOV-0104,Dobradiça Caneco Metálico Escovado 400mm,Componentes para Indústria de Móveis,817,128
+MOV-0105,Perfil PVC MDP Preto Fosco 128mm,Componentes para Indústria de Móveis,1069,107
+MOV-0106,Prateleira MDP Madeira Tauari Branco 600mm,Componentes para Indústria de Móveis,578,65
+MOV-0107,Prateleira MDP Plástico Texturizado 600mm,Componentes para Indústria de Móveis,461,82
+MOV-0108,Dobradiça Caneco Plástico Champagne 96mm,Componentes para Indústria de Móveis,1083,170
+MOV-0109,Parafuso Confirmat Aço Carbono Níquel 96mm,Componentes para Indústria de Móveis,902,60
+MOV-0110,Puxador Metálico Verniz Fosco 128mm,Componentes para Indústria de Móveis,381,126
+MOV-0111,Dobradiça Caneco Aço Inox Champagne 500mm,Componentes para Indústria de Móveis,1076,174
+MOV-0112,Tampo MDF Metálico Verniz Fosco 500mm,Componentes para Indústria de Móveis,842,64
+MOV-0113,Puxador Aço Carbono Cromado 500mm,Componentes para Indústria de Móveis,1196,89
+MOV-0114,Parafuso Confirmat Metálico Níquel 600mm,Componentes para Indústria de Móveis,557,67
+MOV-0115,Parafuso Confirmat Plástico Texturizado 600mm,Componentes para Indústria de Móveis,837,125
+MOV-0116,Puxador Metálico Níquel 128mm,Componentes para Indústria de Móveis,845,191
+MOV-0117,Puxador Metálico Níquel 600mm,Componentes para Indústria de Móveis,985,91
+MOV-0118,Perfil PVC Metálico Champagne 400mm,Componentes para Indústria de Móveis,922,82
+MOV-0119,Corrediça MDF Escovado 96mm,Componentes para Indústria de Móveis,1137,158
+MOV-0120,Corrediça Metálico Texturizado 500mm,Componentes para Indústria de Móveis,516,170
+MOV-0121,Parafuso Confirmat Plástico Verniz Fosco 600mm,Componentes para Indústria de Móveis,524,104
+MOV-0122,Tampo MDF MDF Preto Fosco 500mm,Componentes para Indústria de Móveis,895,91
+MOV-0123,Puxador Metálico Cromado 160mm,Componentes para Indústria de Móveis,797,91
+MOV-0124,Parafuso Confirmat MDP Cromado 160mm,Componentes para Indústria de Móveis,1142,150
+MOV-0125,Puxador MDP Branco 450mm,Componentes para Indústria de Móveis,671,111
+MOV-0126,Prateleira MDP Alumínio Preto Fosco 500mm,Componentes para Indústria de Móveis,736,133
+MOV-0127,Dobradiça Aço Carbono Branco 500mm,Componentes para Indústria de Móveis,1039,181
+MOV-0128,Tampo MDF Plástico Cromado 300mm,Componentes para Indústria de Móveis,1099,85
+MOV-0129,Dobradiça Plástico Escovado 450mm,Componentes para Indústria de Móveis,423,85
+MOV-0130,Puxador MDP Texturizado 128mm,Componentes para Indústria de Móveis,936,122
+MOV-0131,Corrediça Aço Inox Níquel 500mm,Componentes para Indústria de Móveis,471,157
+MOV-0132,Corrediça MDF Escovado 160mm,Componentes para Indústria de Móveis,732,176
+MOV-0133,Dobradiça MDF Preto Fosco 160mm,Componentes para Indústria de Móveis,413,90
+MOV-0134,Puxador Madeira Tauari Cromado 450mm,Componentes para Indústria de Móveis,1144,186
+MOV-0135,Prateleira MDP Madeira Tauari Cromado 450mm,Componentes para Indústria de Móveis,773,129
+MOV-0136,Parafuso Confirmat MDP Verniz Fosco 96mm,Componentes para Indústria de Móveis,439,93
+MOV-0137,Parafuso Confirmat Aço Carbono Níquel 400mm,Componentes para Indústria de Móveis,791,65
+MOV-0138,Puxador Alumínio Champagne 300mm,Componentes para Indústria de Móveis,535,121
+MOV-0139,Parafuso Confirmat Plástico Champagne 600mm,Componentes para Indústria de Móveis,375,125
+MOV-0140,Dobradiça Caneco Metálico Escovado 128mm,Componentes para Indústria de Móveis,1149,198
+MOV-0141,Prateleira MDP Aço Inox Texturizado 300mm,Componentes para Indústria de Móveis,412,103
+MOV-0142,Corrediça Alumínio Champagne 300mm,Componentes para Indústria de Móveis,832,125
+MOV-0143,Perfil PVC Metálico Texturizado 96mm,Componentes para Indústria de Móveis,944,130
+MOV-0144,Parafuso Confirmat Metálico Escovado 160mm,Componentes para Indústria de Móveis,447,113
+MOV-0145,Parafuso Confirmat Metálico Cromado 128mm,Componentes para Indústria de Móveis,955,85
+MOV-0146,Tampo MDF MDP Verniz Fosco 500mm,Componentes para Indústria de Móveis,1072,96
+MOV-0147,Dobradiça Caneco Aço Carbono Escovado 300mm,Componentes para Indústria de Móveis,905,153
+MOV-0148,Parafuso Confirmat Plástico Champagne 500mm,Componentes para Indústria de Móveis,1103,157
+MOV-0149,Dobradiça MDF Níquel 96mm,Componentes para Indústria de Móveis,745,159
+MOV-0150,Parafuso Confirmat Madeira Tauari Escovado 96mm,Componentes para Indústria de Móveis,395,86
+MOV-0151,Dobradiça Caneco Aço Carbono Branco 400mm,Componentes para Indústria de Móveis,921,181
+MOV-0152,Tampo MDF Plástico Escovado 160mm,Componentes para Indústria de Móveis,1063,88
+MOV-0153,Corrediça Madeira Tauari Branco 96mm,Componentes para Indústria de Móveis,703,66
+MOV-0154,Corrediça Aço Carbono Preto Fosco 96mm,Componentes para Indústria de Móveis,776,135
+MOV-0155,Dobradiça MDP Preto Fosco 500mm,Componentes para Indústria de Móveis,879,165
+MOV-0156,Dobradiça Metálico Escovado 128mm,Componentes para Indústria de Móveis,788,74
+MOV-0157,Dobradiça Caneco MDP Preto Fosco 500mm,Componentes para Indústria de Móveis,572,140
+MOV-0158,Dobradiça Caneco Alumínio Preto Fosco 500mm,Componentes para Indústria de Móveis,988,149
+MOV-0159,Corrediça Madeira Tauari Verniz Fosco 600mm,Componentes para Indústria de Móveis,445,148
+MOV-0160,Perfil PVC Aço Carbono Texturizado 400mm,Componentes para Indústria de Móveis,785,156
+MOV-0161,Perfil PVC MDP Cromado 160mm,Componentes para Indústria de Móveis,1122,88
+MOV-0162,Prateleira MDP Metálico Preto Fosco 400mm,Componentes para Indústria de Móveis,1059,161
+MOV-0163,Prateleira MDP Alumínio Níquel 400mm,Componentes para Indústria de Móveis,1198,63
+MOV-0164,Dobradiça Madeira Tauari Branco 128mm,Componentes para Indústria de Móveis,960,127
+MOV-0165,Parafuso Confirmat Alumínio Champagne 400mm,Componentes para Indústria de Móveis,887,99
+MOV-0166,Perfil PVC Aço Carbono Cromado 450mm,Componentes para Indústria de Móveis,457,104
+MOV-0167,Dobradiça Plástico Texturizado 160mm,Componentes para Indústria de Móveis,580,67
+MOV-0168,Tampo MDF Alumínio Escovado 128mm,Componentes para Indústria de Móveis,555,185
+MOV-0169,Dobradiça Metálico Texturizado 500mm,Componentes para Indústria de Móveis,640,187
+MOV-0170,Tampo MDF Metálico Verniz Fosco 160mm,Componentes para Indústria de Móveis,502,109
+MOV-0171,Dobradiça Caneco Alumínio Preto Fosco 450mm,Componentes para Indústria de Móveis,449,116
+MOV-0172,Parafuso Confirmat Aço Carbono Escovado 300mm,Componentes para Indústria de Móveis,677,94
+MOV-0173,Dobradiça Aço Carbono Texturizado 300mm,Componentes para Indústria de Móveis,1110,146
+MOV-0174,Dobradiça Aço Inox Champagne 300mm,Componentes para Indústria de Móveis,668,50
+MOV-0175,Dobradiça Metálico Verniz Fosco 500mm,Componentes para Indústria de Móveis,883,62
+MOV-0176,Dobradiça Caneco MDF Níquel 400mm,Componentes para Indústria de Móveis,834,89
+MOV-0177,Dobradiça MDF Escovado 128mm,Componentes para Indústria de Móveis,1066,74
+MOV-0178,Puxador MDP Champagne 400mm,Componentes para Indústria de Móveis,1131,136
+MOV-0179,Parafuso Confirmat Plástico Preto Fosco 400mm,Componentes para Indústria de Móveis,464,108
+MOV-0180,Tampo MDF Aço Inox Preto Fosco 500mm,Componentes para Indústria de Móveis,447,67
+MOV-0181,Tampo MDF Alumínio Verniz Fosco 500mm,Componentes para Indústria de Móveis,1026,140
+MOV-0182,Dobradiça MDP Verniz Fosco 128mm,Componentes para Indústria de Móveis,724,86
+MOV-0183,Puxador MDF Champagne 500mm,Componentes para Indústria de Móveis,1168,145
+MOV-0184,Puxador Madeira Tauari Branco 600mm,Componentes para Indústria de Móveis,841,198
+MOV-0185,Parafuso Confirmat Madeira Tauari Champagne 400mm,Componentes para Indústria de Móveis,582,81
+MOV-0186,Parafuso Confirmat Aço Inox Preto Fosco 300mm,Componentes para Indústria de Móveis,673,174
+MOV-0187,Tampo MDF MDP Branco 300mm,Componentes para Indústria de Móveis,878,138
+MOV-0188,Dobradiça Caneco MDP Níquel 600mm,Componentes para Indústria de Móveis,875,192
+MOV-0189,Puxador Alumínio Champagne 450mm,Componentes para Indústria de Móveis,838,64
+MOV-0190,Corrediça Metálico Escovado 400mm,Componentes para Indústria de Móveis,429,62
+MOV-0191,Dobradiça Aço Inox Preto Fosco 500mm,Componentes para Indústria de Móveis,1008,139
+MOV-0192,Corrediça Aço Carbono Texturizado 128mm,Componentes para Indústria de Móveis,1020,162
+MOV-0193,Puxador MDP Champagne 128mm,Componentes para Indústria de Móveis,1148,80
+MOV-0194,Dobradiça Caneco Aço Inox Níquel 600mm,Componentes para Indústria de Móveis,387,129
+MOV-0195,Prateleira MDP Madeira Tauari Cromado 400mm,Componentes para Indústria de Móveis,1047,153
+MOV-0196,Prateleira MDP Aço Carbono Escovado 160mm,Componentes para Indústria de Móveis,849,178
+MOV-0197,Puxador MDF Champagne 128mm,Componentes para Indústria de Móveis,715,132
+MOV-0198,Corrediça Alumínio Escovado 160mm,Componentes para Indústria de Móveis,1131,107
+MOV-0199,Dobradiça Madeira Tauari Champagne 160mm,Componentes para Indústria de Móveis,720,59
+MOV-0200,Dobradiça Alumínio Cromado 450mm,Componentes para Indústria de Móveis,667,193
+TXT-0001,"Gorgorão Juta Impermeável 220gsm Largura 2,00m",Indústria Têxtil,982,154
+TXT-0002,"Malha Juta Impermeável 260gsm Largura 2,20m",Indústria Têxtil,1117,152
+TXT-0003,"Brim Viscose Tingido 260gsm Largura 2,20m",Indústria Têxtil,684,72
+TXT-0004,"Brim Juta Impermeável 260gsm Largura 2,20m",Indústria Têxtil,1594,149
+TXT-0005,"Brim Juta Resinado 260gsm Largura 2,20m",Indústria Têxtil,534,178
+TXT-0006,"Feltro Denim Resinado 120gsm Largura 1,40m",Indústria Têxtil,1240,138
+TXT-0007,"Brim Viscose Estampado 180gsm Largura 1,80m",Indústria Têxtil,1167,77
+TXT-0008,"Renda Juta Impermeável 180gsm Largura 1,80m",Indústria Têxtil,682,78
+TXT-0009,"Brim Algodão Tingido 120gsm Largura 1,40m",Indústria Têxtil,1209,173
+TXT-0010,"Lona Modal Tingido 120gsm Largura 1,40m",Indústria Têxtil,1174,134
+TXT-0011,"Tecido Poliéster Cru 180gsm Largura 1,80m",Indústria Têxtil,1567,81
+TXT-0012,"Brim Viscose Estampado 260gsm Largura 2,20m",Indústria Têxtil,872,214
+TXT-0013,"Brim Linho Tingido 120gsm Largura 1,40m",Indústria Têxtil,752,162
+TXT-0014,"Brim Juta Impermeável 120gsm Largura 1,40m",Indústria Têxtil,438,146
+TXT-0015,"Tecido Algodão Tingido 150gsm Largura 1,60m",Indústria Têxtil,483,161
+TXT-0016,"Lona Poliamida Impermeável 180gsm Largura 1,80m",Indústria Têxtil,692,118
+TXT-0017,"Tecido Viscose Cru 220gsm Largura 2,00m",Indústria Têxtil,535,100
+TXT-0018,"Brim Juta Resinado 150gsm Largura 1,60m",Indústria Têxtil,833,165
+TXT-0019,"Sarja Linho Tingido 220gsm Largura 2,00m",Indústria Têxtil,842,178
+TXT-0020,"Gorgorão Modal Impermeável 260gsm Largura 2,20m",Indústria Têxtil,1446,135
+TXT-0021,"Sarja Modal Estampado 260gsm Largura 2,20m",Indústria Têxtil,492,164
+TXT-0022,"Tecido Denim Resinado 120gsm Largura 1,40m",Indústria Têxtil,916,159
+TXT-0023,"Gorgorão Poliéster Estampado 120gsm Largura 1,40m",Indústria Têxtil,1257,89
+TXT-0024,"Tecido Juta Tingido 150gsm Largura 1,60m",Indústria Têxtil,1340,173
+TXT-0025,"Brim Linho Estampado 120gsm Largura 1,40m",Indústria Têxtil,481,158
+TXT-0026,"Sarja Linho Tingido 180gsm Largura 1,80m",Indústria Têxtil,687,122
+TXT-0027,"Gorgorão Viscose Estampado 220gsm Largura 2,00m",Indústria Têxtil,1525,217
+TXT-0028,"Malha Viscose Estampado 150gsm Largura 1,60m",Indústria Têxtil,1070,102
+TXT-0029,"Renda Juta Cru 220gsm Largura 2,00m",Indústria Têxtil,1544,214
+TXT-0030,"Brim Poliamida Tingido 180gsm Largura 1,80m",Indústria Têxtil,1417,196
+TXT-0031,"Gorgorão Linho Impermeável 180gsm Largura 1,80m",Indústria Têxtil,757,110
+TXT-0032,"Brim Linho Tingido 220gsm Largura 2,00m",Indústria Têxtil,559,186
+TXT-0033,"Brim Modal Estampado 260gsm Largura 2,20m",Indústria Têxtil,996,142
+TXT-0034,"Sarja Poliéster Tingido 260gsm Largura 2,20m",Indústria Têxtil,874,160
+TXT-0035,"Gorgorão Algodão Estampado 260gsm Largura 2,20m",Indústria Têxtil,789,68
+TXT-0036,"Malha Poliéster Cru 180gsm Largura 1,80m",Indústria Têxtil,1498,129
+TXT-0037,"Sarja Modal Impermeável 220gsm Largura 2,00m",Indústria Têxtil,499,125
+TXT-0038,"Tecido Modal Impermeável 120gsm Largura 1,40m",Indústria Têxtil,805,211
+TXT-0039,"Renda Algodão Tingido 180gsm Largura 1,80m",Indústria Têxtil,1385,176
+TXT-0040,"Brim Juta Tingido 120gsm Largura 1,40m",Indústria Têxtil,1511,213
+TXT-0041,"Feltro Denim Cru 150gsm Largura 1,60m",Indústria Têxtil,753,110
+TXT-0042,"Brim Poliéster Cru 180gsm Largura 1,80m",Indústria Têxtil,1038,119
+TXT-0043,"Feltro Linho Cru 120gsm Largura 1,40m",Indústria Têxtil,1301,196
+TXT-0044,"Lona Denim Estampado 260gsm Largura 2,20m",Indústria Têxtil,884,65
+TXT-0045,"Tecido Algodão Cru 260gsm Largura 2,20m",Indústria Têxtil,1283,175
+TXT-0046,"Sarja Poliamida Estampado 120gsm Largura 1,40m",Indústria Têxtil,578,155
+TXT-0047,"Sarja Viscose Cru 180gsm Largura 1,80m",Indústria Têxtil,1023,173
+TXT-0048,"Renda Poliéster Cru 180gsm Largura 1,80m",Indústria Têxtil,1567,128
+TXT-0049,"Tecido Modal Resinado 180gsm Largura 1,80m",Indústria Têxtil,1508,181
+TXT-0050,"Gorgorão Poliéster Tingido 180gsm Largura 1,80m",Indústria Têxtil,1504,75
+TXT-0051,"Brim Poliéster Resinado 220gsm Largura 2,00m",Indústria Têxtil,452,110
+TXT-0052,"Tecido Poliamida Estampado 260gsm Largura 2,20m",Indústria Têxtil,1110,101
+TXT-0053,"Malha Juta Cru 180gsm Largura 1,80m",Indústria Têxtil,600,83
+TXT-0054,"Feltro Juta Impermeável 150gsm Largura 1,60m",Indústria Têxtil,734,66
+TXT-0055,"Tecido Poliéster Estampado 260gsm Largura 2,20m",Indústria Têxtil,1211,110
+TXT-0056,"Malha Modal Estampado 180gsm Largura 1,80m",Indústria Têxtil,617,70
+TXT-0057,"Sarja Poliéster Estampado 220gsm Largura 2,00m",Indústria Têxtil,913,202
+TXT-0058,"Tecido Denim Resinado 180gsm Largura 1,80m",Indústria Têxtil,1167,99
+TXT-0059,"Tecido Viscose Cru 260gsm Largura 2,20m",Indústria Têxtil,1445,194
+TXT-0060,"Renda Poliamida Impermeável 260gsm Largura 2,20m",Indústria Têxtil,679,186
+TXT-0061,"Malha Viscose Cru 180gsm Largura 1,80m",Indústria Têxtil,1065,94
+TXT-0062,"Tecido Poliéster Tingido 260gsm Largura 2,20m",Indústria Têxtil,585,67
+TXT-0063,"Gorgorão Denim Tingido 180gsm Largura 1,80m",Indústria Têxtil,945,79
+TXT-0064,"Sarja Denim Estampado 120gsm Largura 1,40m",Indústria Têxtil,1049,114
+TXT-0065,"Brim Linho Impermeável 220gsm Largura 2,00m",Indústria Têxtil,936,188
+TXT-0066,"Brim Juta Impermeável 220gsm Largura 2,00m",Indústria Têxtil,1079,77
+TXT-0067,"Brim Poliamida Cru 220gsm Largura 2,00m",Indústria Têxtil,427,115
+TXT-0068,"Feltro Linho Resinado 120gsm Largura 1,40m",Indústria Têxtil,1188,160
+TXT-0069,"Brim Linho Cru 150gsm Largura 1,60m",Indústria Têxtil,744,137
+TXT-0070,"Sarja Viscose Impermeável 220gsm Largura 2,00m",Indústria Têxtil,1313,145
+TXT-0071,"Gorgorão Juta Estampado 120gsm Largura 1,40m",Indústria Têxtil,486,74
+TXT-0072,"Feltro Viscose Cru 260gsm Largura 2,20m",Indústria Têxtil,583,122
+TXT-0073,"Malha Linho Impermeável 260gsm Largura 2,20m",Indústria Têxtil,1270,143
+TXT-0074,"Tecido Algodão Resinado 120gsm Largura 1,40m",Indústria Têxtil,1065,125
+TXT-0075,"Feltro Viscose Cru 150gsm Largura 1,60m",Indústria Têxtil,725,89
+TXT-0076,"Tecido Modal Estampado 220gsm Largura 2,00m",Indústria Têxtil,1168,152
+TXT-0077,"Gorgorão Linho Tingido 150gsm Largura 1,60m",Indústria Têxtil,506,168
+TXT-0078,"Sarja Modal Resinado 260gsm Largura 2,20m",Indústria Têxtil,1192,187
+TXT-0079,"Tecido Poliéster Resinado 220gsm Largura 2,00m",Indústria Têxtil,1200,94
+TXT-0080,"Sarja Modal Cru 220gsm Largura 2,00m",Indústria Têxtil,699,73
+TXT-0081,"Renda Linho Impermeável 220gsm Largura 2,00m",Indústria Têxtil,973,191
+TXT-0082,"Tecido Poliéster Cru 150gsm Largura 1,60m",Indústria Têxtil,1571,112
+TXT-0083,"Lona Poliéster Resinado 220gsm Largura 2,00m",Indústria Têxtil,689,60
+TXT-0084,"Feltro Linho Tingido 180gsm Largura 1,80m",Indústria Têxtil,1187,82
+TXT-0085,"Gorgorão Juta Impermeável 180gsm Largura 1,80m",Indústria Têxtil,523,174
+TXT-0086,"Renda Poliéster Tingido 120gsm Largura 1,40m",Indústria Têxtil,942,139
+TXT-0087,"Gorgorão Linho Cru 220gsm Largura 2,00m",Indústria Têxtil,1149,152
+TXT-0088,"Sarja Viscose Tingido 220gsm Largura 2,00m",Indústria Têxtil,426,142
+TXT-0089,"Gorgorão Viscose Cru 120gsm Largura 1,40m",Indústria Têxtil,468,61
+TXT-0090,"Brim Denim Tingido 180gsm Largura 1,80m",Indústria Têxtil,794,200
+TXT-0091,"Brim Juta Cru 220gsm Largura 2,00m",Indústria Têxtil,1159,154
+TXT-0092,"Malha Poliamida Impermeável 220gsm Largura 2,00m",Indústria Têxtil,502,94
+TXT-0093,"Gorgorão Modal Resinado 180gsm Largura 1,80m",Indústria Têxtil,486,121
+TXT-0094,"Malha Poliéster Estampado 260gsm Largura 2,20m",Indústria Têxtil,446,126
+TXT-0095,"Gorgorão Modal Impermeável 150gsm Largura 1,60m",Indústria Têxtil,1576,162
+TXT-0096,"Gorgorão Modal Estampado 180gsm Largura 1,80m",Indústria Têxtil,886,129
+TXT-0097,"Brim Viscose Tingido 120gsm Largura 1,40m",Indústria Têxtil,1338,108
+TXT-0098,"Malha Denim Tingido 220gsm Largura 2,00m",Indústria Têxtil,906,148
+TXT-0099,"Malha Algodão Cru 180gsm Largura 1,80m",Indústria Têxtil,1417,199
+TXT-0100,"Renda Modal Estampado 150gsm Largura 1,60m",Indústria Têxtil,479,159
+TXT-0101,"Sarja Viscose Impermeável 180gsm Largura 1,80m",Indústria Têxtil,984,127
+TXT-0102,"Feltro Modal Cru 120gsm Largura 1,40m",Indústria Têxtil,1286,159
+TXT-0103,"Lona Poliéster Resinado 150gsm Largura 1,60m",Indústria Têxtil,828,98
+TXT-0104,"Feltro Poliéster Impermeável 220gsm Largura 2,00m",Indústria Têxtil,739,107
+TXT-0105,"Brim Algodão Impermeável 120gsm Largura 1,40m",Indústria Têxtil,479,159
+TXT-0106,"Brim Viscose Cru 120gsm Largura 1,40m",Indústria Têxtil,1593,181
+TXT-0107,"Renda Poliéster Tingido 180gsm Largura 1,80m",Indústria Têxtil,559,125
+TXT-0108,"Malha Viscose Impermeável 150gsm Largura 1,60m",Indústria Têxtil,864,95
+TXT-0109,"Feltro Denim Impermeável 180gsm Largura 1,80m",Indústria Têxtil,604,201
+TXT-0110,"Renda Modal Cru 120gsm Largura 1,40m",Indústria Têxtil,1369,199
+TXT-0111,"Tecido Modal Resinado 260gsm Largura 2,20m",Indústria Têxtil,963,88
+TXT-0112,"Renda Algodão Tingido 150gsm Largura 1,60m",Indústria Têxtil,979,60
+TXT-0113,"Sarja Algodão Estampado 120gsm Largura 1,40m",Indústria Têxtil,599,119
+TXT-0114,"Renda Poliéster Cru 120gsm Largura 1,40m",Indústria Têxtil,838,109
+TXT-0115,"Tecido Viscose Tingido 260gsm Largura 2,20m",Indústria Têxtil,1140,167
+TXT-0116,"Lona Denim Tingido 220gsm Largura 2,00m",Indústria Têxtil,1486,163
+TXT-0117,"Feltro Poliamida Estampado 220gsm Largura 2,00m",Indústria Têxtil,1321,159
+TXT-0118,"Malha Juta Tingido 150gsm Largura 1,60m",Indústria Têxtil,808,137
+TXT-0119,"Lona Juta Tingido 150gsm Largura 1,60m",Indústria Têxtil,1126,117
+TXT-0120,"Sarja Poliamida Estampado 260gsm Largura 2,20m",Indústria Têxtil,1040,197
+TXT-0121,"Gorgorão Algodão Tingido 180gsm Largura 1,80m",Indústria Têxtil,902,144
+TXT-0122,"Lona Linho Resinado 180gsm Largura 1,80m",Indústria Têxtil,1111,175
+TXT-0123,"Sarja Denim Estampado 150gsm Largura 1,60m",Indústria Têxtil,1348,219
+TXT-0124,"Renda Juta Resinado 260gsm Largura 2,20m",Indústria Têxtil,700,215
+TXT-0125,"Lona Modal Tingido 260gsm Largura 2,20m",Indústria Têxtil,1091,208
+TXT-0126,"Sarja Algodão Cru 120gsm Largura 1,40m",Indústria Têxtil,445,85
+TXT-0127,"Gorgorão Poliamida Resinado 120gsm Largura 1,40m",Indústria Têxtil,544,150
+TXT-0128,"Lona Poliéster Cru 150gsm Largura 1,60m",Indústria Têxtil,910,184
+TXT-0129,"Gorgorão Modal Cru 220gsm Largura 2,00m",Indústria Têxtil,571,78
+TXT-0130,"Tecido Algodão Cru 120gsm Largura 1,40m",Indústria Têxtil,453,119
+TXT-0131,"Brim Linho Tingido 150gsm Largura 1,60m",Indústria Têxtil,1154,176
+TXT-0132,"Feltro Denim Tingido 260gsm Largura 2,20m",Indústria Têxtil,1344,154
+TXT-0133,"Lona Viscose Tingido 260gsm Largura 2,20m",Indústria Têxtil,981,104
+TXT-0134,"Feltro Linho Cru 220gsm Largura 2,00m",Indústria Têxtil,1477,64
+TXT-0135,"Renda Juta Resinado 120gsm Largura 1,40m",Indústria Têxtil,1288,96
+TXT-0136,"Gorgorão Algodão Impermeável 220gsm Largura 2,00m",Indústria Têxtil,1443,172
+TXT-0137,"Gorgorão Poliéster Resinado 220gsm Largura 2,00m",Indústria Têxtil,1233,160
+TXT-0138,"Sarja Viscose Impermeável 260gsm Largura 2,20m",Indústria Têxtil,974,185
+TXT-0139,"Lona Poliamida Cru 220gsm Largura 2,00m",Indústria Têxtil,552,105
+TXT-0140,"Renda Denim Resinado 150gsm Largura 1,60m",Indústria Têxtil,1317,154
+TXT-0141,"Sarja Algodão Tingido 120gsm Largura 1,40m",Indústria Têxtil,1498,104
+TXT-0142,"Gorgorão Linho Tingido 260gsm Largura 2,20m",Indústria Têxtil,1033,178
+TXT-0143,"Gorgorão Poliéster Tingido 220gsm Largura 2,00m",Indústria Têxtil,1183,157
+TXT-0144,"Renda Linho Cru 180gsm Largura 1,80m",Indústria Têxtil,677,88
+TXT-0145,"Feltro Modal Estampado 150gsm Largura 1,60m",Indústria Têxtil,454,67
+TXT-0146,"Sarja Juta Impermeável 260gsm Largura 2,20m",Indústria Têxtil,1436,107
+TXT-0147,"Gorgorão Juta Tingido 180gsm Largura 1,80m",Indústria Têxtil,1476,150
+TXT-0148,"Lona Modal Tingido 150gsm Largura 1,60m",Indústria Têxtil,1441,153
+TXT-0149,"Feltro Juta Tingido 220gsm Largura 2,00m",Indústria Têxtil,1427,127
+TXT-0150,"Gorgorão Poliéster Tingido 260gsm Largura 2,20m",Indústria Têxtil,1426,195
+TXT-0151,"Sarja Algodão Cru 180gsm Largura 1,80m",Indústria Têxtil,1005,151
+TXT-0152,"Lona Linho Tingido 150gsm Largura 1,60m",Indústria Têxtil,1536,210
+TXT-0153,"Gorgorão Viscose Tingido 220gsm Largura 2,00m",Indústria Têxtil,815,82
+TXT-0154,"Gorgorão Modal Estampado 260gsm Largura 2,20m",Indústria Têxtil,906,182
+TXT-0155,"Lona Viscose Estampado 120gsm Largura 1,40m",Indústria Têxtil,1268,214
+TXT-0156,"Lona Modal Estampado 260gsm Largura 2,20m",Indústria Têxtil,969,64
+TXT-0157,"Tecido Modal Impermeável 260gsm Largura 2,20m",Indústria Têxtil,442,87
+TXT-0158,"Tecido Poliéster Impermeável 220gsm Largura 2,00m",Indústria Têxtil,848,170
+TXT-0159,"Sarja Juta Tingido 150gsm Largura 1,60m",Indústria Têxtil,1033,168
+TXT-0160,"Brim Poliéster Estampado 180gsm Largura 1,80m",Indústria Têxtil,1302,134
+TXT-0161,"Gorgorão Viscose Estampado 180gsm Largura 1,80m",Indústria Têxtil,1406,80
+TXT-0162,"Feltro Juta Impermeável 120gsm Largura 1,40m",Indústria Têxtil,1263,145
+TXT-0163,"Tecido Modal Tingido 260gsm Largura 2,20m",Indústria Têxtil,1471,113
+TXT-0164,"Brim Denim Impermeável 220gsm Largura 2,00m",Indústria Têxtil,1190,145
+TXT-0165,"Tecido Poliéster Tingido 180gsm Largura 1,80m",Indústria Têxtil,507,81
+TXT-0166,"Lona Denim Resinado 150gsm Largura 1,60m",Indústria Têxtil,640,137
+TXT-0167,"Renda Juta Tingido 180gsm Largura 1,80m",Indústria Têxtil,751,104
+TXT-0168,"Gorgorão Linho Tingido 220gsm Largura 2,00m",Indústria Têxtil,532,162
+TXT-0169,"Tecido Algodão Resinado 260gsm Largura 2,20m",Indústria Têxtil,1074,157
+TXT-0170,"Malha Poliéster Impermeável 120gsm Largura 1,40m",Indústria Têxtil,1442,175
+TXT-0171,"Feltro Poliamida Tingido 180gsm Largura 1,80m",Indústria Têxtil,1583,157
+TXT-0172,"Renda Modal Cru 220gsm Largura 2,00m",Indústria Têxtil,1335,94
+TXT-0173,"Tecido Poliamida Tingido 150gsm Largura 1,60m",Indústria Têxtil,429,135
+TXT-0174,"Tecido Linho Cru 180gsm Largura 1,80m",Indústria Têxtil,1365,148
+TXT-0175,"Lona Linho Cru 260gsm Largura 2,20m",Indústria Têxtil,674,208
+TXT-0176,"Lona Algodão Resinado 180gsm Largura 1,80m",Indústria Têxtil,855,149
+TXT-0177,"Lona Poliamida Cru 180gsm Largura 1,80m",Indústria Têxtil,1053,161
+TXT-0178,"Tecido Poliéster Tingido 150gsm Largura 1,60m",Indústria Têxtil,1234,152
+TXT-0179,"Brim Viscose Impermeável 150gsm Largura 1,60m",Indústria Têxtil,826,159
+TXT-0180,"Gorgorão Poliéster Impermeável 260gsm Largura 2,20m",Indústria Têxtil,1137,185
+TXT-0181,"Renda Poliamida Impermeável 120gsm Largura 1,40m",Indústria Têxtil,1053,162
+TXT-0182,"Renda Viscose Impermeável 220gsm Largura 2,00m",Indústria Têxtil,1411,191
+TXT-0183,"Feltro Algodão Estampado 220gsm Largura 2,00m",Indústria Têxtil,783,93
+TXT-0184,"Feltro Denim Estampado 180gsm Largura 1,80m",Indústria Têxtil,1235,132
+TXT-0185,"Lona Poliéster Cru 260gsm Largura 2,20m",Indústria Têxtil,1142,109
+TXT-0186,"Brim Viscose Resinado 180gsm Largura 1,80m",Indústria Têxtil,584,161
+TXT-0187,"Feltro Denim Cru 180gsm Largura 1,80m",Indústria Têxtil,1486,141
+TXT-0188,"Brim Modal Resinado 120gsm Largura 1,40m",Indústria Têxtil,1216,150
+TXT-0189,"Feltro Algodão Impermeável 260gsm Largura 2,20m",Indústria Têxtil,606,108
+TXT-0190,"Sarja Juta Impermeável 120gsm Largura 1,40m",Indústria Têxtil,1236,131
+TXT-0191,"Sarja Juta Cru 260gsm Largura 2,20m",Indústria Têxtil,517,172
+TXT-0192,"Renda Denim Cru 150gsm Largura 1,60m",Indústria Têxtil,710,167
+TXT-0193,"Malha Denim Cru 220gsm Largura 2,00m",Indústria Têxtil,725,63
+TXT-0194,"Brim Denim Estampado 220gsm Largura 2,00m",Indústria Têxtil,652,67
+TXT-0195,"Renda Modal Resinado 180gsm Largura 1,80m",Indústria Têxtil,937,152
+TXT-0196,"Brim Modal Estampado 220gsm Largura 2,00m",Indústria Têxtil,531,67
+TXT-0197,"Renda Linho Resinado 260gsm Largura 2,20m",Indústria Têxtil,1314,164
+TXT-0198,"Malha Poliéster Cru 120gsm Largura 1,40m",Indústria Têxtil,1393,118
+TXT-0199,"Tecido Denim Cru 180gsm Largura 1,80m",Indústria Têxtil,1508,189
+TXT-0200,"Lona Algodão Estampado 260gsm Largura 2,20m",Indústria Têxtil,1123,208
