@@ -7,7 +7,10 @@ from typing import Optional
 from fastapi import APIRouter, Body, status
 from pydantic import BaseModel, EmailStr
 
-from app.services.task_service import trigger_retrain_model_task
+from app.services.task_service import (
+    trigger_retrain_all_products_task,
+    trigger_retrain_model_task,
+)
 
 router = APIRouter(prefix="/vendas", tags=["ml"])
 
@@ -25,6 +28,12 @@ class RetrainResponse(BaseModel):
     produto_id: int
 
 
+class BulkRetrainResponse(BaseModel):
+    """Response structure for the consolidated retraining flow."""
+
+    task_id: str
+
+
 @router.post(
     "/retrain/{produto_id}",
     response_model=RetrainResponse,
@@ -38,3 +47,15 @@ def enqueue_retrain(produto_id: int, payload: RetrainRequest = Body(default=Retr
         destinatario_email=payload.email,
     )
     return RetrainResponse(task_id=async_result.id, produto_id=produto_id)
+
+
+@router.post(
+    "/retrain/catalogo",
+    response_model=BulkRetrainResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def enqueue_bulk_retrain(payload: RetrainRequest = Body(default=RetrainRequest())) -> BulkRetrainResponse:
+    """Dispatch the consolidated Prophet retraining flow for the entire catalogue."""
+
+    async_result = trigger_retrain_all_products_task(destinatario_email=payload.email)
+    return BulkRetrainResponse(task_id=async_result.id)

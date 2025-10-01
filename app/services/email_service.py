@@ -92,6 +92,62 @@ def send_training_report(to_email: str, produto_id: int, pdf_path: str) -> None:
     )
 
 
+def send_bulk_training_report(
+    *, to_email: Optional[str], pdf_path: str, total_treinados: int, total_ignorados: int
+) -> None:
+    """Send the consolidated training report covering the entire catalogue."""
+
+    try:
+        config = _load_smtp_config()
+    except RuntimeError as exc:
+        LOGGER.warning("email.bulk.config.missing", error=str(exc))
+        return
+
+    recipient = to_email or config.default_recipient
+    if not recipient:
+        LOGGER.warning(
+            "email.bulk.recipient.missing",
+            destinatario_informado=to_email,
+        )
+        return
+
+    attachment = _validate_pdf(pdf_path)
+    body = _render_bulk_email_body(
+        total_treinados=total_treinados,
+        total_ignorados=total_ignorados,
+    )
+
+    email_content = EmailContent(
+        subject="Relatório de Re-Treino — Catálogo Completo",
+        body=body,
+        sender=config.sender,
+        recipient=recipient,
+        attachment_path=attachment,
+    )
+    message = _build_email_message(email_content)
+
+    LOGGER.info(
+        "email.bulk.preparing",
+        destinatario=recipient,
+        pdf=str(attachment),
+        total_treinados=total_treinados,
+        total_ignorados=total_ignorados,
+    )
+
+    try:
+        _dispatch_email(config=config, message=message)
+    except Exception as exc:  # noqa: BLE001
+        LOGGER.error("email.bulk.failed", error=str(exc))
+        raise
+
+    LOGGER.info(
+        "email.bulk.sent",
+        destinatario=recipient,
+        total_treinados=total_treinados,
+        total_ignorados=total_ignorados,
+    )
+
+
 def _load_smtp_config() -> SMTPConfig:
     """Load SMTP credentials from environment variables and validate them."""
 
@@ -193,6 +249,25 @@ def _render_email_body(*, produto_nome: str, treinado_em: datetime, metricas: Di
     return "\n".join(linhas)
 
 
+def _render_bulk_email_body(*, total_treinados: int, total_ignorados: int) -> str:
+    """Render the email body for the consolidated training report."""
+
+    linhas = [
+        "Prezados(as),",
+        "",
+        "O ciclo completo de re-treino dos modelos de previsão foi concluído com sucesso.",
+        "",
+        f"• Modelos treinados: {total_treinados}",
+        f"• Produtos sem dados suficientes: {total_ignorados}",
+        "• Relatório consolidado em anexo",
+        "",
+        "Atenciosamente,",
+        "Equipe de IA - Automação da Cadeia de Suprimentos",
+    ]
+
+    return "\n".join(linhas)
+
+
 @dataclass(frozen=True)
 class EmailContent:
     """Encapsulates email message content and attachment information."""
@@ -234,4 +309,4 @@ def _dispatch_email(*, config: SMTPConfig, message: EmailMessage) -> None:
         smtp.send_message(message)
 
 
-__all__ = ["send_training_report"]
+__all__ = ["send_training_report", "send_bulk_training_report"]

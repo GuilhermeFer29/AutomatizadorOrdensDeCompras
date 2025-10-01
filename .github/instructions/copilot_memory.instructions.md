@@ -126,11 +126,6 @@ status: "PENDING"
       - Dashboard acessível em `/dashboard` mostrando histórico + previsão
 - Status: PENDING
 
-### Progresso registrado (pré-PASS)
-- Refeito: nova tentativa de executar `create_db_and_tables()` durante o startup da API; o processo segue sem sucesso.
-- Pronto: nenhum item liberado para validação antes do PASS devido à indisponibilidade do banco.
-- Bloqueio atual: `2003 (HY000): Can't connect to MySQL server on 'db:3306' (111)` ao conectar no MySQL.
-
 ---
 
 ## Phase 4 — Scraping com ScraperAPI (Mercado Livre)

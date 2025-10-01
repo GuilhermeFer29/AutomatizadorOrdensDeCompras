@@ -19,9 +19,10 @@ def create_celery_app() -> Celery:
     backend_url = os.getenv("CELERY_RESULT_BACKEND", broker_url)
 
     celery_app = Celery(
-        "automacao_inteligente_compras",
+        "worker",
         broker=broker_url,
         backend=backend_url,
+        broker_connection_retry_on_startup=True,  # Add this line
     )
 
     celery_app.conf.update(

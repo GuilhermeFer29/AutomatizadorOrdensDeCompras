@@ -7,7 +7,11 @@ from typing import Any, Optional
 from fastapi import APIRouter, Body, HTTPException, status
 from pydantic import BaseModel, Field
 
-from app.services.task_service import get_task_status, trigger_long_running_task
+from app.services.task_service import (
+    get_task_status,
+    trigger_long_running_task,
+    trigger_scrape_all_products_task,
+)
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -36,6 +40,14 @@ class TaskStatusResponse(BaseModel):
 def enqueue_test_task(payload: TaskRequest = Body(default=TaskRequest())) -> TaskResponse:
     """Enqueue the debug task and return its identifier."""
     async_result = trigger_long_running_task(duration_seconds=payload.duration_seconds)
+    return TaskResponse(task_id=async_result.id)
+
+
+@router.post("/scrape/all", response_model=TaskResponse, status_code=status.HTTP_202_ACCEPTED)
+def enqueue_scrape_all_products() -> TaskResponse:
+    """Trigger the scraping workflow for every registered product."""
+
+    async_result = trigger_scrape_all_products_task()
     return TaskResponse(task_id=async_result.id)
 
 

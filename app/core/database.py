@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import os
 import logging
+import time
 from typing import Generator
 
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, SQLModel, create_engine
 
 DEFAULT_DATABASE_URL = "mysql+mysqlconnector://app_user:app_password@db:3306/app_db"
@@ -35,12 +37,28 @@ engine: Engine = create_engine_instance()
 
 
 def create_db_and_tables() -> None:
-    """Ensure database schema is created for all SQLModel tables."""
-    # Import models at runtime to guarantee they are registered with SQLModel's metadata
-    from app.models import models  # noqa: F401  # pylint: disable=unused-import
+    """Create database tables with retry logic"""
+    max_retries = 5
+    retry_delay = 2
 
-    SQLModel.metadata.create_all(engine)
-    LOGGER.info("Database schema ensured via SQLModel metadata")
+    for attempt in range(max_retries):
+        try:
+            SQLModel.metadata.create_all(engine)
+            LOGGER.info("Database tables created successfully")
+            return
+        except OperationalError as e:
+            if attempt < max_retries - 1:
+                LOGGER.warning(
+                    "Database connection failed (attempt %d/%d). Retrying in %ds...",
+                    attempt + 1,
+                    max_retries,
+                    retry_delay,
+                )
+                time.sleep(retry_delay)
+                retry_delay *= 2  # Exponential backoff
+            else:
+                LOGGER.error("Failed to connect to database after %d attempts", max_retries)
+                raise e
 
 
 def get_session() -> Generator[Session, None, None]:

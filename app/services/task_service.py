@@ -8,7 +8,8 @@ from celery.result import AsyncResult
 
 from app.core.celery_app import celery_app
 from app.tasks.debug_tasks import long_running_task
-from app.tasks.ml_tasks import retrain_model_task
+from app.tasks.ml_tasks import retrain_all_products_task, retrain_model_task
+from app.tasks.scraping_tasks import scrape_all_products
 
 
 def trigger_long_running_task(duration_seconds: int = 5) -> AsyncResult:
@@ -20,6 +21,18 @@ def trigger_retrain_model_task(produto_id: int, destinatario_email: Optional[str
     """Schedule the ML retraining pipeline for the provided product."""
 
     return retrain_model_task.delay(produto_id, destinatario_email)
+
+
+def trigger_retrain_all_products_task(destinatario_email: Optional[str] = None) -> AsyncResult:
+    """Schedule the consolidated ML retraining pipeline for the entire catalogue."""
+
+    return retrain_all_products_task.delay(destinatario_email)
+
+
+def trigger_scrape_all_products_task() -> AsyncResult:
+    """Schedule the scraping workflow for every registered product."""
+
+    return scrape_all_products.delay()
 
 
 def get_task_status(task_id: str) -> Dict[str, Optional[Any]]:

@@ -26,58 +26,77 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
-def render_dashboard(produto_id: Optional[int] = Query(default=None)) -> HTMLResponse:
-    """Render the dashboard with historical prices, forecast curve and metrics."""
+def render_dashboard(
+  produto_id: Optional[int] = Query(default=None),
+  busca: Optional[str] = Query(default=None, alias="q"),
+) -> HTMLResponse:
+  """Render the dashboard with historical prices, forecast curve and metrics."""
 
-    with Session(engine) as session:
-        produtos = list(session.exec(select(Produto).order_by(Produto.nome)))
-        if not produtos:
-            LOGGER.warning("dashboard.no_products")
-            return HTMLResponse("<h1>Nenhum produto cadastrado.</h1>", status_code=200)
+  termo_busca = (busca or "").strip()
+  aviso_busca: Optional[str] = None
 
-        produto = _select_produto(produtos, produto_id)
-        precos = list(
-            session.exec(
-                select(PrecosHistoricos)
-                .where(PrecosHistoricos.produto_id == produto.id)
-                .order_by(PrecosHistoricos.coletado_em)
-            )
-        )
-        metadata = session.exec(
-            select(ModeloPredicao)
-            .where(ModeloPredicao.produto_id == produto.id)
-            .order_by(ModeloPredicao.treinado_em.desc())
-        ).first()
+  with Session(engine) as session:
+    produtos_catalogo = list(session.exec(select(Produto).order_by(Produto.nome)))
+    if not produtos_catalogo:
+      LOGGER.warning("dashboard.no_products")
+      return HTMLResponse("<h1>Nenhum produto cadastrado.</h1>", status_code=200)
 
-    if not precos:
-        LOGGER.info("dashboard.no_history", produto_id=produto.id)
-        template = TemplateData(
-            produtos=produtos,
-            produto_selecionado=produto,
-            chart_payload={"labels": [], "history": [], "forecast": []},
-            metricas={},
-            treinado_em=None,
-            aviso="Nenhum preço coletado para este produto ainda.",
-        )
-        return HTMLResponse(_render_template(template))
+    produtos_exibidos = produtos_catalogo
+    if termo_busca:
+      produtos_filtrados = _filter_products(produtos_catalogo, termo_busca)
+      if produtos_filtrados:
+        produtos_exibidos = produtos_filtrados
+      else:
+        aviso_busca = f"Nenhum produto encontrado para '{termo_busca}'."
+        termo_busca = ""
 
-    history_frame = _build_history_frame(precos)
-    chart_payload, treinado_em, metricas = _load_forecast_payload(
-        history_frame=history_frame,
-        metadata=metadata,
+    produto = _select_produto(produtos_exibidos, produto_id)
+    precos = list(
+      session.exec(
+        select(PrecosHistoricos)
+        .where(PrecosHistoricos.produto_id == produto.id)
+        .order_by(PrecosHistoricos.coletado_em)
+      )
     )
+    metadata = session.exec(
+      select(ModeloPredicao)
+      .where(ModeloPredicao.produto_id == produto.id)
+      .order_by(ModeloPredicao.treinado_em.desc())
+    ).first()
 
+  if not precos:
+    LOGGER.info("dashboard.no_history", produto_id=produto.id)
     template = TemplateData(
-        produtos=produtos,
-        produto_selecionado=produto,
-        chart_payload=chart_payload,
-        metricas=metricas,
-        treinado_em=treinado_em,
-        aviso=None,
+      produtos=produtos_exibidos,
+      produto_selecionado=produto,
+      chart_payload={"labels": [], "history": [], "forecast": []},
+      metricas={},
+      treinado_em=None,
+      aviso="Nenhum preço coletado para este produto ainda.",
+      busca=termo_busca,
+      aviso_busca=aviso_busca,
     )
-    html = _render_template(template)
-    LOGGER.info("dashboard.render", produto_id=produto.id)
-    return HTMLResponse(html)
+    return HTMLResponse(_render_template(template))
+
+  history_frame = _build_history_frame(precos)
+  chart_payload, treinado_em, metricas = _load_forecast_payload(
+    history_frame=history_frame,
+    metadata=metadata,
+  )
+
+  template = TemplateData(
+    produtos=produtos_exibidos,
+    produto_selecionado=produto,
+    chart_payload=chart_payload,
+    metricas=metricas,
+    treinado_em=treinado_em,
+    aviso=None,
+    busca=termo_busca,
+    aviso_busca=aviso_busca,
+  )
+  html = _render_template(template)
+  LOGGER.info("dashboard.render", produto_id=produto.id)
+  return HTMLResponse(html)
 
 
 def _select_produto(produtos: List[Produto], produto_id: Optional[int]) -> Produto:
@@ -91,6 +110,18 @@ def _select_produto(produtos: List[Produto], produto_id: Optional[int]) -> Produ
             return produto
 
     return produtos[0]
+
+
+def _filter_products(produtos: List[Produto], termo: str) -> List[Produto]:
+  """Filter products by name or SKU using the provided search term."""
+
+  termo_lower = termo.lower()
+  return [
+    produto
+    for produto in produtos
+    if termo_lower in (produto.nome or "").lower()
+    or termo_lower in (produto.sku or "").lower()
+  ]
 
 
 def _build_history_frame(precos: List[PrecosHistoricos]) -> pd.DataFrame:
@@ -251,13 +282,20 @@ def _build_html_template(template_data: Dict[str, str]) -> str:
 def _get_css_styles() -> str:
   """Return CSS styles for the dashboard."""
   return """
-  body { font-family: 'Segoe UI', Arial, sans-serif; margin: 40px; color: #1f2933; }
-  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-  .selectors select { padding: 8px 12px; font-size: 14px; }
-  .metrics { font-size: 14px; color: #4b5563; }
-  .warning { color: #b91c1c; margin-top: 16px; font-weight: 600; }
+  body { font-family: 'Inter', 'Segoe UI', sans-serif; margin: 24px; color: #0f172a; background-color: #f8fafc; }
+  header { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; margin-bottom: 24px; }
+  header h1 { margin: 0; font-size: 1.75rem; }
+  .metrics { font-size: 0.9rem; color: #475569; margin-top: 4px; }
+  .selectors { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+  .selectors label { display: block; font-size: 0.75rem; text-transform: uppercase; color: #64748b; letter-spacing: 0.05em; margin-bottom: 4px; }
+  .selectors input[type="search"], .selectors select { padding: 8px 12px; border-radius: 8px; border: 1px solid #cbd5f5; background: #ffffff; font-size: 0.95rem; min-width: 220px; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08); }
+  .selectors button { padding: 9px 18px; border-radius: 8px; background: #2563eb; color: #ffffff; border: none; cursor: pointer; font-size: 0.95rem; transition: background 0.2s ease; box-shadow: 0 8px 16px rgba(37, 99, 235, 0.25); }
+  .selectors button:hover { background: #1d4ed8; }
+  section { background: #ffffff; border-radius: 16px; padding: 24px; box-shadow: 0 16px 28px rgba(15, 23, 42, 0.08); }
   canvas { max-width: 100%; }
-  footer { margin-top: 32px; font-size: 12px; color: #6b7280; }
+  .warning { color: #b91c1c; margin-top: 16px; font-weight: 600; }
+  .search-notice { color: #6d28d9; margin-bottom: 16px; font-weight: 500; }
+  footer { margin-top: 32px; font-size: 0.75rem; color: #64748b; text-align: center; }
   """
 
 
@@ -271,10 +309,17 @@ def _build_header_section(template_data: Dict[str, str]) -> str:
     <div class="metrics">Último treino: {template_data['treino_texto']}</div>
   </div>
   <form class="selectors" method="get" action="/dashboard">
-    <label for="produto">Produto:</label>
-    <select id="produto" name="produto_id" onchange="this.form.submit()">
-    {template_data['options_html']}
-    </select>
+    <div>
+      <label for="search">Buscar</label>
+      <input type="search" id="search" name="q" placeholder="Nome ou SKU" value="{template_data['search_value']}" />
+    </div>
+    <div>
+      <label for="produto">Produto</label>
+      <select id="produto" name="produto_id" onchange="this.form.submit()">
+      {template_data['options_html']}
+      </select>
+    </div>
+    <button type="submit">Aplicar</button>
   </form>
   </header>
   """
@@ -284,6 +329,7 @@ def _build_main_section(template_data: Dict[str, str]) -> str:
   """Build the main content section."""
   return f"""
   <section>
+  {template_data['search_notice_html']}
   <canvas id="priceChart" height="120"></canvas>
   {template_data['aviso_html']}
   </section>
@@ -353,25 +399,33 @@ def _build_chart_script(template_data: Dict[str, str]) -> str:
 
 @dataclass
 class TemplateData:
-  """Data class to encapsulate template rendering parameters."""
-  produtos: List[Produto]
-  produto_selecionado: Produto
-  chart_payload: Dict[str, List[Optional[float]]]
-  metricas: Dict[str, float]
-  treinado_em: Optional[datetime]
-  aviso: Optional[str]
+    """Data class to encapsulate template rendering parameters."""
+
+    produtos: List[Produto]
+    produto_selecionado: Produto
+    chart_payload: Dict[str, List[Optional[float]]]
+    metricas: Dict[str, float]
+    treinado_em: Optional[datetime]
+    aviso: Optional[str]
+    busca: str
+    aviso_busca: Optional[str]
 
 
 def _prepare_template_data(template_data: TemplateData) -> Dict[str, str]:
-  """Prepare all template data for rendering."""
-  return {
-    "produto_nome": template_data.produto_selecionado.nome,
-    "options_html": _build_product_options(template_data.produtos, template_data.produto_selecionado),
-    "chart_json": json.dumps(template_data.chart_payload, ensure_ascii=False),
-    "metricas_html": _format_metrics(template_data.metricas),
-    "treino_texto": _format_training_date(template_data.treinado_em),
-    "aviso_html": f"<p class='warning'>{template_data.aviso}</p>" if template_data.aviso else "",
-  }
+    """Prepare all template data for rendering."""
+
+    return {
+        "produto_nome": template_data.produto_selecionado.nome,
+        "options_html": _build_product_options(template_data.produtos, template_data.produto_selecionado),
+        "chart_json": json.dumps(template_data.chart_payload, ensure_ascii=False),
+        "metricas_html": _format_metrics(template_data.metricas),
+        "treino_texto": _format_training_date(template_data.treinado_em),
+        "aviso_html": f"<p class='warning'>{template_data.aviso}</p>" if template_data.aviso else "",
+        "search_value": template_data.busca,
+        "search_notice_html": (
+            f"<p class='search-notice'>{template_data.aviso_busca}</p>" if template_data.aviso_busca else ""
+        ),
+    }
 
 
 def _build_product_options(produtos: List[Produto], produto_selecionado: Produto) -> str:
