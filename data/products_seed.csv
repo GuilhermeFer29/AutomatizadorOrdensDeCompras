@@ -1,0 +1,51 @@
+sku,nome,categoria,estoque_atual,estoque_minimo
+SKU-1001,"Garrafa Térmica Inox 1L","Utilidades Domésticas",120,25
+SKU-1002,"Kit Ferramentas 32 Peças","Ferramentas",80,15
+SKU-1003,"Parafuso Aço Inox M8 x 30mm","Fixadores",500,75
+SKU-1004,"Porca Sextavada M8 Zincada","Fixadores",420,60
+SKU-1005,"Chave Inglesa Ajustável 10""","Ferramentas",90,20
+SKU-1006,"Broca Aço Rápido 10mm","Ferramentas",200,40
+SKU-1007,"Luva Nitrílica Reforçada G","EPIs",300,80
+SKU-1008,"Máscara Respiratória PFF2","EPIs",450,100
+SKU-1009,"Fita Isolante PVC 19mm x 20m","Elétrica",350,70
+SKU-1010,"Cabo Flexível 2,5mm Vermelho 100m","Elétrica",180,30
+SKU-1011,"Relé Térmico Trifásico 25A","Automação Industrial",60,15
+SKU-1012,"Contato Auxiliar para Contatora","Automação Industrial",150,30
+SKU-1013,"Sensor Indutivo M12 5mm NPN","Automação Industrial",110,20
+SKU-1014,"Esteira Modular Plástica 2""","Movimentação",75,15
+SKU-1015,"Motorredutor 0,5CV 220V","Movimentação",40,8
+SKU-1016,"Correia Sincronizada HTD 8M 640mm","Movimentação",95,20
+SKU-1017,"Óleo Hidráulico ISO 68 20L","Manutenção",55,10
+SKU-1018,"Graxa Multipropósito 2kg","Manutenção",130,25
+SKU-1019,"Limpa Contato Spray 300ml","Manutenção",210,40
+SKU-1020,"Solução Anticorrosiva 5L","Manutenção",70,12
+SKU-1021,"Placa Controladora PLC Compacto","Automação Industrial",45,10
+SKU-1022,"Inversor de Frequência 2CV 220V","Automação Industrial",35,8
+SKU-1023,"Soft Starter 5CV","Automação Industrial",22,5
+SKU-1024,"Chave Seccionadora 32A","Elétrica",95,20
+SKU-1025,"Disjuntor Tripolar 32A","Elétrica",140,30
+SKU-1026,"Contatora Tripolar 18A 220V","Automação Industrial",115,25
+SKU-1027,"CLP Modular Expansão 8 Entradas","Automação Industrial",50,12
+SKU-1028,"Bomba D'água Centrífuga 1CV","Hidráulica",48,10
+SKU-1029,"Válvula Solenoide 1"" Latão","Hidráulica",85,18
+SKU-1030,"Mangueira Pneumática PU 8mm x 100m","Pneumática",160,35
+SKU-1031,"Conector Rápido Pneumático 8mm","Pneumática",240,50
+SKU-1032,"Cilindro Pneumático 50mm x 100mm","Pneumática",70,15
+SKU-1033,"Compressor de Ar 20 pés 220V","Pneumática",18,5
+SKU-1034,"Transmissor de Pressão 0-10bar","Instrumentação",42,10
+SKU-1035,"Termopar Tipo K 1m","Instrumentação",220,45
+SKU-1036,"Controlador de Temperatura PID","Instrumentação",65,12
+SKU-1037,"Data Logger 4 Canais","Instrumentação",32,8
+SKU-1038,"Barra de Alumínio 1"" x 6m","Matéria-Prima",95,20
+SKU-1039,"Chapa Aço Carbono 2mm x 3m","Matéria-Prima",75,15
+SKU-1040,"Perfil U Laminado 100mm x 6m","Matéria-Prima",60,12
+SKU-1041,"Fio de Cobre Esmaltado 18 AWG","Matéria-Prima",210,45
+SKU-1042,"Tinta Epóxi Cinza 18L","Acabamento",55,10
+SKU-1043,"Solvente Desengraxante 5L","Acabamento",85,18
+SKU-1044,"Adesivo Epóxi Estrutural 3kg","Acabamento",65,14
+SKU-1045,"Resina Poliéster 5kg","Acabamento",90,20
+SKU-1046,"Rolo de Pintura Antigotas 23cm","Acabamento",180,35
+SKU-1047,"Pincel Cerda Sintética 2""","Acabamento",260,50
+SKU-1048,"Eletrodo Revestido 6013 3,25mm","Soldagem",320,65
+SKU-1049,"Arame MIG ER70S-6 15kg","Soldagem",140,30
+SKU-1050,"Maçarico de Corte Oxicorte","Soldagem",28,6
