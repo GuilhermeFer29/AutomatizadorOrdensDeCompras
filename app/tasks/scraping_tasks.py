@@ -1,8 +1,6 @@
-"""Celery tasks responsible for orchestrating scraping jobs."""
+"""Tarefas Celery para scraping de preços no Mercado Livre."""
 
 from __future__ import annotations
-
-from typing import Any, Dict, List
 
 import structlog
 from celery import shared_task
@@ -10,54 +8,37 @@ from sqlmodel import Session, select
 
 from app.core.database import engine
 from app.models.models import Produto
-from app.services.scraping_service import ScrapingOutcome, scrape_and_save_price
+from app.services.scraping_service import scrape_and_save_price
 
 LOGGER = structlog.get_logger(__name__)
 
 
 @shared_task(name="app.tasks.scraping.scrape_product")
-def scrape_product(produto_id: int) -> Dict[str, Any]:
-    """Collect and persist the price for a specific product."""
+def scrape_product(produto_id: int) -> None:
+    """Executa o scraping e persiste o preço de um único produto."""
 
-    LOGGER.info("Iniciando scraping de produto", produto_id=produto_id)
-    outcome = scrape_and_save_price(produto_id)
-
-    return {
-        "produto_id": outcome.produto_id,
-        "price": str(outcome.price),
-        "currency": outcome.currency,
-        "source": outcome.source,
-        "fallback": outcome.used_fallback,
-    }
+    LOGGER.info("Disparando scraping individual", produto_id=produto_id)
+    scrape_and_save_price(produto_id)
 
 
 @shared_task(name="app.tasks.scraping.scrape_all_products")
-def scrape_all_products() -> List[Dict[str, Any]]:
-    """Collect prices for all products registered in the database."""
+def scrape_all_products() -> None:
+    """Realiza scraping para todos os produtos cadastrados."""
 
-    resultados: List[Dict[str, Any]] = []
     with Session(engine) as session:
         produtos = session.exec(select(Produto)).all()
 
+    LOGGER.info("Iniciando scraping em lote", total_produtos=len(produtos))
+
     for produto in produtos:
         try:
-            LOGGER.info("Processando produto para scraping", produto_id=produto.id, sku=produto.sku)
-            outcome: ScrapingOutcome = scrape_and_save_price(produto.id)
-            resultados.append(
-                {
-                    "produto_id": outcome.produto_id,
-                    "price": str(outcome.price),
-                    "currency": outcome.currency,
-                    "source": outcome.source,
-                    "fallback": outcome.used_fallback,
-                }
-            )
+            scrape_and_save_price(produto.id)
         except Exception as error:  # noqa: BLE001
             LOGGER.error(
-                "Falha ao coletar preço do produto",
+                "Erro ao executar scraping do produto",
                 produto_id=produto.id,
                 sku=produto.sku,
                 error=str(error),
             )
 
-    return resultados
+    LOGGER.info("Scraping em lote concluído", total_processados=len(produtos))

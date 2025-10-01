@@ -11,25 +11,10 @@ from celery.schedules import crontab
 DEFAULT_BROKER_URL = "redis://broker:6379/0"
 
 
-def _build_scraping_schedule() -> crontab:
-    cron_expression = os.getenv("SCRAPING_SCHEDULE_CRON", "0 */8 * * *")
-    fields = cron_expression.split()
-    if len(fields) != 5:
-        return crontab(minute=0, hour="*/8")
-
-    minute, hour, day_of_month, month_of_year, day_of_week = fields
-    return crontab(
-        minute=minute,
-        hour=hour,
-        day_of_month=day_of_month,
-        month_of_year=month_of_year,
-        day_of_week=day_of_week,
-    )
-
-
 @lru_cache(maxsize=1)
 def create_celery_app() -> Celery:
     """Create and configure the Celery application instance."""
+
     broker_url = os.getenv("REDIS_URL", DEFAULT_BROKER_URL)
     backend_url = os.getenv("CELERY_RESULT_BACKEND", broker_url)
 
@@ -48,9 +33,9 @@ def create_celery_app() -> Celery:
     )
 
     celery_app.conf.beat_schedule = {
-        "scrape-products-periodically": {
+        "scrape-mercadolivre-a-cada-8h": {
             "task": "app.tasks.scraping.scrape_all_products",
-            "schedule": _build_scraping_schedule(),
+            "schedule": crontab(minute=0, hour="*/8"),
         }
     }
 
