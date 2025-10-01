@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
+from typing import Optional
 
 import structlog
 from sqlmodel import Session
@@ -17,7 +19,18 @@ LOGGER = structlog.get_logger(__name__)
 DEFAULT_CURRENCY = os.getenv("SCRAPING_CURRENCY", "BRL")
 
 
-def scrape_and_save_price(produto_id: int) -> None:
+@dataclass(slots=True)
+class ScrapingOutcome:
+    """Resultado de uma operação de scraping."""
+    
+    produto_id: int
+    price: Optional[Decimal]
+    currency: str
+    source: str
+    success: bool
+
+
+def scrape_and_save_price(produto_id: int) -> ScrapingOutcome:
     """Scrape Mercado Livre for ``produto_id`` and persist the price."""
 
     LOGGER.info("Iniciando scraping de preço", produto_id=produto_id)
@@ -26,7 +39,13 @@ def scrape_and_save_price(produto_id: int) -> None:
         produto = session.get(Produto, produto_id)
         if produto is None:
             LOGGER.warning("Produto não encontrado para scraping", produto_id=produto_id)
-            return
+            return ScrapingOutcome(
+                produto_id=produto_id,
+                price=None,
+                currency=DEFAULT_CURRENCY,
+                source="mercado_livre",
+                success=False
+            )
 
         termo_busca = produto.nome or produto.sku
         if not termo_busca:
@@ -34,7 +53,13 @@ def scrape_and_save_price(produto_id: int) -> None:
                 "Produto não possui nome ou SKU para consulta",
                 produto_id=produto.id,
             )
-            return
+            return ScrapingOutcome(
+                produto_id=produto_id,
+                price=None,
+                currency=DEFAULT_CURRENCY,
+                source="mercado_livre",
+                success=False
+            )
 
         preco = scrape_mercadolivre(termo_busca)
         if preco is None:
@@ -43,7 +68,13 @@ def scrape_and_save_price(produto_id: int) -> None:
                 produto_id=produto.id,
                 termo_busca=termo_busca,
             )
-            return
+            return ScrapingOutcome(
+                produto_id=produto_id,
+                price=None,
+                currency=DEFAULT_CURRENCY,
+                source="mercado_livre",
+                success=False
+            )
 
         preco_decimal = Decimal(str(preco)).quantize(Decimal("0.01"))
         registro = PrecosHistoricos(
@@ -62,6 +93,14 @@ def scrape_and_save_price(produto_id: int) -> None:
             preco=str(preco_decimal),
             moeda=DEFAULT_CURRENCY,
         )
+        
+        return ScrapingOutcome(
+            produto_id=produto_id,
+            price=preco_decimal,
+            currency=DEFAULT_CURRENCY,
+            source="mercado_livre",
+            success=True
+        )
 
 
-__all__ = ["scrape_and_save_price"]
+__all__ = ["scrape_and_save_price", "ScrapingOutcome"]
