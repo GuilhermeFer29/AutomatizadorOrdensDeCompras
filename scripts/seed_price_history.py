@@ -60,7 +60,7 @@ def _calculate_price(base_price: float, step: int, rng: random.Random) -> Decima
 
 
 def seed_price_history(truncate: bool, points: int, seed: int) -> None:
-    if points < 5:
+    if points < 60:
         raise ValueError("É necessário gerar pelo menos 5 pontos históricos para treinar o modelo.")
 
     rng = random.Random(seed)
@@ -77,7 +77,11 @@ def seed_price_history(truncate: bool, points: int, seed: int) -> None:
             session.exec(delete(PrecosHistoricos))
             session.commit()
 
-        LOGGER.info("Gerando histórico sintético", total_produtos=len(produtos), pontos=points)
+        LOGGER.info(
+            "Gerando histórico sintético (produtos=%s, pontos=%s)",
+            len(produtos),
+            points,
+        )
         registros_criados = 0
 
         for produto in produtos:
@@ -98,17 +102,18 @@ def seed_price_history(truncate: bool, points: int, seed: int) -> None:
                 session.add(
                     PrecosHistoricos(
                         produto_id=produto.id,
-                        fornecedor="sintetico",
+                        fornecedor="seed",
                         preco=preco,
                         moeda="BRL",
                         coletado_em=coleta_em,
+                        is_synthetic=False,
                     )
                 )
                 registros_criados += 1
 
         session.commit()
 
-    LOGGER.info("Histórico sintético concluído", registros=registros_criados)
+    LOGGER.info("Histórico sintético concluído (registros=%s)", registros_criados)
 
 
 def main() -> None:

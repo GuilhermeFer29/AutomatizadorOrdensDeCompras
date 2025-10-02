@@ -13,6 +13,12 @@ services:
       broker:
         condition: service_healthy
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    volumes:
+      - ./app:/app/app:ro  # Hot reload código da API
+      - ./scripts:/app/scripts:ro  # Hot reload scripts
+      - ./data:/app/data:ro  # Hot reload CSVs
+      - models_data:/models
+      - reports_data:/reports
 
   worker:
     build:
@@ -26,6 +32,12 @@ services:
       broker:
         condition: service_healthy
     command: celery -A app.core.celery_app.celery_app worker --loglevel=info
+    volumes:
+      - ./app:/app/app:ro  # Hot reload código do worker
+      - ./scripts:/app/scripts:ro  # Hot reload scripts
+      - ./data:/app/data:ro  # Hot reload CSVs
+      - models_data:/models
+      - reports_data:/reports
 
   beat:
     build:
@@ -39,6 +51,9 @@ services:
       db:
         condition: service_healthy
     command: celery -A app.core.celery_app.celery_app beat --loglevel=info
+    volumes:
+      - ./app:/app/app:ro  # Hot reload código do beat
+      - ./scripts:/app/scripts:ro  # Hot reload scripts
 
   db:
     image: mysql:8.0
@@ -74,4 +89,6 @@ services:
 
 volumes:
   postgres_data:
+  models_data:
+  reports_data:
 

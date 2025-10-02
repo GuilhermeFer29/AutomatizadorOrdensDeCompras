@@ -54,6 +54,7 @@ class PrecosHistoricos(SQLModel, table=True):
     preco: Decimal = Field(default=Decimal("0.0000"), ge=Decimal("0.0000"))
     moeda: str = Field(default="BRL", max_length=10)
     coletado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
+    is_synthetic: bool = Field(default=False, nullable=False)
 
     produto: "Produto" = Relationship(back_populates="precos")
 
@@ -75,3 +76,21 @@ class ModeloPredicao(SQLModel, table=True):
     treinado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
 
     produto: "Produto" = Relationship(back_populates="modelos_predicao")
+
+
+class ModeloGlobal(SQLModel, table=True):
+    """Metadata describing the aggregated catalogue forecasting model."""
+
+    __tablename__ = "modelos_globais"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    modelo_tipo: str = Field(max_length=120)
+    versao: str = Field(max_length=32)
+    holdout_dias: int = Field(default=0, ge=0)
+    caminho_modelo: str = Field(max_length=512)
+    caminho_relatorio: str = Field(max_length=512)
+    metricas: Optional[Dict[str, float]] = Field(
+        default=None,
+        sa_column=Column(MySQLJSON, nullable=True),
+    )
+    treinado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)

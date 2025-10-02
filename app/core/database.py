@@ -65,3 +65,6 @@ def get_session() -> Generator[Session, None, None]:
     """Provide a session generator compatible with FastAPI dependencies."""
     with Session(engine) as session:
         yield session
+
+
+__all__ = ["engine", "get_session", "create_db_and_tables", "wait_for_database"]

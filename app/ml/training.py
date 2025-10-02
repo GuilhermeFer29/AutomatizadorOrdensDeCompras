@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import io
+import json
 import pickle
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Iterable, List, Sequence
+from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 import pandas as pd
@@ -20,7 +21,7 @@ from reportlab.pdfgen import canvas
 from sqlmodel import Session, select
 
 from app.core.database import engine
-from app.models.models import ModeloPredicao, PrecosHistoricos, Produto
+from app.models.models import ModeloGlobal, ModeloPredicao, PrecosHistoricos, Produto
 
 LOGGER = structlog.get_logger(__name__)
 
@@ -53,6 +54,31 @@ class TrainingOutcome:
 
 
 @dataclass
+class GlobalTrainingOutcome:
+    """Artifacts generated while training the catalogue-level model."""
+
+    history: pd.DataFrame
+    forecast: pd.DataFrame
+    metrics: Dict[str, float]
+    holdout_days: int
+    treinado_em: datetime
+    version: str
+    model_path: Path
+
+
+@dataclass
+class GlobalDashboardArtifacts:
+    """Artifacts loaded for dashboard visualisation of the global model."""
+
+    history: pd.DataFrame
+    forecast: pd.DataFrame
+    metrics: Dict[str, float]
+    holdout_days: int
+    treinado_em: datetime
+    report_path: Path
+
+
+@dataclass
 class SkippedProduct:
     """Metadata for products skipped during a bulk training run."""
 
@@ -82,8 +108,8 @@ class PDFLayoutConfig:
     body_font_size: int = 12
 
 
-def train_prophet_model(produto_id: int) -> str:
-    """Train a Prophet model for a single product and return the PDF path."""
+def train_model(produto_id: int) -> str:
+    """Train a Prophet model for a single product using price history data."""
 
     LOGGER.info("ml.training.start", produto_id=produto_id)
     run_timestamp = datetime.now(timezone.utc)
@@ -110,6 +136,104 @@ def train_prophet_model(produto_id: int) -> str:
         pdf_path=str(pdf_path),
         metricas=outcome.metrics,
     )
+
+    return str(pdf_path)
+
+
+def train_global_model() -> str:
+    """Train a single Prophet model using aggregated catalogue price history."""
+
+    LOGGER.info("ml.training.global.start")
+    run_timestamp = datetime.now(timezone.utc)
+
+    with Session(engine) as session:
+        history_df = _prepare_global_history_dataframe(session=session)
+
+    desired_holdout_days = 30
+    max_holdout = len(history_df) - MINIMUM_HISTORY_POINTS
+    if max_holdout < 1:
+        raise InsufficientHistoryError(
+            "Histórico global insuficiente para separar dados de validação."
+        )
+
+    holdout_size = min(desired_holdout_days, max_holdout)
+
+    train_df = history_df.iloc[:-holdout_size]
+    holdout_df = history_df.iloc[-holdout_size:]
+
+    LOGGER.info(
+        "ml.training.global.fit",
+        pontos_totais=len(history_df),
+        holdout_dias=holdout_size,
+    )
+
+    validation_model = Prophet(daily_seasonality=True, weekly_seasonality=True, yearly_seasonality=False)
+    validation_model.fit(train_df)
+
+    validation_future = validation_model.make_future_dataframe(
+        periods=holdout_size + FORECAST_HORIZON_DAYS,
+        freq="D",
+    )
+    validation_forecast = validation_model.predict(validation_future)
+    metrics = _calculate_holdout_metrics(holdout_df, validation_forecast)
+
+    model = Prophet(daily_seasonality=True, weekly_seasonality=True, yearly_seasonality=False)
+    model.fit(history_df)
+    future = model.make_future_dataframe(periods=FORECAST_HORIZON_DAYS, freq="D")
+    forecast = model.predict(future)
+
+    version = run_timestamp.strftime("%Y%m%dT%H%M%SZ")
+    model_path = MODELS_DIR / f"global_{version}.pkl"
+
+    with model_path.open("wb") as artifact:
+        pickle.dump(model, artifact)
+
+    outcome = GlobalTrainingOutcome(
+        history=history_df,
+        forecast=forecast,
+        metrics=metrics,
+        holdout_days=holdout_size,
+        treinado_em=run_timestamp,
+        version=version,
+        model_path=model_path,
+    )
+
+    pdf_path = REPORTS_DIR / f"global_{version}.pdf"
+    _generate_global_report(outcome=outcome, pdf_path=pdf_path)
+
+    metadata_path = MODELS_DIR / "global_metadata.json"
+
+    def _relative_or_absolute(path: Path) -> str:
+        try:
+            return str(path.relative_to(ROOT_DIR))
+        except ValueError:
+            return str(path)
+
+    metadata_payload = {
+        "version": version,
+        "model_path": _relative_or_absolute(model_path),
+        "report_path": _relative_or_absolute(pdf_path),
+        "metrics": metrics,
+        "holdout_days": holdout_size,
+        "trained_at": run_timestamp.isoformat(),
+    }
+
+    metadata_path.write_text(json.dumps(metadata_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    with Session(engine) as session:
+        registro_global = ModeloGlobal(
+            modelo_tipo="prophet_global",
+            versao=version,
+            holdout_dias=holdout_size,
+            caminho_modelo=metadata_payload["model_path"],
+            caminho_relatorio=metadata_payload["report_path"],
+            metricas=metrics,
+            treinado_em=run_timestamp,
+        )
+        session.add(registro_global)
+        session.commit()
+
+    LOGGER.info("ml.training.global.completed", pdf_path=str(pdf_path), metricas=metrics)
 
     return str(pdf_path)
 
@@ -202,20 +326,7 @@ def _process_products_for_training(
 def _train_product(*, session: Session, produto: Produto, run_timestamp: datetime) -> TrainingOutcome:
     """Execute Prophet training for the provided product within the current session."""
 
-    precos = list(
-        session.exec(
-            select(PrecosHistoricos)
-            .where(PrecosHistoricos.produto_id == produto.id)
-            .order_by(PrecosHistoricos.coletado_em)
-        )
-    )
-
-    if len(precos) < MINIMUM_HISTORY_POINTS:
-        raise InsufficientHistoryError(
-            f"Histórico insuficiente ({len(precos)}/{MINIMUM_HISTORY_POINTS})"
-        )
-
-    history_df = _prepare_history_dataframe(precos)
+    history_df = _prepare_history_dataframe(session=session, produto_id=produto.id)
 
     model = Prophet(daily_seasonality=True, weekly_seasonality=True, yearly_seasonality=False)
     model.fit(history_df)
@@ -254,11 +365,13 @@ def _train_product(*, session: Session, produto: Produto, run_timestamp: datetim
 
 
 def _count_price_records(*, session: Session, produto_id: int) -> int:
-    """Return the number of price records for logging purposes."""
+    """Return the number of real price records for logging purposes."""
 
     return len(
         session.exec(
-            select(PrecosHistoricos).where(PrecosHistoricos.produto_id == produto_id)
+            select(PrecosHistoricos)
+            .where(PrecosHistoricos.produto_id == produto_id)
+            .where(PrecosHistoricos.is_synthetic == False)  # noqa: PLR2004
         ).all()
     )
 
@@ -273,17 +386,127 @@ def _resolve_produto_nome(produto: Produto) -> str:
     return f"ID {produto.id}"
 
 
-def _prepare_history_dataframe(precos: Iterable[PrecosHistoricos]) -> pd.DataFrame:
-    """Build a Prophet-compatible dataframe from price history entries."""
+def _prepare_history_dataframe(*, session: Session, produto_id: int) -> pd.DataFrame:
+    """Load real price history from the database and convert to Prophet format."""
+
+    precos_reais = list(
+        session.exec(
+            select(PrecosHistoricos)
+            .where(PrecosHistoricos.produto_id == produto_id)
+            .where(PrecosHistoricos.is_synthetic == False)  # noqa: PLR2004
+            .order_by(PrecosHistoricos.coletado_em)
+        )
+    )
+
+    if len(precos_reais) < MINIMUM_HISTORY_POINTS:
+        raise InsufficientHistoryError(
+            f"Histórico insuficiente ({len(precos_reais)}/{MINIMUM_HISTORY_POINTS})"
+        )
 
     data = pd.DataFrame(
         {
-            "ds": [registro.coletado_em.replace(tzinfo=None) for registro in precos],
-            "y": [float(registro.preco) for registro in precos],
+            "ds": [registro.coletado_em.replace(tzinfo=None) for registro in precos_reais],
+            "y": [float(registro.preco) for registro in precos_reais],
         }
     ).sort_values("ds")
 
     return data
+
+
+def load_global_dashboard_artifacts() -> Optional[GlobalDashboardArtifacts]:
+    """Load trained global model artifacts for dashboard consumption."""
+
+    metadata_file = MODELS_DIR / "global_metadata.json"
+    if not metadata_file.is_file():
+        return None
+
+    try:
+        payload = json.loads(metadata_file.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:  # noqa: PERF203 - rare path
+        LOGGER.error("ml.training.global.metadata_invalid", error=str(exc))
+        return None
+
+    model_path = Path(payload.get("model_path", ""))
+    report_path = Path(payload.get("report_path", ""))
+
+    if not model_path.is_absolute():
+        model_path = ROOT_DIR / model_path
+    if not report_path.is_absolute():
+        report_path = ROOT_DIR / report_path
+
+    if not model_path.is_file():
+        LOGGER.warning("ml.training.global.model_missing", caminho=str(model_path))
+        return None
+
+    metrics = {chave: float(valor) for chave, valor in (payload.get("metrics", {}) or {}).items()}
+    holdout_days = int(payload.get("holdout_days", 0))
+
+    try:
+        treinado_em = datetime.fromisoformat(payload.get("trained_at"))
+    except (TypeError, ValueError):
+        treinado_em = None
+
+    with Session(engine) as session:
+        history_df = _prepare_global_history_dataframe(session=session)
+
+    with model_path.open("rb") as artifact:
+        model = pickle.load(artifact)
+
+    future = model.make_future_dataframe(periods=FORECAST_HORIZON_DAYS, freq="D")
+    forecast = model.predict(future)
+
+    return GlobalDashboardArtifacts(
+        history=history_df,
+        forecast=forecast,
+        metrics=metrics,
+        holdout_days=holdout_days,
+        treinado_em=treinado_em or datetime.fromtimestamp(model_path.stat().st_mtime, tz=timezone.utc),
+        report_path=report_path,
+    )
+
+
+def _prepare_global_history_dataframe(*, session: Session) -> pd.DataFrame:
+    """Aggregate real price history across all products for global modelling."""
+
+    registros = list(
+        session.exec(
+            select(PrecosHistoricos)
+            .where(PrecosHistoricos.is_synthetic == False)  # noqa: PLR2004
+            .order_by(PrecosHistoricos.coletado_em)
+        )
+    )
+
+    if len(registros) < MINIMUM_HISTORY_POINTS:
+        raise InsufficientHistoryError(
+            f"Histórico global insuficiente ({len(registros)}/{MINIMUM_HISTORY_POINTS})"
+        )
+
+    timestamps: List[datetime] = []
+    for registro in registros:
+        coleta = registro.coletado_em
+        if coleta.tzinfo is None:
+            coleta = coleta.replace(tzinfo=timezone.utc)
+        coleta = coleta.astimezone(timezone.utc).replace(tzinfo=None)
+        timestamps.append(coleta)
+
+    data = pd.DataFrame({"ds": timestamps, "y": [float(registro.preco) for registro in registros]})
+
+    data["ds"] = data["ds"].dt.floor("D")
+    aggregated = (
+        data.groupby("ds", as_index=False)["y"].mean().sort_values("ds")
+    )
+
+    if len(aggregated) < MINIMUM_HISTORY_POINTS:
+        raise InsufficientHistoryError(
+            f"Histórico global insuficiente ({len(aggregated)}/{MINIMUM_HISTORY_POINTS})"
+        )
+
+    aggregated = aggregated.set_index("ds").asfreq("D")
+    aggregated["y"] = aggregated["y"].interpolate(method="time")
+    aggregated["y"] = aggregated["y"].ffill().bfill()
+    aggregated = aggregated.reset_index()
+
+    return aggregated
 
 
 def _calculate_metrics(history: pd.DataFrame, forecast: pd.DataFrame) -> Dict[str, float]:
@@ -291,6 +514,23 @@ def _calculate_metrics(history: pd.DataFrame, forecast: pd.DataFrame) -> Dict[st
 
     merged = history.merge(forecast[["ds", "yhat"]], on="ds", how="left")
     merged = merged.dropna(subset=["yhat"])
+    y_true = merged["y"].to_numpy(dtype=float)
+    y_pred = merged["yhat"].to_numpy(dtype=float)
+
+    mse = float(np.mean((y_true - y_pred) ** 2))
+    rmse = float(np.sqrt(mse))
+
+    return {"mse": round(mse, 4), "rmse": round(rmse, 4)}
+
+
+def _calculate_holdout_metrics(holdout: pd.DataFrame, forecast: pd.DataFrame) -> Dict[str, float]:
+    """Calculate metrics for the holdout window used in global training."""
+
+    merged = holdout.merge(forecast[["ds", "yhat"]], on="ds", how="left")
+    merged = merged.dropna(subset=["yhat"])
+    if merged.empty:
+        return {"mse": float("nan"), "rmse": float("nan")}
+
     y_true = merged["y"].to_numpy(dtype=float)
     y_pred = merged["yhat"].to_numpy(dtype=float)
 
@@ -547,9 +787,42 @@ def _create_forecast_plot(
     return buffer
 
 
+def _generate_global_report(*, outcome: GlobalTrainingOutcome, pdf_path: Path) -> None:
+    """Create a PDF report summarizing the global Prophet training run."""
+
+    chart_stream = _create_forecast_plot(
+        produto_nome="Catálogo Global",
+        history=outcome.history,
+        forecast=outcome.forecast,
+    )
+
+    pdf, config = _create_pdf_canvas(pdf_path, "Relatório de Previsão — Modelo Global")
+
+    y_position = _add_pdf_header(pdf, config, "Relatório de Previsão — Modelo Global")
+
+    info_lines = [
+        f"Gerado em: {outcome.treinado_em.strftime('%d/%m/%Y %H:%M UTC')}",
+        f"Horizonte de previsão: {FORECAST_HORIZON_DAYS} dias",
+        f"Dias em holdout: {outcome.holdout_days}",
+    ]
+    y_position = _add_info_lines(pdf, config, info_lines, y_position)
+
+    metric_lines = [
+        f"MSE: {outcome.metrics.get('mse', 0.0):.4f}",
+        f"RMSE: {outcome.metrics.get('rmse', 0.0):.4f}",
+    ]
+
+    y_position = _add_info_lines(pdf, config, metric_lines, y_position - 20)
+    _add_chart_to_pdf(pdf, config, chart_stream, y_offset=0)
+
+    pdf.save()
+
+
 __all__ = [
-    "train_prophet_model",
+    "train_model",
     "train_all_products",
+    "train_global_model",
+    "load_global_dashboard_artifacts",
     "FORECAST_HORIZON_DAYS",
     "BulkTrainingResult",
     "SkippedProduct",

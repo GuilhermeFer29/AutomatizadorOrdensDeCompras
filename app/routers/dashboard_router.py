@@ -10,12 +10,12 @@ from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 import structlog
-from fastapi import APIRouter, Query
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import FileResponse, HTMLResponse
 from sqlmodel import Session, select
 
 from app.core.database import engine
-from app.ml.training import FORECAST_HORIZON_DAYS
+from app.ml.training import FORECAST_HORIZON_DAYS, load_global_dashboard_artifacts
 from app.models.models import ModeloPredicao, PrecosHistoricos, Produto
 from dataclasses import dataclass
 
@@ -64,17 +64,25 @@ def render_dashboard(
       .order_by(ModeloPredicao.treinado_em.desc())
     ).first()
 
+    global_context = _load_global_dashboard_context()
+
   if not precos:
     LOGGER.info("dashboard.no_history", produto_id=produto.id)
     template = TemplateData(
       produtos=produtos_exibidos,
       produto_selecionado=produto,
-      chart_payload={"labels": [], "history": [], "forecast": []},
+      chart_payload={
+        "labels": [],
+        "real_history": [],
+        "synthetic_history": [],
+        "forecast": [],
+      },
       metricas={},
       treinado_em=None,
       aviso="Nenhum preço coletado para este produto ainda.",
       busca=termo_busca,
       aviso_busca=aviso_busca,
+      global_context=global_context,
     )
     return HTMLResponse(_render_template(template))
 
@@ -93,10 +101,40 @@ def render_dashboard(
     aviso=None,
     busca=termo_busca,
     aviso_busca=aviso_busca,
+    global_context=global_context,
   )
   html = _render_template(template)
   LOGGER.info("dashboard.render", produto_id=produto.id)
   return HTMLResponse(html)
+
+
+@router.get("/dashboard/global/report")
+def download_global_report() -> FileResponse:
+  """Serve the latest global training PDF report for download."""
+
+  metadata_path = ROOT_DIR / "models" / "global_metadata.json"
+  if not metadata_path.is_file():
+    raise HTTPException(status_code=404, detail="Relatório global não encontrado.")
+
+  try:
+    payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+  except json.JSONDecodeError as exc:  # noqa: PERF203 - rare path
+    LOGGER.error("dashboard.global.metadata_invalid", error=str(exc))
+    raise HTTPException(status_code=500, detail="Metadados globais inválidos.") from exc
+
+  report_path = Path(payload.get("report_path", ""))
+  if not report_path.is_absolute():
+    report_path = ROOT_DIR / report_path
+
+  if not report_path.is_file():
+    LOGGER.warning("dashboard.global.report_missing", caminho=str(report_path))
+    raise HTTPException(status_code=404, detail="Arquivo de relatório indisponível.")
+
+  return FileResponse(
+    path=report_path,
+    media_type="application/pdf",
+    filename=report_path.name,
+  )
 
 
 def _select_produto(produtos: List[Produto], produto_id: Optional[int]) -> Produto:
@@ -130,6 +168,7 @@ def _build_history_frame(precos: List[PrecosHistoricos]) -> pd.DataFrame:
     {
       "ds": [registro.coletado_em.replace(tzinfo=None) for registro in precos],
       "y": [float(registro.preco) for registro in precos],
+      "is_synthetic": [bool(registro.is_synthetic) for registro in precos],
     }
   ).sort_values("ds")
   return frame
@@ -141,41 +180,103 @@ def _load_forecast_payload(
   metadata: Optional[ModeloPredicao],
 ) -> Tuple[Dict[str, List[Optional[float]]], Optional[datetime], Dict[str, float]]:
   """Load the persisted Prophet model to generate the chart payload."""
-  labels, history_series = _extract_history_data(history_frame)
-  
+  labels, real_series, synthetic_series = _extract_history_data(history_frame)
+
+  if not labels:
+    chart_payload = _create_empty_forecast_payload(labels, real_series, synthetic_series)
+    return chart_payload, None, {}
+
   if not metadata or not metadata.caminho_modelo:
-    return _create_empty_forecast_payload(labels, history_series)
-  
+    chart_payload = _create_empty_forecast_payload(labels, real_series, synthetic_series)
+    return chart_payload, None, {}
+
   metricas = {chave: float(valor) for chave, valor in (metadata.metricas or {}).items()}
   treinado_em = metadata.treinado_em
-  
+
   forecast_data = _generate_forecast(metadata.caminho_modelo, labels)
   if forecast_data is None:
-    return _create_empty_forecast_payload(labels, history_series)
-  
-  chart_payload = _merge_history_and_forecast(labels, history_series, forecast_data)
+    chart_payload = _create_empty_forecast_payload(labels, real_series, synthetic_series)
+    return chart_payload, treinado_em, metricas
+
+  chart_payload = _merge_history_and_forecast(labels, real_series, synthetic_series, forecast_data)
   return chart_payload, treinado_em, metricas
 
 
-def _extract_history_data(history_frame: pd.DataFrame) -> Tuple[List[str], List[float]]:
-  """Extract labels and history series from dataframe."""
-  labels = [date.strftime("%Y-%m-%d") for date in history_frame["ds"].tolist()]
-  history_series = [round(float(valor), 4) for valor in history_frame["y"].tolist()]
-  return labels, history_series
+def _load_global_dashboard_context() -> Optional[GlobalDashboardContext]:
+  """Load global model artifacts and format for dashboard consumption."""
+
+  artifacts = load_global_dashboard_artifacts()
+  if not artifacts:
+    return None
+
+  history_frame = artifacts.history.copy()
+  if history_frame.empty:
+    return None
+
+  history_frame["label"] = history_frame["ds"].dt.strftime("%Y-%m-%d")
+  labels = history_frame["label"].tolist()
+  real_series = [round(float(valor), 4) for valor in history_frame["y"].tolist()]
+  synthetic_series = [None] * len(labels)
+
+  forecast_map: Dict[str, float] = {}
+  forecast_frame = artifacts.forecast.copy()
+  forecast_frame["label"] = forecast_frame["ds"].dt.strftime("%Y-%m-%d")
+  limite = labels[-1]
+  for _, row in forecast_frame.iterrows():
+    label = row["label"]
+    if label < limite:
+      continue
+    forecast_map[label] = round(float(row["yhat"]), 4)
+
+  chart_payload = _merge_history_and_forecast(labels, real_series, synthetic_series, forecast_map)
+
+  return GlobalDashboardContext(
+    chart_payload=chart_payload,
+    metricas=artifacts.metrics,
+    treinado_em=artifacts.treinado_em,
+    holdout_dias=artifacts.holdout_days,
+    report_path=str(artifacts.report_path) if artifacts.report_path else None,
+  )
+
+
+def _extract_history_data(history_frame: pd.DataFrame) -> Tuple[List[str], List[Optional[float]], List[Optional[float]]]:
+  """Extract labels and split historical series between real and synthetic points."""
+
+  if history_frame.empty:
+    return [], [], []
+
+  frame = history_frame.copy()
+  frame["label"] = frame["ds"].dt.strftime("%Y-%m-%d")
+
+  labels: List[str] = []
+  real_series: List[Optional[float]] = []
+  synthetic_series: List[Optional[float]] = []
+
+  for label, group in frame.groupby("label", sort=True):
+    labels.append(label)
+
+    reais = group.loc[group["is_synthetic"] == False, "y"]  # noqa: PLR2004
+    sinteticos = group.loc[group["is_synthetic"] == True, "y"]  # noqa: PLR2004
+
+    real_series.append(round(float(reais.iloc[-1]), 4) if not reais.empty else None)
+    synthetic_series.append(round(float(sinteticos.iloc[-1]), 4) if not sinteticos.empty else None)
+
+  return labels, real_series, synthetic_series
 
 
 def _create_empty_forecast_payload(
   labels: List[str], 
-  history_series: List[float]
-) -> Tuple[Dict[str, List[Optional[float]]], Optional[datetime], Dict[str, float]]:
+  real_series: List[Optional[float]],
+  synthetic_series: List[Optional[float]],
+) -> Dict[str, List[Optional[float]]]:
   """Create payload with no forecast data."""
-  forecast_series: List[Optional[float]] = [None] * len(labels)
-  chart_payload = {
+
+  return {
     "labels": labels,
-    "history": history_series,
-    "forecast": forecast_series,
+    "real_history": real_series,
+    "synthetic_history": synthetic_series,
+    "forecast": [None] * len(labels),
   }
-  return chart_payload, None, {}
 
 
 def _generate_forecast(model_path_str: str, labels: List[str]) -> Optional[Dict[str, float]]:
@@ -230,22 +331,25 @@ def _extract_forecast_data(forecast_df: pd.DataFrame, labels: List[str]) -> Dict
 
 def _merge_history_and_forecast(
   labels: List[str], 
-  history_series: List[float], 
+  real_series: List[Optional[float]], 
+  synthetic_series: List[Optional[float]],
   forecast_data: Dict[str, float]
 ) -> Dict[str, List[Optional[float]]]:
   """Merge historical data with forecast predictions."""
+
   all_labels = sorted(set(labels + list(forecast_data.keys())))
-  
-  history_map = {label: None for label in all_labels}
-  for label, valor in zip(labels, history_series):
-    history_map[label] = valor
-  
-  merged_history = [history_map[label] for label in all_labels]
+
+  real_map = {label: value for label, value in zip(labels, real_series)}
+  synthetic_map = {label: value for label, value in zip(labels, synthetic_series)}
+
+  merged_real = [real_map.get(label) for label in all_labels]
+  merged_synthetic = [synthetic_map.get(label) for label in all_labels]
   merged_forecast = [forecast_data.get(label) for label in all_labels]
-  
+
   return {
     "labels": all_labels,
-    "history": merged_history,
+    "real_history": merged_real,
+    "synthetic_history": merged_synthetic,
     "forecast": merged_forecast,
   }
 
@@ -295,6 +399,8 @@ def _get_css_styles() -> str:
   canvas { max-width: 100%; }
   .warning { color: #b91c1c; margin-top: 16px; font-weight: 600; }
   .search-notice { color: #6d28d9; margin-bottom: 16px; font-weight: 500; }
+  .global-overview { margin-top: 32px; padding-top: 24px; border-top: 1px solid #e2e8f0; }
+  .global-overview h2 { margin: 0 0 12px; font-size: 1.35rem; }
   footer { margin-top: 32px; font-size: 0.75rem; color: #64748b; text-align: center; }
   """
 
@@ -327,11 +433,25 @@ def _build_header_section(template_data: Dict[str, str]) -> str:
 
 def _build_main_section(template_data: Dict[str, str]) -> str:
   """Build the main content section."""
+  global_section = ""
+  if template_data.get("global_available") == "true":
+    global_section = f"""
+    <div class="global-overview">
+      <h2>Visão Geral do Catálogo</h2>
+      <div class="metrics">{template_data['global_metricas_html']}</div>
+      <div class="metrics">{template_data['global_holdout_text']}</div>
+      <div class="metrics">{template_data['global_treino_texto']}</div>
+      <div class="metrics">{template_data['global_report_text']}</div>
+      <canvas id="globalPriceChart" height="110"></canvas>
+    </div>
+    """
+
   return f"""
   <section>
   {template_data['search_notice_html']}
   <canvas id="priceChart" height="120"></canvas>
   {template_data['aviso_html']}
+  {global_section}
   </section>
   """
 
@@ -340,7 +460,7 @@ def _build_footer_section() -> str:
   """Build the footer section."""
   return f"""
   <footer>
-  Horizonte de previsão: {FORECAST_HORIZON_DAYS} dias. Fonte de dados: Mercado Livre (ScraperAPI).
+  Horizonte de previsão: {FORECAST_HORIZON_DAYS} dias. Fonte real: Mercado Livre (ScraperAPI). Histórico sintético exibido apenas como contextualização.
   </footer>
   """
 
@@ -357,13 +477,27 @@ def _build_chart_script(template_data: Dict[str, str]) -> str:
     labels: chartData.labels,
     datasets: [
       {{
-      label: 'Histórico de preços',
-      data: chartData.history,
+      label: 'Histórico (real)',
+      data: chartData.real_history,
       borderColor: '#2563eb',
       backgroundColor: 'rgba(37,99,235,0.15)',
       tension: 0.2,
       spanGaps: true,
       borderWidth: 2,
+      pointRadius: 3,
+      pointBackgroundColor: '#2563eb',
+      }},
+      {{
+      label: 'Histórico (sintético)',
+      data: chartData.synthetic_history,
+      borderColor: '#ef4444',
+      backgroundColor: 'rgba(239,68,68,0.15)',
+      borderDash: [6,3],
+      tension: 0.2,
+      spanGaps: true,
+      borderWidth: 2,
+      pointRadius: 2,
+      pointBackgroundColor: '#ef4444',
       }},
       {{
       label: 'Previsão Prophet',
@@ -393,8 +527,62 @@ def _build_chart_script(template_data: Dict[str, str]) -> str:
     }}
     }}
   }});
+
+  const globalData = {template_data['global_chart_json']};
+  if (globalData && globalData.labels) {{
+    const globalCtx = document.getElementById('globalPriceChart');
+    if (globalCtx) {{
+      new Chart(globalCtx, {{
+        type: 'line',
+        data: {{
+          labels: globalData.labels,
+          datasets: [
+            {{
+              label: 'Histórico Global',
+              data: globalData.real_history,
+              borderColor: '#0f766e',
+              backgroundColor: 'rgba(15,118,110,0.15)',
+              tension: 0.2,
+              spanGaps: true,
+              borderWidth: 2,
+              pointRadius: 2,
+            }},
+            {{
+              label: 'Previsão Global',
+              data: globalData.forecast,
+              borderColor: '#f97316',
+              backgroundColor: 'rgba(249,115,22,0.15)',
+              borderDash: [6,3],
+              tension: 0.2,
+              spanGaps: true,
+              borderWidth: 2,
+            }}
+          ]
+        }},
+        options: {{
+          interaction: {{ mode: 'index', intersect: false }},
+          scales: {{
+            x: {{ ticks: {{ maxRotation: 45, minRotation: 45 }} }},
+            y: {{ ticks: {{ callback: value => 'R$ ' + Number(value).toFixed(2) }} }},
+          }},
+          plugins: {{ legend: {{ position: 'bottom' }} }}
+        }}
+      }});
+    }}
+  }}
   </script>
   """
+
+
+@dataclass
+class GlobalDashboardContext:
+  """Context data for the global aggregated model."""
+
+  chart_payload: Dict[str, List[Optional[float]]]
+  metricas: Dict[str, float]
+  treinado_em: Optional[datetime]
+  holdout_dias: int
+  report_path: Optional[str]
 
 
 @dataclass
@@ -409,23 +597,54 @@ class TemplateData:
     aviso: Optional[str]
     busca: str
     aviso_busca: Optional[str]
+    global_context: Optional[GlobalDashboardContext]
 
 
 def _prepare_template_data(template_data: TemplateData) -> Dict[str, str]:
-    """Prepare all template data for rendering."""
+  """Prepare all template data for rendering."""
 
-    return {
-        "produto_nome": template_data.produto_selecionado.nome,
-        "options_html": _build_product_options(template_data.produtos, template_data.produto_selecionado),
-        "chart_json": json.dumps(template_data.chart_payload, ensure_ascii=False),
-        "metricas_html": _format_metrics(template_data.metricas),
-        "treino_texto": _format_training_date(template_data.treinado_em),
-        "aviso_html": f"<p class='warning'>{template_data.aviso}</p>" if template_data.aviso else "",
-        "search_value": template_data.busca,
-        "search_notice_html": (
-            f"<p class='search-notice'>{template_data.aviso_busca}</p>" if template_data.aviso_busca else ""
+  prepared: Dict[str, str] = {
+    "produto_nome": template_data.produto_selecionado.nome,
+    "options_html": _build_product_options(template_data.produtos, template_data.produto_selecionado),
+    "chart_json": json.dumps(template_data.chart_payload, ensure_ascii=False),
+    "metricas_html": _format_metrics(template_data.metricas),
+    "treino_texto": _format_training_date(template_data.treinado_em),
+    "aviso_html": f"<p class='warning'>{template_data.aviso}</p>" if template_data.aviso else "",
+    "search_value": template_data.busca,
+    "search_notice_html": (
+      f"<p class='search-notice'>{template_data.aviso_busca}</p>" if template_data.aviso_busca else ""
+    ),
+  }
+
+  if template_data.global_context:
+    global_ctx = template_data.global_context
+    prepared.update(
+      {
+        "global_available": "true",
+        "global_chart_json": json.dumps(global_ctx.chart_payload, ensure_ascii=False),
+        "global_metricas_html": _format_metrics(global_ctx.metricas),
+        "global_treino_texto": _format_training_date(global_ctx.treinado_em),
+        "global_holdout_text": f"Dias em holdout: {global_ctx.holdout_dias}",
+        "global_report_text": (
+          f"<a href='/dashboard/global/report' target='_blank' rel='noopener'>Baixar relatório ({Path(global_ctx.report_path).name})</a>"
+          if global_ctx.report_path
+          else ""
         ),
-    }
+      }
+    )
+  else:
+    prepared.update(
+      {
+        "global_available": "false",
+        "global_chart_json": "null",
+        "global_metricas_html": "MSE: N/D | RMSE: N/D",
+        "global_treino_texto": "Treinamento ainda não executado",
+        "global_holdout_text": "",
+        "global_report_text": "",
+      }
+    )
+
+  return prepared
 
 
 def _build_product_options(produtos: List[Produto], produto_selecionado: Produto) -> str:

@@ -10,7 +10,7 @@ from celery import shared_task
 from sqlmodel import Session, select
 
 from app.core.database import engine
-from app.ml.training import BulkTrainingResult, train_all_products, train_prophet_model
+from app.ml.training import BulkTrainingResult, train_all_products, train_model
 from app.models.models import ModeloPredicao, Produto
 from app.services.email_service import send_bulk_training_report, send_training_report
 
@@ -32,7 +32,7 @@ def retrain_model_task(
 
     LOGGER.info("ml.tasks.retrain_model.start", produto_id=produto_id)
 
-    pdf_path = train_prophet_model(produto_id=produto_id)
+    pdf_path = train_model(produto_id=produto_id)
 
     with Session(engine) as session:
         produto = session.get(Produto, produto_id)
