@@ -1,28 +1,28 @@
-"""Simple dashboard rendered via FastAPI to visualise price history and forecasts."""
+"""Dashboard com histórico e previsões usando o modelo global LightGBM."""
 
 from __future__ import annotations
 
-import json
-import pickle
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+import json
 import pandas as pd
 import structlog
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import HTMLResponse
 from sqlmodel import Session, select
 
 from app.core.database import engine
-from app.ml.training import FORECAST_HORIZON_DAYS, load_global_dashboard_artifacts
-from app.models.models import ModeloPredicao, PrecosHistoricos, Produto
-from dataclasses import dataclass
+from app.ml.training import predict_prices
+from app.models.models import PrecosHistoricos, Produto
 
 LOGGER = structlog.get_logger(__name__)
 router = APIRouter(tags=["dashboard"])
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
+DEFAULT_HORIZON_DAYS = 14
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
@@ -58,39 +58,22 @@ def render_dashboard(
         .order_by(PrecosHistoricos.coletado_em)
       )
     )
-    metadata = session.exec(
-      select(ModeloPredicao)
-      .where(ModeloPredicao.produto_id == produto.id)
-      .order_by(ModeloPredicao.treinado_em.desc())
-    ).first()
 
-    global_context = _load_global_dashboard_context()
-
-  if not precos:
-    LOGGER.info("dashboard.no_history", produto_id=produto.id)
-    template = TemplateData(
-      produtos=produtos_exibidos,
-      produto_selecionado=produto,
-      chart_payload={
-        "labels": [],
-        "real_history": [],
-        "synthetic_history": [],
-        "forecast": [],
-      },
-      metricas={},
-      treinado_em=None,
-      aviso="Nenhum preço coletado para este produto ainda.",
-      busca=termo_busca,
-      aviso_busca=aviso_busca,
-      global_context=global_context,
-    )
-    return HTMLResponse(_render_template(template))
+    global_context = _load_global_forecast()
 
   history_frame = _build_history_frame(precos)
-  chart_payload, treinado_em, metricas = _load_forecast_payload(
-    history_frame=history_frame,
-    metadata=metadata,
-  )
+
+  if history_frame.empty:
+    LOGGER.info("dashboard.no_history", produto_id=produto.id)
+    chart_payload = _empty_chart_payload()
+    metricas: Dict[str, float] = {}
+    treinado_em = None
+  else:
+    chart_payload, metricas, treinado_em = _build_product_chart_payload(
+      produto=produto,
+      history_frame=history_frame,
+      horizon=DEFAULT_HORIZON_DAYS,
+    )
 
   template = TemplateData(
     produtos=produtos_exibidos,
@@ -109,32 +92,14 @@ def render_dashboard(
 
 
 @router.get("/dashboard/global/report")
-def download_global_report() -> FileResponse:
-  """Serve the latest global training PDF report for download."""
+def download_global_report() -> HTMLResponse:
+  """Retorna instruções para gerar relatório com o modelo global."""
 
-  metadata_path = ROOT_DIR / "models" / "global_metadata.json"
-  if not metadata_path.is_file():
-    raise HTTPException(status_code=404, detail="Relatório global não encontrado.")
-
-  try:
-    payload = json.loads(metadata_path.read_text(encoding="utf-8"))
-  except json.JSONDecodeError as exc:  # noqa: PERF203 - rare path
-    LOGGER.error("dashboard.global.metadata_invalid", error=str(exc))
-    raise HTTPException(status_code=500, detail="Metadados globais inválidos.") from exc
-
-  report_path = Path(payload.get("report_path", ""))
-  if not report_path.is_absolute():
-    report_path = ROOT_DIR / report_path
-
-  if not report_path.is_file():
-    LOGGER.warning("dashboard.global.report_missing", caminho=str(report_path))
-    raise HTTPException(status_code=404, detail="Arquivo de relatório indisponível.")
-
-  return FileResponse(
-    path=report_path,
-    media_type="application/pdf",
-    filename=report_path.name,
+  content = (
+    "<h2>Relatório global indisponível</h2>"
+    "<p>O pipeline Prophet foi substituído pelo modelo LightGBM. Utilize o endpoint `/ml/retrain/global` para métricas atualizadas e acompanhe as previsões neste dashboard.</p>"
   )
+  return HTMLResponse(content, status_code=200)
 
 
 def _select_produto(produtos: List[Produto], produto_id: Optional[int]) -> Produto:
@@ -174,94 +139,64 @@ def _build_history_frame(precos: List[PrecosHistoricos]) -> pd.DataFrame:
   return frame
 
 
-def _load_forecast_payload(
-  *,
-  history_frame: pd.DataFrame,
-  metadata: Optional[ModeloPredicao],
-) -> Tuple[Dict[str, List[Optional[float]]], Optional[datetime], Dict[str, float]]:
-  """Load the persisted Prophet model to generate the chart payload."""
-  labels, real_series, synthetic_series = _extract_history_data(history_frame)
+def _empty_chart_payload() -> Dict[str, List[Optional[float]]]:
+  return {
+    "labels": [],
+    "real_history": [],
+    "synthetic_history": [],
+    "forecast": [],
+  }
+
+
+def _load_global_forecast() -> Optional[GlobalDashboardContext]:
+  with Session(engine) as session:
+    produtos = list(session.exec(select(Produto.sku).order_by(Produto.sku)))
+
+  if not produtos:
+    return None
+
+  skus = [sku for (sku,) in produtos]
+
+  try:
+    forecasts = predict_prices(skus=skus, horizon_days=DEFAULT_HORIZON_DAYS)
+  except Exception as exc:
+    LOGGER.warning("dashboard.global.forecast_failure", error=str(exc))
+    return None
+
+  labels: List[str] = []
+  forecast_values: List[Optional[float]] = []
+
+  base_date = datetime.now().date()
+  for day_offset in range(DEFAULT_HORIZON_DAYS):
+    label = (base_date + timedelta(days=day_offset + 1)).strftime("%Y-%m-%d")
+    aggregated: List[float] = []
+    for sku in skus:
+      sku_forecasts = forecasts.get(sku, [])
+      if day_offset < len(sku_forecasts):
+        aggregated.append(sku_forecasts[day_offset])
+    if aggregated:
+      labels.append(label)
+      forecast_values.append(round(float(sum(aggregated) / len(aggregated)), 4))
 
   if not labels:
-    chart_payload = _create_empty_forecast_payload(labels, real_series, synthetic_series)
-    return chart_payload, None, {}
-
-  if not metadata or not metadata.caminho_modelo:
-    chart_payload = _create_empty_forecast_payload(labels, real_series, synthetic_series)
-    return chart_payload, None, {}
-
-  metricas = {chave: float(valor) for chave, valor in (metadata.metricas or {}).items()}
-  treinado_em = metadata.treinado_em
-
-  forecast_data = _generate_forecast(metadata.caminho_modelo, labels)
-  if forecast_data is None:
-    chart_payload = _create_empty_forecast_payload(labels, real_series, synthetic_series)
-    return chart_payload, treinado_em, metricas
-
-  chart_payload = _merge_history_and_forecast(labels, real_series, synthetic_series, forecast_data)
-  return chart_payload, treinado_em, metricas
-
-
-def _load_global_dashboard_context() -> Optional[GlobalDashboardContext]:
-  """Load global model artifacts and format for dashboard consumption."""
-
-  artifacts = load_global_dashboard_artifacts()
-  if not artifacts:
     return None
 
-  history_frame = artifacts.history.copy()
-  if history_frame.empty:
-    return None
+  chart_payload = {
+    "labels": labels,
+    "real_history": [None] * len(labels),
+    "synthetic_history": [None] * len(labels),
+    "forecast": forecast_values,
+  }
 
-  history_frame["label"] = history_frame["ds"].dt.strftime("%Y-%m-%d")
-  labels = history_frame["label"].tolist()
-  real_series = [round(float(valor), 4) for valor in history_frame["y"].tolist()]
-  synthetic_series = [None] * len(labels)
-
-  forecast_map: Dict[str, float] = {}
-  forecast_frame = artifacts.forecast.copy()
-  forecast_frame["label"] = forecast_frame["ds"].dt.strftime("%Y-%m-%d")
-  limite = labels[-1]
-  for _, row in forecast_frame.iterrows():
-    label = row["label"]
-    if label < limite:
-      continue
-    forecast_map[label] = round(float(row["yhat"]), 4)
-
-  chart_payload = _merge_history_and_forecast(labels, real_series, synthetic_series, forecast_map)
+  metrics, trained_at, holdout_days = _fetch_global_metadata()
 
   return GlobalDashboardContext(
     chart_payload=chart_payload,
-    metricas=artifacts.metrics,
-    treinado_em=artifacts.treinado_em,
-    holdout_dias=artifacts.holdout_days,
-    report_path=str(artifacts.report_path) if artifacts.report_path else None,
+    metricas=metrics,
+    treinado_em=trained_at or datetime.now(),
+    holdout_dias=holdout_days,
+    report_path=None,
   )
-
-
-def _extract_history_data(history_frame: pd.DataFrame) -> Tuple[List[str], List[Optional[float]], List[Optional[float]]]:
-  """Extract labels and split historical series between real and synthetic points."""
-
-  if history_frame.empty:
-    return [], [], []
-
-  frame = history_frame.copy()
-  frame["label"] = frame["ds"].dt.strftime("%Y-%m-%d")
-
-  labels: List[str] = []
-  real_series: List[Optional[float]] = []
-  synthetic_series: List[Optional[float]] = []
-
-  for label, group in frame.groupby("label", sort=True):
-    labels.append(label)
-
-    reais = group.loc[group["is_synthetic"] == False, "y"]  # noqa: PLR2004
-    sinteticos = group.loc[group["is_synthetic"] == True, "y"]  # noqa: PLR2004
-
-    real_series.append(round(float(reais.iloc[-1]), 4) if not reais.empty else None)
-    synthetic_series.append(round(float(sinteticos.iloc[-1]), 4) if not sinteticos.empty else None)
-
-  return labels, real_series, synthetic_series
 
 
 def _create_empty_forecast_payload(
@@ -279,54 +214,34 @@ def _create_empty_forecast_payload(
   }
 
 
-def _generate_forecast(model_path_str: str, labels: List[str]) -> Optional[Dict[str, float]]:
-  """Generate forecast using the persisted model."""
-  model_path = _resolve_model_path(model_path_str)
-  
-  if not model_path.is_file():
-    LOGGER.warning("dashboard.model_missing", caminho=str(model_path))
-    return None
-  
+def _build_product_chart_payload(
+  *, produto: Produto, history_frame: pd.DataFrame, horizon: int
+) -> Tuple[Dict[str, List[Optional[float]]], Dict[str, float], datetime]:
+  labels, real_series, synthetic_series = _extract_history_data(history_frame)
+  if not labels:
+    return _empty_chart_payload(), {}, datetime.now()
+
   try:
-    model = _load_model(model_path)
-    forecast_df = _predict_future(model, labels)
-    return _extract_forecast_data(forecast_df, labels)
-  except Exception as e:
-    LOGGER.error("dashboard.forecast_error", error=str(e))
-    return None
+    forecasts = predict_prices(skus=[produto.sku], horizon_days=horizon)
+  except Exception as exc:
+    LOGGER.warning("dashboard.forecast_failure", produto_id=produto.id, error=str(exc))
+    return _create_empty_forecast_payload(labels, real_series, synthetic_series), {}, datetime.now()
+
+  forecast_values = forecasts.get(produto.sku, [])
+  future_labels = _future_labels(labels[-1], len(forecast_values))
+  forecast_map = {label: round(value, 4) for label, value in zip(future_labels, forecast_values)}
+
+  chart_payload = _merge_history_and_forecast(labels, real_series, synthetic_series, forecast_map)
+  metricas, treinado_em, _ = _fetch_global_metadata()
+  return chart_payload, metricas, treinado_em
 
 
-def _resolve_model_path(model_path_str: str) -> Path:
-  """Resolve the model path, handling relative paths."""
-  model_path = Path(model_path_str)
-  if not model_path.is_absolute():
-    model_path = ROOT_DIR / model_path
-  return model_path
-
-
-def _load_model(model_path: Path):
-  """Load the pickled Prophet model."""
-  with model_path.open("rb") as model_file:
-    return pickle.load(model_file)
-
-
-def _predict_future(model, labels: List[str]) -> pd.DataFrame:
-  """Generate predictions using the Prophet model."""
-  future = model.make_future_dataframe(periods=FORECAST_HORIZON_DAYS, freq="D")
-  forecast = model.predict(future)
-  forecast["date"] = forecast["ds"].dt.strftime("%Y-%m-%d")
-  return forecast
-
-
-def _extract_forecast_data(forecast_df: pd.DataFrame, labels: List[str]) -> Dict[str, float]:
-  """Extract forecast data from the prediction dataframe."""
-  latest_history_date = labels[-1]
-  forecast_future = forecast_df[forecast_df["date"] >= latest_history_date]
-  
-  return {
-    row["date"]: round(float(row["yhat"]), 4)
-    for _, row in forecast_future.iterrows()
-  }
+def _future_labels(start_label: str, horizon: int) -> List[str]:
+  start_date = datetime.strptime(start_label, "%Y-%m-%d").date()
+  return [
+    (start_date + timedelta(days=index + 1)).strftime("%Y-%m-%d")
+    for index in range(horizon)
+  ]
 
 
 def _merge_history_and_forecast(
@@ -352,6 +267,31 @@ def _merge_history_and_forecast(
     "synthetic_history": merged_synthetic,
     "forecast": merged_forecast,
   }
+
+
+def _fetch_global_metadata() -> Tuple[Dict[str, float], Optional[datetime], int]:
+  metadata_path = ROOT_DIR / "models" / "global_lgbm_metadata.json"
+  if not metadata_path.is_file():
+    return {}, None, 0
+
+  try:
+    payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+  except (OSError, json.JSONDecodeError) as exc:
+    LOGGER.warning("dashboard.global.metadata_invalid", error=str(exc))
+    return {}, None, 0
+
+  metrics = {key: float(value) for key, value in (payload.get("metrics", {}) or {}).items()}
+
+  trained_at_raw = payload.get("trained_at")
+  trained_at: Optional[datetime]
+  try:
+    trained_at = datetime.fromisoformat(trained_at_raw) if trained_at_raw else None
+  except ValueError:
+    trained_at = None
+
+  holdout_days = int(payload.get("holdout_days", 0)) if payload.get("holdout_days") is not None else 0
+
+  return metrics, trained_at, holdout_days
 
 
 def _render_template(template_data: TemplateData) -> str:

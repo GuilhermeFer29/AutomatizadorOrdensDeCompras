@@ -23,3 +23,5 @@ langchain
 langgraph
 langchain-community
 langchain-openai
+lightgbm==4.3.0
+scikit-learn==1.4.2

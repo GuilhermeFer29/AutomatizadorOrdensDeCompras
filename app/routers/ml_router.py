@@ -1,61 +1,48 @@
-"""Routes to orchestrate ML retraining workflows via Celery."""
+"""Rotas para treinamento global LightGBM e geração de previsões."""
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Dict, List
 
-from fastapi import APIRouter, Body, status
-from pydantic import BaseModel, EmailStr
+from fastapi import APIRouter, Query, status
+from pydantic import BaseModel
 
-from app.services.task_service import (
-    trigger_retrain_all_products_task,
-    trigger_retrain_model_task,
-)
+from app.ml.training import predict_prices
+from app.services.task_service import trigger_retrain_global_model_task
 
-router = APIRouter(prefix="/vendas", tags=["ml"])
-
-
-class RetrainRequest(BaseModel):
-    """Optional payload extending the retraining request."""
-
-    email: Optional[EmailStr] = None
+router = APIRouter(prefix="/ml", tags=["ml"])
 
 
 class RetrainResponse(BaseModel):
-    """Response structure exposing the Celery task identifier."""
-
-    task_id: str
-    produto_id: int
-
-
-class BulkRetrainResponse(BaseModel):
-    """Response structure for the consolidated retraining flow."""
+    """Resposta contendo a identificação da tarefa Celery."""
 
     task_id: str
 
 
 @router.post(
-    "/retrain/{produto_id}",
+    "/retrain/global",
     response_model=RetrainResponse,
     status_code=status.HTTP_202_ACCEPTED,
 )
-def enqueue_retrain(produto_id: int, payload: RetrainRequest = Body(default=RetrainRequest())) -> RetrainResponse:
-    """Dispatch the Prophet retraining flow for a specific product."""
+def enqueue_global_retrain() -> RetrainResponse:
+    """Dispara o treinamento global LightGBM."""
 
-    async_result = trigger_retrain_model_task(
-        produto_id=produto_id,
-        destinatario_email=payload.email,
-    )
-    return RetrainResponse(task_id=async_result.id, produto_id=produto_id)
+    async_result = trigger_retrain_global_model_task()
+    return RetrainResponse(task_id=async_result.id)
 
 
-@router.post(
-    "/retrain/catalogo",
-    response_model=BulkRetrainResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-)
-def enqueue_bulk_retrain(payload: RetrainRequest = Body(default=RetrainRequest())) -> BulkRetrainResponse:
-    """Dispatch the consolidated Prophet retraining flow for the entire catalogue."""
+class PredictionResponse(BaseModel):
+    """Resposta contendo previsões por SKU."""
 
-    async_result = trigger_retrain_all_products_task(destinatario_email=payload.email)
-    return BulkRetrainResponse(task_id=async_result.id)
+    forecasts: Dict[str, List[float]]
+
+
+@router.get("/predict", response_model=PredictionResponse)
+def get_predictions(
+    sku: List[str] = Query(..., description="Lista de SKUs a serem previstos"),
+    horizon_days: int = Query(14, ge=1, le=60, description="Quantidade de dias futuros"),
+) -> PredictionResponse:
+    """Retorna previsões do modelo global para os SKUs informados."""
+
+    forecasts = predict_prices(skus=sku, horizon_days=horizon_days)
+    return PredictionResponse(forecasts=forecasts)

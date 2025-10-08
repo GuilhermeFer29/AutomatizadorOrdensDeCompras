@@ -1,4 +1,4 @@
-"""CLI utility to train a single Prophet model over the entire price catalogue."""
+"""CLI para treinar o modelo global LightGBM do catálogo."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.ml.training import train_global_model  # noqa: E402
+from app.ml.training import train_global_lgbm_model  # noqa: E402
 
 LOGGER = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ def configure_logging() -> None:
 
 
 def parse_arguments() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Train Prophet model using the full catalogue history.")
+    parser = argparse.ArgumentParser(description="Treina o modelo LightGBM usando o histórico completo do catálogo.")
     parser.add_argument(
         "--skip-dotenv",
         action="store_true",
@@ -39,9 +39,9 @@ def main() -> None:
     if not args.skip_dotenv:
         load_dotenv()
 
-    LOGGER.info("Iniciando treinamento global do catálogo")
-    pdf_path = train_global_model()
-    LOGGER.info("Treinamento global concluído: %s", pdf_path)
+    LOGGER.info("Iniciando treinamento global LightGBM")
+    metrics = train_global_lgbm_model()
+    LOGGER.info("Treinamento concluído. Métricas: %s", metrics)
 
 
 if __name__ == "__main__":
