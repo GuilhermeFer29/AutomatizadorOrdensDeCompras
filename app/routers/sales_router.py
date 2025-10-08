@@ -66,3 +66,12 @@ async def upload_sales_csv(
         await arquivo.close()
 
     return response
+
+
+@router.post("/retrain/{produto_id}", status_code=status.HTTP_202_ACCEPTED)
+def retrain_model(produto_id: int) -> dict:
+    """Trigger retraining for a specific product."""
+    from app.tasks.ml_tasks import retrain_model_task
+
+    task = retrain_model_task.delay(produto_id=produto_id)
+    return {"produto_id": produto_id, "task_id": task.id}

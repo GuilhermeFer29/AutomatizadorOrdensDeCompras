@@ -14,9 +14,9 @@ services:
         condition: service_healthy
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     volumes:
-      - ./app:/app/app:ro  # Hot reload código da API
-      - ./scripts:/app/scripts:ro  # Hot reload scripts
-      - ./data:/app/data:ro  # Hot reload CSVs
+      - ./app:/app/app  # Removido :ro para permitir gravação
+      - ./scripts:/app/scripts  # Removido :ro para permitir gravação
+      - ./data:/app/data  # Removido :ro para permitir gravação
       - models_data:/models
       - reports_data:/reports
 
@@ -33,9 +33,9 @@ services:
         condition: service_healthy
     command: celery -A app.core.celery_app.celery_app worker --loglevel=info
     volumes:
-      - ./app:/app/app:ro  # Hot reload código do worker
-      - ./scripts:/app/scripts:ro  # Hot reload scripts
-      - ./data:/app/data:ro  # Hot reload CSVs
+      - ./app:/app/app  # Removido :ro para permitir gravação
+      - ./scripts:/app/scripts  # Removido :ro para permitir gravação
+      - ./data:/app/data  # Removido :ro para permitir gravação
       - models_data:/models
       - reports_data:/reports
 
@@ -52,8 +52,8 @@ services:
         condition: service_healthy
     command: celery -A app.core.celery_app.celery_app beat --loglevel=info
     volumes:
-      - ./app:/app/app:ro  # Hot reload código do beat
-      - ./scripts:/app/scripts:ro  # Hot reload scripts
+      - ./app:/app/app  # Removido :ro para permitir gravação
+      - ./scripts:/app/scripts  # Removido :ro para permitir gravação
 
   db:
     image: mysql:8.0

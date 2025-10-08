@@ -31,7 +31,7 @@ rules:
   - Reescrever fases anteriores apenas se falharem
 
 ## Current Phase
-phase: 4
+phase: 5
 status: "PENDING"
 
 ## Phase Checklist
@@ -40,7 +40,7 @@ status: "PENDING"
 2: PASS
 3: PENDING
 4: PASS
-4.5: PENDING
+4.5: PASS
 5: PENDING
 
 ---
@@ -92,28 +92,28 @@ status: "PENDING"
 
 ---
 ## Phase 3 — MLOps + Dashboards (retrain com dados do Scraping)
-- [ ] Criar `scripts/seed_database.py` (opcional: popular DB inicial com CSV histórico, mas usar dados de `PrecosHistoricos` como fonte principal).
-- [ ] Criar `app/ml/training.py`:
+- [x] Criar `scripts/seed_database.py` (opcional: popular DB inicial com CSV histórico, mas usar dados de `PrecosHistoricos` como fonte principal).
+- [x] Criar `app/ml/training.py`:
       - Função `train_prophet_model(produto_id: int) -> str`
       - Lê dados de preços de `PrecosHistoricos` para o produto.
       - Treina modelo Prophet.
       - Salva modelo (`/models/{produto_id}.pkl`) e relatório PDF (`/reports/{produto_id}.pdf`).
-- [ ] Criar `app/services/email_service.py`:
+- [x] Criar `app/services/email_service.py`:
       - Função `send_training_report(to_email: str, produto_id: int, pdf_path: str) -> None`
       - Envia e-mail corporativo com PDF anexo e corpo estruturado.
-- [ ] Criar `app/tasks/ml_tasks.py`:
+- [x] Criar `app/tasks/ml_tasks.py`:
       - Tarefa Celery `retrain_model_task(produto_id: int)` que:
         1. Executa `train_prophet_model`.
         2. Gera relatório PDF.
         3. Chama `send_training_report`.
-- [ ] Criar rota `/vendas/retrain/{produto_id}`:
+- [x] Criar rota `/vendas/retrain/{produto_id}`:
       - Dispara retraining para produto específico.
-- [ ] Criar dashboard simples (Streamlit ou FastAPI + template frontend):
+- [x] Criar dashboard simples (Streamlit ou FastAPI + template frontend):
       - Página `/dashboard`:
         - Exibe gráfico histórico de preços (dados de `PrecosHistoricos`).
         - Exibe previsão do Prophet (curva futura).
         - Exibe métricas (MSE/RMSE).
-- [ ] Validação:
+- [x] Validação:
     command: |
       docker-compose up --build
       docker-compose exec api celery -A app.core.celery_app worker --loglevel=info
@@ -169,39 +169,131 @@ status: "PENDING"
 ---
 
 ## Phase 4.5 — Integração com APIs Públicas de Localização e Fornecedores
-- [ ] Criar `app/services/cep_service.py`:
+- [x] Criar `app/services/cep_service.py`:
       - Função `get_address_from_cep(cep: str) -> Dict[str, str]` usando **ViaCEP** (gratuito, sem API key).
-- [ ] Criar `app/services/geolocation_service.py`:
+- [x] Criar `app/services/geolocation_service.py`:
       - Função `get_coordinates_from_address(address: str) -> Tuple[float, float]` usando **Nominatim (OpenStreetMap)**.
       - Função `calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float` (fórmula de Haversine).
-- [ ] Enriquecer `Fornecedor` no DB com:
+- [x] Enriquecer `Fornecedor` no DB com:
       - CEP
       - Latitude/Longitude
-- [ ] Criar lógica no serviço de pedidos:
+- [x] Criar lógica no serviço de pedidos:
       - Ao gerar ordem de compra, comparar fornecedores:
         - Pelo preço
         - Pelo prazo
         - Pela **proximidade geográfica** (distância).
       - Regra: em caso de **urgência**, priorizar fornecedor mais próximo.
-- [ ] Criar endpoint `/fornecedores/enriquecer` para atualizar fornecedores com dados de CEP/geo.
-- [ ] Observações:
+- [x] Criar endpoint `/fornecedores/enriquecer` para atualizar fornecedores com dados de CEP/geo.
+- [x] Observações:
       - Esses dados poderão ser usados no futuro:
         - Como **feature no modelo preditivo** (prazo de entrega estimado considerando distância).
         - Como **contexto no CrewAI** para análise multi-agente.
-- [ ] Validação:
+- [x] Validação:
     - Seed inicial de fornecedores com CEPs.
     - Rodar enriquecimento (`/fornecedores/enriquecer`).
     - Gerar pedido com urgência → sistema deve escolher fornecedor mais próximo.
     - Logs devem mostrar cálculo de distância e fornecedor selecionado.
-- Status: PENDING
+- Status: PASS
 
 
 ---
-## Phase 5 — CrewAI Agents + Deploy final
-- [ ] Criar `app/agents/tools.py` (ferramentas que chamam API interna)
-- [ ] Criar `app/agents/supply_chain_crew.py` (definição dos agentes e fluxo)
-- [ ] Criar `app/services/crew_service.py` (função que monta e executa Crew)
-- [ ] Ajustar `docker-compose.yml` para rodar `api`, `worker`, `beat`, `db`, `broker`
-- [ ] Instruções de deploy (Render, Docker Swarm ou K8s)
-- [ ] Validação: endpoint `/crew/execute-analysis` retorna execução real do Crew
-- Status: PENDING
+Ótima ideia. Preparar um bom prompt para o Copilot e um checklist detalhado é a melhor forma de garantir que o desenvolvimento da Fase 5 seja estruturado e siga o plano "uma coisa de cada vez".
+
+Abaixo estão o prompt que você pode usar para guiar o Copilot e, em seguida, o bloco de markdown para adicionar ao seu arquivo de controle de projeto (.copilot_.md).
+
+1. Prompt para o Copilot (Fase 5 - LangChain)
+Aqui está um prompt completo que você pode usar para iniciar a Fase 5 com o Copilot. Ele estabelece o contexto, o objetivo e as regras para esta nova etapa.
+
+Markdown
+
+# CONTEXTO ATUAL
+
+Estamos iniciando a **Fase 5** do projeto "Plataforma Preditiva - Backend Assíncrono". A arquitetura base com FastAPI, Celery, SQLModel e serviços modulares já está robusta e funcional. As fases anteriores garantiram a coleta de dados (scraping), o treinamento de modelos de previsão (Prophet) e a exposição de dados via API e dashboard.
+
+Decidimos usar **LangChain**, especificamente o módulo **LangGraph**, para construir a camada de inteligência que orquestrará os serviços existentes, em vez do CrewAI.
+
+**PERSONA:**
+Você continua atuando como um Desenvolvedor Python Sênior, especialista em FastAPI, Celery, SQLModel, e agora com foco em **LangChain e LangGraph** para a criação de sistemas de múltiplos agentes.
+
+# OBJETIVO DA FASE 5
+
+Implementar um sistema de agentes de IA colaborativos usando LangChain e LangGraph para automatizar a análise e recomendação de ordens de compra. A equipe de agentes deve seguir este fluxo:
+
+1.  **Analista de Demanda:** Verifica a necessidade de reposição de um produto com base no estoque atual e na previsão de demanda futura.
+2.  **Pesquisador de Mercado:** Se a reposição for necessária, busca os preços atuais do produto em diferentes fornecedores.
+3.  **Analista de Logística:** Avalia as opções de fornecedores com base em custo total (preço + frete estimado por distância).
+4.  **Gerente de Compras (Agente Final):** Consolida todas as informações e gera uma recomendação final de compra estruturada.
+
+# INSTRUÇÕES PARA ESTA FASE
+
+1.  **Crie o Módulo de Agentes:** Inicie criando o diretório `app/agents/`.
+2.  **Defina as Ferramentas (`Tools`):** Crie o arquivo `app/agents/tools.py`. Importe os serviços existentes (ex: `scraping_service`, `ml_service`) e encapsule suas funções como `Tools` do LangChain. As ferramentas devem ter descrições claras para que o LLM saiba como usá-las.
+3.  **Construa o Grafo de Agentes:** Crie o arquivo `app/agents/supply_chain_graph.py`.
+    * Defina o `State` do grafo (`TypedDict`) para carregar as informações entre os nós (ex: `product_sku`, `forecast`, `market_prices`, `recommendation`).
+    * Implemente cada agente como um "nó" (`node`) no grafo. Cada nó será uma função que invoca um LLM com suas ferramentas e atualiza o estado.
+    * Use `StateGraph` do LangGraph para montar o fluxo, definindo o ponto de entrada e as arestas (`edges`) que conectam os agentes em sequência.
+4.  **Integre com a API:**
+    * Crie um novo serviço `app/services/agent_service.py` que encapsula a lógica para invocar o grafo compilado.
+    * Crie um novo router `app/routers/agent_router.py` com um endpoint `/agents/execute-analysis/{sku}` que dispara o serviço.
+5.  **Validação:** O objetivo final é que o endpoint retorne um JSON com a recomendação final, incluindo o fornecedor escolhido, o preço e a justificativa.
+
+Siga o checklist da Fase 5 e entregue um passo de cada vez para validação.
+2. Checklist da Fase 5 para o .copilot_.md
+Copie e cole este bloco de markdown no final do seu arquivo .copilot_.md (ou similar) para acompanhar o progresso desta fase.
+
+Markdown
+
+---
+
+---
+
+## Phase 5 — Agentes com LangChain
+- [ ] **Configuração do Ambiente:**
+      - [ ] Adicionar `langchain`, `langgraph`, `langchain-community`, `langchain-openai`, `openrouter-python` ao `requirements.txt`.
+      - [ ] Criar o diretório `app/agents/` e o arquivo `__init__.py`.
+      - [ ] Adicionar `OPENROUTER_API_KEY` e `OPENROUTER_MODEL_NAME` ao arquivo `.env`.
+
+- [ ] **Definição das Ferramentas:**
+      - [ ] Criar o arquivo `app/agents/tools.py`.
+      - [ ] Implementar a primeira ferramenta: `search_market_price(product_sku: str)`, que usa o `scraping_service` e retorna o preço atual.
+      - [ ] Implementar a segunda ferramenta: `get_product_info(product_sku: str)`, que consulta o banco de dados e retorna o estoque atual e mínimo.
+
+- [ ] **Construção do Grafo (Parte 1 - Nós Iniciais):**
+      - [ ] Criar o arquivo `app/agents/supply_chain_graph.py`.
+      - [ ] Definir a classe de estado `PurchaseAnalysisState(TypedDict)`.
+      - [ ] Implementar o primeiro nó: `demand_analyst_node`, que usa a ferramenta `get_product_info` e decide se a compra é necessária (lógica: `estoque_atual <= estoque_minimo`).
+      - [ ] Implementar o segundo nó: `market_researcher_node`, que usa a ferramenta `search_market_price`.
+
+- [ ] **Construção do Grafo (Parte 2 - Estrutura e Roteamento):**
+      - [ ] Em `supply_chain_graph.py`, instanciar `StateGraph`.
+      - [ ] Adicionar os nós criados (`demand_analyst`, `market_researcher`).
+      - [ ] Definir `demand_analyst` como o ponto de entrada (`entry_point`).
+      - [ ] Adicionar uma aresta condicional (`conditional_edge`):
+            - Se o `demand_analyst` indicar que a compra é necessária, vá para `market_researcher`.
+            - Caso contrário, vá para o fim (`END`).
+      - [ ] Adicionar uma aresta do `market_researcher` para o fim (`END`) por enquanto.
+      - [ ] Compilar o grafo (`workflow.compile()`).
+
+- [ ] **Integração com a API:**
+      - [ ] Criar `app/services/agent_service.py` com a função `run_purchase_analysis(sku: str)` que invoca o grafo.
+      - [ ] Criar `app/routers/agent_router.py` com o endpoint POST `/agents/execute-analysis`.
+      - [ ] Registrar o novo router no `app/main.py`.
+
+- [ ] **Validação:**
+      - **Comando:**
+        ```bash
+        # Certifique-se de que os serviços estão no ar
+        docker compose up --build
+
+        # Dispare a análise para um SKU existente
+        curl -X POST http://localhost:8000/agents/execute-analysis -H "Content-Type: application/json" -d '{"sku": "seu_sku_aqui"}'
+        ```
+      - **Resultado Esperado:**
+        - Logs da API mostrando a execução dos nós do grafo.
+        - Resposta JSON no terminal contendo o estado final da análise (ex: com os preços de mercado preenchidos).
+
+- [ ] **Expansão (Passos Futuros):**
+      - [ ] Implementar o `logistics_analyst_node` e suas ferramentas (Fase 4.5).
+      - [ ] Implementar o `decision_maker_node` para gerar a recomendação final.
+      - [ ] Integrar o grafo completo, atualizando as arestas para o fluxo final.
+- **Status:** PENDING

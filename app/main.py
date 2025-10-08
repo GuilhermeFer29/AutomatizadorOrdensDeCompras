@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.database import create_db_and_tables
 from app.routers.dashboard_router import router as dashboard_router
+from app.routers.agent_router import router as agent_router
 from app.routers.ml_router import router as ml_router
 from app.routers.sales_router import router as sales_router
 from app.routers.tasks_router import router as tasks_router
@@ -39,8 +40,13 @@ def create_application() -> FastAPI:
 
     application.include_router(tasks_router)
     application.include_router(sales_router)
-    application.include_router(ml_router)
     application.include_router(dashboard_router)
+    application.include_router(ml_router)
+    application.include_router(agent_router)
+
+    # Adicionando a rota de fornecedores
+    from app.routers.supplier_router import router as supplier_router
+    application.include_router(supplier_router)
 
     @application.on_event("startup")
     async def on_startup() -> None:  # noqa: D401 - simple startup hook

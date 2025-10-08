@@ -94,3 +94,17 @@ class ModeloGlobal(SQLModel, table=True):
         sa_column=Column(MySQLJSON, nullable=True),
     )
     treinado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
+
+
+class Fornecedor(SQLModel, table=True):
+    """Entity representing a supplier."""
+
+    __tablename__ = "fornecedores"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    nome: str = Field(index=True, max_length=255)
+    cep: Optional[str] = Field(default=None, max_length=20)
+    latitude: Optional[float] = Field(default=None)
+    longitude: Optional[float] = Field(default=None)
+    criado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
+    atualizado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)

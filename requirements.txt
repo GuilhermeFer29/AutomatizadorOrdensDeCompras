@@ -1,8 +1,9 @@
-fastapi==0.110.2
+fastapi
 uvicorn[standard]==0.29.0
 celery==5.3.6
 redis==5.0.3
-sqlmodel==0.0.16
+sqlalchemy
+sqlmodel
 python-dotenv==1.0.1
 mysql-connector-python==8.4.0
 numpy==1.26.4
@@ -17,3 +18,8 @@ structlog==24.1.0
 playwright==1.45.0
 reportlab==4.0.9
 email-validator==2.1.1
+requests
+langchain
+langgraph
+langchain-community
+langchain-openai
