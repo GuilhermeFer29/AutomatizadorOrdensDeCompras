@@ -38,11 +38,45 @@ priceHistory: PricePoint[];
 export type AgentStatus = 'active' | 'inactive';
 
 export interface Agent {
-id: number;
-name: string;
-status: AgentStatus;
-lastRun: string;
-description: string;
+  id: number;
+  name: string;
+  description: string;
+  status: AgentStatus;
+  lastRun: string;
+}
+
+export interface ChatAction {
+  action_type: string;
+  label: string;
+  action_data: Record<string, any>;
+  variant?: 'default' | 'destructive' | 'outline' | 'secondary';
+}
+
+export interface ChatMessageMetadata {
+  type?: string;
+  confidence?: 'high' | 'medium' | 'low';
+  task_id?: string;
+  sku?: string;
+  intent?: string;
+  async?: boolean;
+  stock_atual?: number;
+  stock_minimo?: number;
+  reason?: string;
+  entities?: any;
+  actions?: ChatAction[];  // Botões interativos
+  decision?: string;
+  supplier?: string;
+  price?: number;
+  quantity_recommended?: number;
+}
+
+export interface ChatMessage {
+  id: number;
+  session_id: number;
+  sender: 'human' | 'agent' | 'system';
+  content: string;
+  criado_em: string;
+  metadata?: ChatMessageMetadata | null;
 }
 
 // ============= Order Types =============

@@ -132,3 +132,47 @@ class Agente(SQLModel, table=True):
     descricao: str
     status: str = Field(default="inactive")  # active, inactive
     ultima_execucao: Optional[datetime] = Field(default=None)
+
+
+class ChatSession(SQLModel, table=True):
+    __tablename__ = "chat_sessions"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    criado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    # Poderia ter um nome, ou estar associado a um usuário
+
+
+class ChatMessage(SQLModel, table=True):
+    __tablename__ = "chat_messages"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    session_id: int = Field(foreign_key="chat_sessions.id")
+    sender: str  # 'human', 'agent', 'system'
+    content: str
+    metadata_json: Optional[str] = Field(default=None)  # JSON com confidence, agent_name, etc
+    criado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    session: ChatSession = Relationship()
+
+
+class ChatContext(SQLModel, table=True):
+    """Armazena contexto da sessão para memória entre mensagens."""
+    __tablename__ = "chat_context"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    session_id: int = Field(foreign_key="chat_sessions.id")
+    key: str  # ex: 'current_sku', 'last_intent', 'mentioned_products'
+    value: str  # Valor em string (pode ser JSON serializado)
+    atualizado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class ChatAction(SQLModel, table=True):
+    """Armazena ações pendentes (botões interativos) de mensagens do chat."""
+    __tablename__ = "chat_actions"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    message_id: int = Field(foreign_key="chat_messages.id")
+    action_type: str  # 'approve_purchase', 'view_details', 'adjust_quantity', etc
+    action_data: str  # JSON com dados da ação
+    status: str = Field(default="pending")  # pending, completed, cancelled
+    criado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

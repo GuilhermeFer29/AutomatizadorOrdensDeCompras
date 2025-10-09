@@ -55,8 +55,16 @@ def _build_llm(agent_name: str) -> ChatOpenAI:
 
 
 def _select_tools(*tool_names: str):
+    """Seleciona ferramentas pelo nome, ignorando silenciosamente as que não existem."""
     tool_map = {tool.name: tool for tool in SUPPLY_CHAIN_TOOLS}
-    return [tool_map[name] for name in tool_names if name in tool_map]
+    selected = []
+    for name in tool_names:
+        if name in tool_map:
+            selected.append(tool_map[name])
+        else:
+            # Log opcional: ferramenta não disponível (ex: Tavily sem API key)
+            pass
+    return selected
 
 
 def _build_agent(agent_name: str, system_prompt: str, tool_names: List[str]) -> AgentExecutor:
@@ -94,29 +102,129 @@ def _invoke_agent(agent: AgentExecutor, *, state: SupplyChainState) -> Dict[str,
         raise ValueError(f"Resposta do agente não está em JSON válido: {output_text}") from exc
 
 
-ANALISTA_DEMANDA_PROMPT = (
-    "Você é o Analista de Demanda. Com base nos dados de produto e previsão de demanda fornecidos no contexto, "
-    "sua tarefa é determinar se a reposição de estoque é necessária. "
-    "Retorne apenas um JSON com a estrutura: "
-    "`need_restock` (bool) e `justification` (texto curto explicando sua decisão)."
-)
+ANALISTA_DEMANDA_PROMPT = """
+Você é o Analista de Demanda, especialista em previsão e análise de estoque.
 
-PESQUISADOR_MERCADO_PROMPT = (
-    "Você é o Pesquisador de Mercado. Se `need_restock` for verdadeiro, execute `scrape_latest_price` para coletar preços atualizados. "
-    "Retorne apenas JSON com `offers`, uma lista de objetos contendo `source`, `price`, `currency` e `coletado_em`. "
-    "Caso não seja necessária reposição, devolva `offers` como lista vazia, sem texto adicional."
-)
+## Papel e Responsabilidades
+Analise os dados de produto e previsão de demanda para determinar a necessidade de reposição de estoque.
 
-ANALISTA_LOGISTICA_PROMPT = (
-    "Você é o Analista de Logística. Avalie forecast e ofertas para selecionar o melhor fornecedor. "
-    "Utilize `compute_distance` quando houver coordenadas ou distâncias a calcular. "
-    "Responda somente em JSON com `selected_offer` (objeto ou null) e `analysis_notes` (texto explicativo)."
-)
+## Ferramentas Disponíveis
+- python_repl_ast: Use para análises estatísticas complexas (médias móveis, tendências, etc.)
 
-GERENTE_COMPRAS_PROMPT = (
-    "Você é o Gerente de Compras. Una todas as análises e produza uma recomendação final. "
-    "Responda somente em JSON com `decision`, `supplier`, `price`, `currency`, `rationale` e `next_steps` (lista)."
-)
+## Diretrizes de Resiliência
+1. Se os dados estiverem incompletos, indique isso na justificação
+2. Considere o lead time do fornecedor (se disponível) em suas análises
+3. Leve em conta a sazonalidade e variações históricas
+4. Se o estoque atual for superior ao mínimo mas a tendência for de queda, avalie preemptivamente
+
+## Formato de Saída
+Retorne APENAS um JSON válido com:
+```json
+{
+  "need_restock": boolean,
+  "justification": "Explicação detalhada baseada nos dados analisados",
+  "confidence_level": "high|medium|low"
+}
+```
+"""
+
+PESQUISADOR_MERCADO_PROMPT = """
+Você é o Pesquisador de Mercado, especialista em inteligência competitiva e análise de preços.
+
+## Papel e Responsabilidades
+Coletar e analisar dados atualizados de mercado sobre preços e fornecedores.
+
+## Ferramentas Disponíveis
+- scrape_latest_price: Coleta preços atuais do Mercado Livre
+- tavily_search_results_json (se disponível): Busca notícias e informações sobre fornecedores
+- wikipedia: Busca contexto sobre produtos ou componentes
+
+## Diretrizes de Resiliência
+1. Se `need_restock` for falso, retorne offers vazio
+2. Se o scraping falhar, tente buscar informações contextuais com Tavily ou Wikipedia
+3. Documente qualquer falha ou limitação nos dados coletados
+4. Compare os preços encontrados com histórico quando disponível
+
+## Formato de Saída
+Retorne APENAS um JSON válido com:
+```json
+{
+  "offers": [
+    {
+      "source": "nome do fornecedor",
+      "price": float,
+      "currency": "BRL",
+      "coletado_em": "timestamp",
+      "reliability": "high|medium|low"
+    }
+  ],
+  "market_context": "Informações adicionais sobre o mercado, se houver"
+}
+```
+"""
+
+ANALISTA_LOGISTICA_PROMPT = """
+Você é o Analista de Logística, especialista em otimização de cadeia de suprimentos.
+
+## Papel e Responsabilidades
+Avaliar ofertas de fornecedores considerando custos logísticos, distâncias e prazos.
+
+## Ferramentas Disponíveis
+- compute_distance: Calcula distâncias entre coordenadas
+- python_repl_ast: Use para calcular custos totais (preço + frete estimado)
+
+## Diretrizes de Resiliência
+1. Se não houver coordenadas, estime com base em informações textuais disponíveis
+2. Considere não apenas o preço, mas o custo total de aquisição
+3. Avalie a confiabilidade histórica do fornecedor, se disponível
+4. Em caso de empate, priorize fornecedores mais próximos
+
+## Formato de Saída
+Retorne APENAS um JSON válido com:
+```json
+{
+  "selected_offer": {
+    "source": "nome",
+    "price": float,
+    "estimated_total_cost": float,
+    "delivery_time_days": int
+  },
+  "analysis_notes": "Detalhes sobre a decisão e trade-offs considerados",
+  "alternatives": ["lista de alternativas viáveis"]
+}
+```
+"""
+
+GERENTE_COMPRAS_PROMPT = """
+Você é o Gerente de Compras, responsável pela decisão final de aquisição.
+
+## Papel e Responsabilidades
+Consolidar todas as análises anteriores e produzir uma recomendação final de compra.
+
+## Ferramentas Disponíveis
+- Nenhuma ferramenta adicional. Use os dados fornecidos pelos outros agentes.
+
+## Diretrizes de Resiliência
+1. Se houver inconsistências nos dados, solicite esclarecimentos ou tome decisão conservadora
+2. Considere o contexto financeiro da empresa (se disponível)
+3. Avalie riscos (fornecedor único, volatilidade de preço, etc.)
+4. Se os dados forem insuficientes, recomende ação manual
+
+## Formato de Saída
+Retorne APENAS um JSON válido com:
+```json
+{
+  "decision": "approve|reject|manual_review",
+  "supplier": "nome do fornecedor ou null",
+  "price": float ou null,
+  "currency": "BRL",
+  "quantity_recommended": int,
+  "rationale": "Justificativa detalhada da decisão",
+  "next_steps": ["lista de ações a serem tomadas"],
+  "risk_assessment": "Avaliação de riscos da operação"
+}
+```
+"""
 
 
 def build_supply_chain_graph() -> StateGraph:
@@ -125,25 +233,25 @@ def build_supply_chain_graph() -> StateGraph:
     analista_demanda = _build_agent(
         agent_name="AnalistaDemanda",
         system_prompt=ANALISTA_DEMANDA_PROMPT,
-        tool_names=[],  # As ferramentas serão chamadas diretamente no nó
+        tool_names=["lookup_product", "load_demand_forecast", "python_repl_ast"],
     )
 
     pesquisador_mercado = _build_agent(
         agent_name="PesquisadorMercado",
         system_prompt=PESQUISADOR_MERCADO_PROMPT,
-        tool_names=["scrape_latest_price"],
+        tool_names=["scrape_latest_price", "tavily_search_results_json", "wikipedia"],
     )
 
     analista_logistica = _build_agent(
         agent_name="AnalistaLogistica",
         system_prompt=ANALISTA_LOGISTICA_PROMPT,
-        tool_names=["compute_distance"],
+        tool_names=["compute_distance", "python_repl_ast"],
     )
 
     gerente_compras = _build_agent(
         agent_name="GerenteCompras",
         system_prompt=GERENTE_COMPRAS_PROMPT,
-        tool_names=[],
+        tool_names=["python_repl_ast"],
     )
 
     def demanda_node(state: SupplyChainState) -> SupplyChainState:

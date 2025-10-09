@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 from langchain.tools import StructuredTool
+from langchain_community.tools import WikipediaQueryRun
+from langchain_community.utilities import WikipediaAPIWrapper
+from langchain_experimental.tools import PythonAstREPLTool
 from sqlmodel import Session, select
 
 from app.core.database import engine
@@ -16,6 +20,13 @@ from app.ml.training import METADATA_PATH, predict_prices
 from app.models.models import Produto
 from app.services.geolocation_service import calculate_distance
 from app.services.scraping_service import ScrapingOutcome, scrape_and_save_price
+
+# Importação condicional do Tavily
+try:
+    from langchain_community.tools.tavily_search import TavilySearchResults
+    TAVILY_AVAILABLE = True
+except ImportError:
+    TAVILY_AVAILABLE = False
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_FORECAST_HORIZON = 14
@@ -148,6 +159,44 @@ def compute_distance(
     }
 
 
+# Ferramenta de busca na web Tavily (opcional, requer API key)
+def _build_tavily_tool():
+    if not TAVILY_AVAILABLE:
+        return None
+    api_key = os.getenv("TAVILY_API_KEY")
+    if not api_key:
+        return None
+    return TavilySearchResults(
+        max_results=3,
+        description=(
+            "Busca informações atualizadas na web sobre fornecedores, tendências de mercado, "
+            "notícias de produtos ou qualquer outro contexto relevante para decisões de compra."
+        )
+    )
+
+# Ferramenta Wikipedia
+wikipedia_tool = WikipediaQueryRun(
+    api_wrapper=WikipediaAPIWrapper(
+        top_k_results=2,
+        doc_content_chars_max=2000,
+    ),
+    description=(
+        "Busca informações enciclopédicas sobre produtos, componentes, materiais ou conceitos "
+        "de mercado que podem ajudar na análise de fornecedores e preços."
+    )
+)
+
+# Ferramenta Python REPL (para análise estatística)
+python_repl_tool = PythonAstREPLTool(
+    name="python_repl_ast",
+    description=(
+        "Executa código Python para análise de dados estatísticos. "
+        "Útil para calcular médias móveis, tendências, correlações ou outras métricas "
+        "que ajudem na tomada de decisão. Use quando precisar de cálculos complexos."
+    )
+)
+
+# Montagem da lista de ferramentas
 SUPPLY_CHAIN_TOOLS: List[StructuredTool] = [
     StructuredTool.from_function(
         func=lookup_product,
@@ -169,4 +218,11 @@ SUPPLY_CHAIN_TOOLS: List[StructuredTool] = [
         name="compute_distance",
         description="Calcula a distância geográfica entre dois pontos.",
     ),
+    wikipedia_tool,
+    python_repl_tool,
 ]
+
+# Adiciona Tavily se disponível
+_tavily = _build_tavily_tool()
+if _tavily:
+    SUPPLY_CHAIN_TOOLS.append(_tavily)

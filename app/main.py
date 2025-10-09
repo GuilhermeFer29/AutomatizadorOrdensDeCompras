@@ -51,6 +51,9 @@ def create_application() -> FastAPI:
     application.include_router(api_agent_router.router)
     application.include_router(api_order_router.router)
 
+    from app.routers import api_chat_router
+    application.include_router(api_chat_router.router)
+
     # Adicionando a rota de fornecedores
     from app.routers.supplier_router import router as supplier_router
     application.include_router(supplier_router)
