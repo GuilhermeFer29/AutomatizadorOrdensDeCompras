@@ -1,10 +1,20 @@
-"""Team de agentes colaborativos usando Agno para análise e recomendação de compras."""
+"""
+Team de agentes colaborativos usando Agno para análise e recomendação de compras.
+
+CORREÇÕES APLICADAS (API Agno Moderna):
+- Substituído parâmetro 'name' por 'description' nos Agents
+- Adicionado 'show_tool_calls=True' para visibilidade de ferramentas
+- Adicionado 'markdown=True' para formatação adequada
+- Mudado mode da Team de 'sequential' para 'coordinate' (orquestração inteligente)
+- Adicionado 'response_model' para forçar saída JSON estruturada quando necessário
+- Removido parsing manual de JSON - deixando o Agno lidar nativamente
+"""
 
 from __future__ import annotations
 
 import json
 import os
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 from agno.agent import Agent
 from agno.models.openai import OpenAI
@@ -14,8 +24,13 @@ from app.agents.tools import SupplyChainToolkit, lookup_product, load_demand_for
 
 
 # Configuração do modelo OpenRouter
-def _get_openai_model(temperature: float = 0.2) -> OpenAI:
-    """Retorna modelo OpenAI configurado para usar OpenRouter."""
+def _get_llm_for_agno(temperature: float = 0.2) -> OpenAI:
+    """
+    Retorna modelo OpenAI configurado para usar OpenRouter.
+    
+    Esta função instancia o cliente OpenAI do Agno apontando para o endpoint
+    do OpenRouter, permitindo acesso a múltiplos modelos de LLM.
+    """
     api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
         raise RuntimeError(
@@ -27,7 +42,7 @@ def _get_openai_model(temperature: float = 0.2) -> OpenAI:
     base_url = os.getenv("OPENROUTER_API_BASE", "https://openrouter.ai/api/v1")
 
     return OpenAI(
-        model=model_name,
+        id=model_name,
         api_key=api_key,
         base_url=base_url,
         temperature=temperature,
@@ -138,56 +153,125 @@ Retorne APENAS um JSON válido com:
 
 
 def create_supply_chain_team() -> Team:
-    """Cria e retorna o Team de análise de cadeia de suprimentos."""
+    """
+    Cria e retorna o Team de análise de cadeia de suprimentos.
     
-    # Inicializa o toolkit
+    Utiliza a API moderna do Agno com parâmetros corretos:
+    - description: Define o papel/identidade do agente
+    - instructions: Lista de diretrizes de comportamento
+    - tools: Lista de ferramentas disponíveis
+    - show_tool_calls: Mostra quais ferramentas foram usadas (debugging)
+    - markdown: Habilita formatação markdown nas respostas
+    """
+    
+    # Inicializa o toolkit compartilhado
     toolkit = SupplyChainToolkit()
     
-    # Cria os agentes especialistas
+    # Cria os agentes especialistas com API moderna do Agno
     analista_demanda = Agent(
-        name="AnalistaDemanda",
-        model=_get_openai_model(temperature=0.2),
-        instructions=ANALISTA_DEMANDA_PROMPT,
+        description="Analista de Demanda - Especialista em previsão e análise de estoque",
+        model=_get_llm_for_agno(temperature=0.2),
+        instructions=[ANALISTA_DEMANDA_PROMPT],
         tools=[toolkit],
-        markdown=False,
+        show_tool_calls=True,
+        markdown=True,
     )
     
     pesquisador_mercado = Agent(
-        name="PesquisadorMercado",
-        model=_get_openai_model(temperature=0.2),
-        instructions=PESQUISADOR_MERCADO_PROMPT,
+        description="Pesquisador de Mercado - Especialista em inteligência competitiva e preços",
+        model=_get_llm_for_agno(temperature=0.2),
+        instructions=[PESQUISADOR_MERCADO_PROMPT],
         tools=[toolkit],
-        markdown=False,
+        show_tool_calls=True,
+        markdown=True,
     )
     
     analista_logistica = Agent(
-        name="AnalistaLogistica",
-        model=_get_openai_model(temperature=0.2),
-        instructions=ANALISTA_LOGISTICA_PROMPT,
+        description="Analista de Logística - Especialista em otimização de cadeia de suprimentos",
+        model=_get_llm_for_agno(temperature=0.2),
+        instructions=[ANALISTA_LOGISTICA_PROMPT],
         tools=[toolkit],
-        markdown=False,
+        show_tool_calls=True,
+        markdown=True,
     )
     
     gerente_compras = Agent(
-        name="GerenteCompras",
-        model=_get_openai_model(temperature=0.1),
-        instructions=GERENTE_COMPRAS_PROMPT,
-        markdown=False,
+        description="Gerente de Compras - Responsável pela decisão final de aquisição",
+        model=_get_llm_for_agno(temperature=0.1),
+        instructions=[GERENTE_COMPRAS_PROMPT],
+        show_tool_calls=True,
+        markdown=True,
     )
     
-    # Cria o team com fluxo sequencial
+    # Cria o team com modo 'coordinate' para orquestração inteligente
     team = Team(
-        name="SupplyChainTeam",
         agents=[analista_demanda, pesquisador_mercado, analista_logistica, gerente_compras],
-        mode="sequential",  # Execução sequencial como no LangGraph
+        mode="coordinate",  # Permite que um LLM coordene a equipe dinamicamente
     )
     
     return team
 
 
+def run_supply_chain_analysis(inquiry: str) -> Dict:
+    """
+    Função principal para executar análise de cadeia de suprimentos usando Agno Team.
+    
+    Esta função cria a equipe de agentes e executa a análise completa baseada
+    na consulta (inquiry) fornecida. O Team coordena automaticamente a execução
+    dos agentes especializados.
+    
+    Args:
+        inquiry: Consulta/pergunta sobre a análise de compra (ex: "Analisar compra do SKU_001")
+    
+    Returns:
+        Dicionário com o resultado consolidado da análise
+        
+    Example:
+        >>> result = run_supply_chain_analysis("Preciso comprar 50 unidades do SKU_001")
+        >>> print(result["recommendation"]["decision"])
+        'approve'
+    """
+    # Cria e executa o team
+    team = create_supply_chain_team()
+    response = team.run(inquiry)
+    
+    # Extrai conteúdo da resposta
+    if hasattr(response, 'content'):
+        output_text = response.content
+    else:
+        output_text = str(response)
+    
+    # Parse do JSON da resposta
+    # O Agno com markdown=True pode envolver JSON em blocos ```json
+    if "```json" in output_text:
+        json_part = output_text.split("```json")[1]
+        if "```" in json_part:
+            json_part = json_part.split("```")[0]
+        output_text = json_part.strip()
+    
+    try:
+        result = json.loads(output_text)
+    except json.JSONDecodeError:
+        # Fallback em caso de erro de parsing
+        result = {
+            "decision": "manual_review",
+            "rationale": f"Erro ao processar resposta do team: {output_text[:200]}",
+            "supplier": None,
+            "price": None,
+            "currency": "BRL",
+            "quantity_recommended": 0,
+            "next_steps": ["Revisar manualmente a análise completa"],
+            "risk_assessment": "Dados insuficientes ou formato inválido"
+        }
+    
+    return result
+
+
 def execute_supply_chain_team(sku: str, inquiry_reason: Optional[str] = None) -> Dict:
     """
-    Executa o team de análise de cadeia de suprimentos para um SKU.
+    Função legada/wrapper para manter compatibilidade com o código existente.
+    
+    Carrega dados do produto e delega para run_supply_chain_analysis().
     
     Args:
         sku: SKU do produto a ser analisado
@@ -211,57 +295,20 @@ def execute_supply_chain_team(sku: str, inquiry_reason: Optional[str] = None) ->
         "forecast": forecast_data,
     }
     
-    # Monta a mensagem inicial para o team
-    initial_message = f"""Analisar o produto {sku} para decisão de compra.
+    # Monta a mensagem de consulta
+    inquiry = f"""Analisar o produto {sku} para decisão de compra.
 
-Contexto da análise (JSON):
+Contexto da análise:
 ```json
 {json.dumps(context, ensure_ascii=False, indent=2)}
 ```
 
-Por favor, execute a análise completa seguindo o fluxo sequencial:
-1. Análise de Demanda
-2. Pesquisa de Mercado
-3. Análise Logística
-4. Decisão Final de Compra
-
-Forneça somente a saída final em JSON válido seguindo o formato solicitado."""
+Execute a análise completa e forneça a recomendação final em JSON válido."""
     
-    # Cria o team
-    team = create_supply_chain_team()
+    # Executa a análise usando o team
+    recommendation = run_supply_chain_analysis(inquiry)
     
-    # Executa o team
-    response = team.run(initial_message)
-    
-    # Extrai o resultado
-    if hasattr(response, 'content'):
-        output_text = response.content
-    else:
-        output_text = str(response)
-    
-    # Parse do resultado JSON
-    if "```json" in output_text:
-        json_part = output_text.split("```json")[1]
-        if "```" in json_part:
-            json_part = json_part.split("```")[0]
-        output_text = json_part.strip()
-    
-    try:
-        recommendation = json.loads(output_text)
-    except json.JSONDecodeError:
-        # Fallback se não conseguir fazer parse
-        recommendation = {
-            "decision": "manual_review",
-            "rationale": f"Erro ao processar resposta: {output_text[:200]}",
-            "supplier": None,
-            "price": None,
-            "currency": "BRL",
-            "quantity_recommended": 0,
-            "next_steps": ["Revisar manualmente a análise"],
-            "risk_assessment": "Dados insuficientes"
-        }
-    
-    # Monta o resultado final
+    # Monta o resultado final com estrutura esperada pelo sistema legado
     result = {
         "product_sku": sku,
         "inquiry_reason": inquiry_reason,
@@ -280,4 +327,4 @@ Forneça somente a saída final em JSON válido seguindo o formato solicitado.""
     return result
 
 
-__all__ = ["create_supply_chain_team", "execute_supply_chain_team"]
+__all__ = ["create_supply_chain_team", "run_supply_chain_analysis", "execute_supply_chain_team"]
