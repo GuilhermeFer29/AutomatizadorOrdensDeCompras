@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* Backgrounds - Clean and neutral */
+    --background: 220 14% 98%; /* #F9FAFB - Very light gray */
+    --foreground: 220 9% 12%; /* #1F2937 - Dark gray for text */
+
+    /* Cards - Pure white for contrast */
+    --card: 0 0% 100%; /* #FFFFFF */
+    --card-foreground: 220 9% 12%;
+
+    /* Popovers */
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 9% 12%;
+
+    /* Primary - Soft blue accent */
+    --primary: 217 91% 60%; /* #3B82F6 - Soft blue */
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary - Subtle gray */
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 9% 12%;
+
+    /* Muted - For subtle UI elements */
+    --muted: 220 13% 91%;
+    --muted-foreground: 220 9% 46%; /* #6B7280 - Medium gray */
+
+    /* Accent - Same as primary for consistency */
+    --accent: 217 91% 60%;
+    --accent-foreground: 0 0% 100%;
+
+    /* Status colors */
+    --success: 142 71% 45%; /* #10B981 - Green */
+    --success-foreground: 0 0% 100%;
+    
+    --warning: 38 92% 50%; /* #F59E0B - Amber */
+    --warning-foreground: 0 0% 100%;
+    
+    --destructive: 0 84% 60%; /* #EF4444 - Red */
+    --destructive-foreground: 0 0% 100%;
+
+    /* Borders and inputs */
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 217 91% 60%;
+
+    --radius: 0.5rem;
+
+    /* Sidebar */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 220 9% 12%;
+    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 14% 96%;
+    --sidebar-accent-foreground: 220 9% 12%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217 91% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+}

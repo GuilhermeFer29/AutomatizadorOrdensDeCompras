@@ -108,3 +108,27 @@ class Fornecedor(SQLModel, table=True):
     longitude: Optional[float] = Field(default=None)
     criado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
     atualizado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
+
+
+class OrdemDeCompra(SQLModel, table=True):
+    __tablename__ = "ordens_de_compra"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    produto_id: int = Field(foreign_key="produtos.id")
+    quantidade: int
+    valor: Decimal = Field(default=Decimal("0.00"))
+    status: str = Field(index=True)  # pending, approved, cancelled
+    origem: str  # Automática, Manual
+    data_criacao: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    produto: Produto = Relationship()
+
+
+class Agente(SQLModel, table=True):
+    __tablename__ = "agentes"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    nome: str = Field(unique=True)
+    descricao: str
+    status: str = Field(default="inactive")  # active, inactive
+    ultima_execucao: Optional[datetime] = Field(default=None)

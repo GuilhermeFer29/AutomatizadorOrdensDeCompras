@@ -110,6 +110,7 @@ O projeto atual é uma base sólida. As próximas etapas podem focar em transfor
 ### Curto Prazo
 
 1.  **Endpoint de Recomendação de Compra**:
+
     - **O que**: Criar um novo endpoint (`/api/recommendations`) que, para cada produto, utiliza a previsão de preços para sugerir o **melhor dia para realizar a compra** (o dia com o menor preço previsto no horizonte de 14 dias).
     - **Por que**: Transforma a previsão em uma recomendação acionável, que é o objetivo final do projeto.
 
@@ -120,19 +121,38 @@ O projeto atual é uma base sólida. As próximas etapas podem focar em transfor
 ### Médio Prazo
 
 3.  **Retreinamento Automático (Celery Beat)**:
+
     - **O que**: Usar o serviço `beat` para agendar a tarefa de retreinamento para ser executada automaticamente em intervalos regulares (ex: semanalmente).
     - **Por que**: Garante que o modelo esteja sempre atualizado com os dados mais recentes, sem intervenção manual.
 
 4.  **Autenticação e Multi-Tenancy**:
-    - **O que**: Adicionar um sistema de login para proteger o acesso ao dashboard e aos dados. Evoluir para um sistema *multi-tenant*, onde diferentes empresas possam gerenciar seus próprios catálogos de produtos.
+    - **O que**: Adicionar um sistema de login para proteger o acesso ao dashboard e aos dados. Evoluir para um sistema _multi-tenant_, onde diferentes empresas possam gerenciar seus próprios catálogos de produtos.
     - **Por que**: Prepara o sistema para um ambiente de produção real e multi-usuário.
 
 ### Longo Prazo
 
 5.  **Ingestão de Dados Reais**:
+
     - **O que**: Substituir o gerador de dados sintéticos por um pipeline de ingestão de dados reais, seja através de web scraping de sites de e-commerce ou integração com APIs de fornecedores.
     - **Por que**: Aumenta a precisão e a relevância do modelo ao usar dados do mundo real.
 
 6.  **Monitoramento e Observabilidade**:
-    - **O que**: Integrar ferramentas como **Prometheus** e **Grafana** para monitorar a saúde dos serviços, a performance da API e as métricas do modelo de ML (ex: *data drift*, *concept drift*).
+    - **O que**: Integrar ferramentas como **Prometheus** e **Grafana** para monitorar a saúde dos serviços, a performance da API e as métricas do modelo de ML (ex: _data drift_, _concept drift_).
     - **Por que**: Essencial para manter a confiabilidade e a performance do sistema em produção.
+
+## 4. Arquitetura do Modelo de Previsão
+
+O modelo de previsão é composto por duas partes principais:
+
+1. **Feature Engineering**:
+
+   - **O que**: Realiza a extração e transformação de features relevantes para o modelo de previsão.
+   - **Por que**: Ajuda a melhorar a performance do modelo ao fornecer features relevantes e relevantes para o problema.
+
+2. **Modelo de Previsão**:
+   - **O que**: Realiza a extração e transformação de features relevantes para o modelo de previsão.
+   - **Por que**: Ajuda a melhorar a performance do modelo ao fornecer features relevantes e relevantes para o problema.
+
+## FUTURO
+
+Intaração com os agentes de IA para verificação de preços e fornecimento de ordens de compra via chatbot
