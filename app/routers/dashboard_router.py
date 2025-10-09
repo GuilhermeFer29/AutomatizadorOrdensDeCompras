@@ -14,6 +14,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from sqlmodel import Session, select
 
+from app.core.config import DEFAULT_HORIZON_DAYS, ROOT_DIR
 from app.core.database import engine
 from app.ml.training import predict_prices
 from app.models.models import PrecosHistoricos, Produto
@@ -21,8 +22,6 @@ from app.models.models import PrecosHistoricos, Produto
 LOGGER = structlog.get_logger(__name__)
 router = APIRouter(tags=["dashboard"])
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
-DEFAULT_HORIZON_DAYS = 14
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
@@ -59,7 +58,7 @@ def render_dashboard(
       )
     )
 
-    global_context = _load_global_forecast()
+    global_context = _load_global_forecast(produtos_catalogo)
 
   history_frame = _build_history_frame(precos)
 
@@ -148,14 +147,12 @@ def _empty_chart_payload() -> Dict[str, List[Optional[float]]]:
   }
 
 
-def _load_global_forecast() -> Optional[GlobalDashboardContext]:
-  with Session(engine) as session:
-    produtos = list(session.exec(select(Produto.sku).order_by(Produto.sku)))
-
+def _load_global_forecast(produtos: list[Produto]) -> Optional[GlobalDashboardContext]:
+  """Carrega e agrega as previsões de preços para todos os produtos do catálogo."""
   if not produtos:
     return None
 
-  skus = [sku for (sku,) in produtos]
+  skus = [p.sku for p in produtos]
 
   try:
     forecasts = predict_prices(skus=skus, horizon_days=DEFAULT_HORIZON_DAYS)
@@ -214,6 +211,26 @@ def _create_empty_forecast_payload(
   }
 
 
+def _extract_history_data(
+  history_frame: pd.DataFrame,
+) -> Tuple[List[str], List[Optional[float]], List[Optional[float]]]:
+  """Extrai e formata dados históricos para o gráfico."""
+  labels = history_frame["ds"].dt.strftime("%Y-%m-%d").tolist()
+  real_series: List[Optional[float]] = (
+    history_frame.where(history_frame["is_synthetic"] == False)["y"]
+    .round(4)
+    .where(pd.notna, None)
+    .tolist()
+  )
+  synthetic_series: List[Optional[float]] = (
+    history_frame.where(history_frame["is_synthetic"] == True)["y"]
+    .round(4)
+    .where(pd.notna, None)
+    .tolist()
+  )
+  return labels, real_series, synthetic_series
+
+
 def _build_product_chart_payload(
   *, produto: Produto, history_frame: pd.DataFrame, horizon: int
 ) -> Tuple[Dict[str, List[Optional[float]]], Dict[str, float], datetime]:
@@ -252,14 +269,13 @@ def _merge_history_and_forecast(
 ) -> Dict[str, List[Optional[float]]]:
   """Merge historical data with forecast predictions."""
 
-  all_labels = sorted(set(labels + list(forecast_data.keys())))
+  # A previsão começa um dia depois do último dado histórico
+  forecast_series = [None] * len(labels)
 
-  real_map = {label: value for label, value in zip(labels, real_series)}
-  synthetic_map = {label: value for label, value in zip(labels, synthetic_series)}
-
-  merged_real = [real_map.get(label) for label in all_labels]
-  merged_synthetic = [synthetic_map.get(label) for label in all_labels]
-  merged_forecast = [forecast_data.get(label) for label in all_labels]
+  all_labels = labels + sorted(forecast_data.keys())
+  merged_real = real_series + [None] * len(forecast_data)
+  merged_synthetic = synthetic_series + [None] * len(forecast_data)
+  merged_forecast = forecast_series + [forecast_data.get(label) for label in sorted(forecast_data.keys())]
 
   return {
     "labels": all_labels,
@@ -400,7 +416,7 @@ def _build_footer_section() -> str:
   """Build the footer section."""
   return f"""
   <footer>
-  Horizonte de previsão: {FORECAST_HORIZON_DAYS} dias. Fonte real: Mercado Livre (ScraperAPI). Histórico sintético exibido apenas como contextualização.
+  Horizonte de previsão: {DEFAULT_HORIZON_DAYS} dias. Fonte real: Mercado Livre (ScraperAPI). Histórico sintético exibido apenas como contextualização.
   </footer>
   """
 
@@ -440,7 +456,7 @@ def _build_chart_script(template_data: Dict[str, str]) -> str:
       pointBackgroundColor: '#ef4444',
       }},
       {{
-      label: 'Previsão Prophet',
+      label: 'Previsão LightGBM',
       data: chartData.forecast,
       borderColor: '#f59e0b',
       backgroundColor: 'rgba(245,158,11,0.15)',

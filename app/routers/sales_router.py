@@ -8,23 +8,17 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
 
 from app.services.sales_ingestion_service import ingest_sales_dataframe, load_sales_dataframe
-from app.services.task_service import trigger_retrain_model_task
+from app.services.task_service import trigger_retrain_global_model_task
 
 router = APIRouter(prefix="/vendas", tags=["vendas"])
-
-
-class RetrainTaskInfo(BaseModel):
-    """Metadata for a scheduled retraining task."""
-
-    produto_id: int
-    task_id: str
 
 
 class SalesUploadResponse(BaseModel):
     """Response returned after processing a CSV upload of sales data."""
 
     produtos: List[int]
-    tarefas: List[RetrainTaskInfo]
+    task_id: str
+    mensagem: str
 
 
 @router.post("/upload", response_model=SalesUploadResponse, status_code=status.HTTP_202_ACCEPTED)
@@ -48,18 +42,14 @@ async def upload_sales_csv(
                 detail="Nenhum registro válido foi encontrado no arquivo enviado.",
             )
 
-        tarefas = [
-            RetrainTaskInfo(
-                produto_id=produto_id,
-                task_id=trigger_retrain_model_task(
-                    produto_id=produto_id,
-                    destinatario_email=destinatario_email,
-                ).id,
-            )
-            for produto_id in produto_ids
-        ]
-
-        response = SalesUploadResponse(produtos=produto_ids, tarefas=tarefas)
+        async_result = trigger_retrain_global_model_task()
+        response = SalesUploadResponse(
+            produtos=produto_ids,
+            task_id=async_result.id,
+            mensagem=(
+                "Treinamento global LightGBM agendado. Modelos individuais foram substituídos pelo fluxo global."
+            ),
+        )
     except ValueError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
     finally:
@@ -71,7 +61,9 @@ async def upload_sales_csv(
 @router.post("/retrain/{produto_id}", status_code=status.HTTP_202_ACCEPTED)
 def retrain_model(produto_id: int) -> dict:
     """Trigger retraining for a specific product."""
-    from app.tasks.ml_tasks import retrain_model_task
-
-    task = retrain_model_task.delay(produto_id=produto_id)
-    return {"produto_id": produto_id, "task_id": task.id}
+    async_result = trigger_retrain_global_model_task()
+    return {
+        "produto_id": produto_id,
+        "task_id": async_result.id,
+        "mensagem": "Treinamento global acionado. Modelos Prophet individuais foram descontinuados.",
+    }

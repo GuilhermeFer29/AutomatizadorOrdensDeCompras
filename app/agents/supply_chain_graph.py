@@ -7,11 +7,15 @@ import os
 from typing import Dict, List, Optional, TypedDict
 
 from langchain.agents import AgentExecutor, create_openai_tools_agent
-from langchain.chat_models import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_community.chat_models import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langgraph.graph import END, StateGraph
 
-from app.agents.tools import SUPPLY_CHAIN_TOOLS
+from app.agents.tools import (
+    SUPPLY_CHAIN_TOOLS,
+    load_demand_forecast,
+    lookup_product,
+)
 
 
 class SupplyChainState(TypedDict, total=False):
@@ -26,8 +30,8 @@ class SupplyChainState(TypedDict, total=False):
     recommendation: Dict[str, object]
 
 
-DEFAULT_OPENROUTER_MODEL = "deepseek/deepseek-chat-v3.1:free"
-DEFAULT_OPENROUTER_BASE_URL = "https://api.openrouter.ai"
+DEFAULT_OPENROUTER_MODEL = "mistralai/mistral-small-3.1-24b-instruct:free"
+DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 
 def _build_llm(agent_name: str) -> ChatOpenAI:
@@ -45,7 +49,6 @@ def _build_llm(agent_name: str) -> ChatOpenAI:
         model=model_name,
         temperature=0.2,
         streaming=False,
-        model_kwargs={"provider": "openrouter"},
         openai_api_key=api_key,
         base_url=base_url,
     ).with_config({"run_name": agent_name})
@@ -66,6 +69,7 @@ def _build_agent(agent_name: str, system_prompt: str, tool_names: List[str]) -> 
                 "Contexto atual da análise (JSON):\n```json\n{state_json}\n```\n"
                 "Forneça somente a saída final em JSON válido seguindo o formato solicitado.",
             ),
+            MessagesPlaceholder(variable_name="agent_scratchpad"),
         ]
     )
     llm = _build_llm(agent_name)
@@ -77,6 +81,13 @@ def _invoke_agent(agent: AgentExecutor, *, state: SupplyChainState) -> Dict[str,
     filtered_state = {k: v for k, v in state.items() if v is not None}
     result = agent.invoke({"state_json": json.dumps(filtered_state, ensure_ascii=False)})
     output_text: str = result["output"]
+
+    if "```json" in output_text:
+        json_part = output_text.split("```json")[1]
+        if "```" in json_part:
+            json_part = json_part.split("```")[0]
+        output_text = json_part.strip()
+
     try:
         return json.loads(output_text)
     except json.JSONDecodeError as exc:
@@ -84,23 +95,22 @@ def _invoke_agent(agent: AgentExecutor, *, state: SupplyChainState) -> Dict[str,
 
 
 ANALISTA_DEMANDA_PROMPT = (
-    "Você é o Analista de Demanda. Avalie estoque e histórico para projetar consumo futuro. "
-    "Utilize as ferramentas `lookup_product` e `load_demand_forecast` para embasar sua decisão. "
-    "Retorne somente JSON com `forecast_summary` (objeto), `need_restock` (bool) e `justification` (texto)."
+    "Você é o Analista de Demanda. Com base nos dados de produto e previsão de demanda fornecidos no contexto, "
+    "sua tarefa é determinar se a reposição de estoque é necessária. "
+    "Retorne apenas um JSON com a estrutura: "
+    "`need_restock` (bool) e `justification` (texto curto explicando sua decisão)."
 )
 
 PESQUISADOR_MERCADO_PROMPT = (
     "Você é o Pesquisador de Mercado. Se `need_restock` for verdadeiro, execute `scrape_latest_price` para coletar preços atualizados. "
     "Retorne apenas JSON com `offers`, uma lista de objetos contendo `source`, `price`, `currency` e `coletado_em`. "
-    "Caso não seja necessária reposição, devolva `offers` como lista vazia."
-    
+    "Caso não seja necessária reposição, devolva `offers` como lista vazia, sem texto adicional."
 )
 
 ANALISTA_LOGISTICA_PROMPT = (
     "Você é o Analista de Logística. Avalie forecast e ofertas para selecionar o melhor fornecedor. "
     "Utilize `compute_distance` quando houver coordenadas ou distâncias a calcular. "
-    "Responda em JSON com `selected_offer` (objeto ou null) e `analysis_notes` (texto explicativo)."
-    
+    "Responda somente em JSON com `selected_offer` (objeto ou null) e `analysis_notes` (texto explicativo)."
 )
 
 GERENTE_COMPRAS_PROMPT = (
@@ -115,7 +125,7 @@ def build_supply_chain_graph() -> StateGraph:
     analista_demanda = _build_agent(
         agent_name="AnalistaDemanda",
         system_prompt=ANALISTA_DEMANDA_PROMPT,
-        tool_names=["lookup_product", "load_demand_forecast"],
+        tool_names=[],  # As ferramentas serão chamadas diretamente no nó
     )
 
     pesquisador_mercado = _build_agent(
@@ -137,8 +147,14 @@ def build_supply_chain_graph() -> StateGraph:
     )
 
     def demanda_node(state: SupplyChainState) -> SupplyChainState:
+        sku = state["product_sku"]
+        product_data = lookup_product(sku=sku)
+        forecast_data = load_demand_forecast(sku=sku)
+
+        state["product_snapshot"] = product_data
+        state["forecast"] = forecast_data
+
         output = _invoke_agent(analista_demanda, state=state)
-        state["forecast"] = output.get("forecast_summary", {})
         state["need_restock"] = bool(output.get("need_restock", False))
         state["forecast_notes"] = output.get("justification", "")
         return state

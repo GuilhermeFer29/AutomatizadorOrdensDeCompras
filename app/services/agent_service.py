@@ -5,15 +5,14 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 import structlog
-from langgraph.graph import CompiledGraph
 
 from app.agents.supply_chain_graph import SupplyChainState, build_supply_chain_graph
 
 LOGGER = structlog.get_logger(__name__)
-_COMPILED_GRAPH: Optional[CompiledGraph] = None
+_COMPILED_GRAPH: Optional[Any] = None
 
 
-def _get_compiled_graph() -> CompiledGraph:
+def _get_compiled_graph() -> Any:
     global _COMPILED_GRAPH
     if _COMPILED_GRAPH is None:
         LOGGER.info("agents.graph.building")

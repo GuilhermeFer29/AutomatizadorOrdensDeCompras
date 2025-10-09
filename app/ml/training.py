@@ -13,15 +13,15 @@ import joblib
 import numpy as np
 import pandas as pd
 import structlog
-from lightgbm import LGBMRegressor
+from lightgbm import LGBMRegressor, early_stopping
 from sqlmodel import Session, select
 
+from app.core.config import ROOT_DIR
 from app.core.database import engine
 from app.models.models import ModeloGlobal, PrecosHistoricos, Produto
 
 LOGGER = structlog.get_logger(__name__)
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
 MODELS_DIR = ROOT_DIR / "models"
 DEFAULT_MODEL_PATH = MODELS_DIR / "global_lgbm_model.pkl"
 METADATA_PATH = MODELS_DIR / "global_lgbm_metadata.json"
@@ -42,7 +42,6 @@ def _load_price_history(session: Session) -> pd.DataFrame:
         session.exec(
             select(PrecosHistoricos, Produto)
             .join(Produto, PrecosHistoricos.produto_id == Produto.id)
-            .where(PrecosHistoricos.is_synthetic == False)  # noqa: PLR2004
             .order_by(PrecosHistoricos.produto_id, PrecosHistoricos.coletado_em)
         )
     )
@@ -67,6 +66,10 @@ def _load_price_history(session: Session) -> pd.DataFrame:
         )
 
     history_df = pd.DataFrame(rows)
+
+    # Lida com timestamps duplicados para o mesmo produto, tirando a média dos preços do dia.
+    history_df = history_df.groupby(["produto_id", "sku", "ds"]).agg(price=("price", "mean")).reset_index()
+
     grouped = history_df.groupby("produto_id")
     enough_data = grouped.size() >= MINIMUM_HISTORY_POINTS
     valid_ids = enough_data[enough_data].index.tolist()
@@ -202,9 +205,10 @@ def train_global_lgbm_model() -> Dict[str, float]:
         y_train,
         eval_set=[(X_valid, y_valid)],
         eval_metric="rmse",
-        early_stopping_rounds=50,
+        callbacks=[
+            early_stopping(stopping_rounds=50, verbose=True)
+        ],
         categorical_feature=[feature_columns.index(col) for col in categorical_features],
-        verbose=False,
     )
 
     y_pred = model.predict(X_valid)
@@ -232,7 +236,6 @@ def _prepare_history_for_prediction(session: Session, produto_id: int) -> pd.Ser
         session.exec(
             select(PrecosHistoricos)
             .where(PrecosHistoricos.produto_id == produto_id)
-            .where(PrecosHistoricos.is_synthetic == False)  # noqa: PLR2004
             .order_by(PrecosHistoricos.coletado_em)
         )
     )
@@ -250,7 +253,8 @@ def _prepare_history_for_prediction(session: Session, produto_id: int) -> pd.Ser
         series.append((coleta.date(), float(registro.preco)))
 
     df = pd.DataFrame(series, columns=["ds", "price"])
-    df = df.set_index("ds").asfreq("D")
+    df = df.groupby("ds").agg(price=("price", "mean"))
+    df = df.asfreq("D")
     df["price"] = df["price"].interpolate(method="time").ffill().bfill()
     return df["price"]
 

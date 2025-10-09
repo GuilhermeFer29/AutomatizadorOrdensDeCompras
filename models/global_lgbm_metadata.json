@@ -1,0 +1,9 @@
+{
+  "model_type": "lightgbm_global",
+  "version": "20251009T004213Z",
+  "model_path": "models/global_lgbm_model.pkl",
+  "metrics": {
+    "rmse": 32.9612
+  },
+  "trained_at": "2025-10-09T00:42:13.223980+00:00"
+}
