@@ -19,11 +19,8 @@ playwright==1.45.0
 reportlab==4.0.9
 email-validator==2.1.1
 requests
-langchain
-langgraph
-langchain-community
-langchain-openai
-langchain-experimental
+agno
+openai==1.59.5
 lightgbm==4.3.0
 scikit-learn==1.4.2
 faker
@@ -31,5 +28,4 @@ tavily-python==0.3.3
 wikipedia==1.4.0
 chromadb==0.4.22
 sentence-transformers==2.3.1
-langchain-chroma==0.1.0
 

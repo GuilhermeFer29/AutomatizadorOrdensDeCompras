@@ -7,20 +7,20 @@ import re
 from typing import Dict, Any, Optional
 from sqlmodel import Session, select
 from app.models.models import Produto, ChatContext
-from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
+from agno.agent import Agent
+from agno.models.openai import OpenAI
 
 
-def _get_llm():
-    """Retorna LLM configurado com OpenRouter."""
+def _get_openai_model(temperature: float = 0.3) -> OpenAI:
+    """Retorna modelo OpenAI configurado com OpenRouter."""
     api_key = os.getenv("OPENROUTER_API_KEY")
     base_url = os.getenv("OPENROUTER_API_BASE", "https://openrouter.ai/api/v1")
     model = os.getenv("OPENROUTER_MODEL_NAME", "mistralai/mistral-small-3.1-24b-instruct:free")
     
-    return ChatOpenAI(
+    return OpenAI(
         model=model,
-        temperature=0.3,
-        openai_api_key=api_key,
+        temperature=temperature,
+        api_key=api_key,
         base_url=base_url
     )
 
@@ -35,8 +35,7 @@ def extract_entities_with_llm(message: str, session: Session, session_id: int) -
     from app.services.rag_service import get_relevant_context
     rag_context = get_relevant_context(message, session)
     
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", """Você é um assistente de análise de mensagens para um sistema de compras.
+    system_prompt = """Você é um assistente de análise de mensagens para um sistema de compras.
         
 Extraia as seguintes informações da mensagem do usuário e retorne em JSON:
 - sku: Código do produto (formato SKU_XXX ou null)
@@ -51,22 +50,42 @@ Contexto da sessão anterior:
 Informações relevantes do histórico (RAG):
 {rag_context}
 
-IMPORTANTE: Se o usuário usar pronomes como "ele", "dela", "isso", use o contexto para resolver a referência."""),
-        ("user", "{message}")
-    ])
+IMPORTANTE: Se o usuário usar pronomes como "ele", "dela", "isso", use o contexto para resolver a referência."""
     
-    llm = _get_llm()
-    chain = prompt | llm
+    # Cria agente Agno para extração de entidades
+    agent = Agent(
+        name="EntityExtractor",
+        model=_get_openai_model(temperature=0.2),
+        instructions=system_prompt,
+        markdown=False,
+    )
     
     try:
-        response = chain.invoke({
-            "message": message,
-            "context": json.dumps(context),
-            "rag_context": rag_context or "Nenhum contexto relevante encontrado"
-        })
+        # Monta a mensagem com contexto
+        full_message = f"""Contexto da sessão: {json.dumps(context)}
+        
+Informações relevantes (RAG): {rag_context or 'Nenhum contexto relevante encontrado'}
+
+Mensagem do usuário: {message}
+
+Retorne APENAS o JSON com as entidades extraídas."""
+        
+        response = agent.run(full_message)
+        
+        # Extrai conteúdo da resposta
+        if hasattr(response, 'content'):
+            response_text = response.content
+        else:
+            response_text = str(response)
         
         # Parse resposta JSON
-        result = json.loads(response.content)
+        if "```json" in response_text:
+            json_part = response_text.split("```json")[1]
+            if "```" in json_part:
+                json_part = json_part.split("```")[0]
+            response_text = json_part.strip()
+        
+        result = json.loads(response_text)
         
         # Fallback para extração por regex se LLM falhar
         if not result.get("sku"):
