@@ -1,56 +1,43 @@
 # ============================================================================
-# OTIMIZADO + CORRIGIDO (2025-10-09 23:59):
-# - Removidas dependências pesadas desnecessárias
+# MIGRAÇÃO COMPLETA PARA GEMINI (2025-10-10 00:15):
+# - CORREÇÃO CRÍTICA: google-generativeai (nome oficial do pacote)
+# - Removidas dependências OpenAI/OpenRouter (legado eliminado)
 # - Mantidas apenas essenciais para produção
-# - CORREÇÃO CRÍTICA: google-genai>=1.0.0 (compatível com agno 2.1.3)
 # - Redução estimada: 8.4GB → ~2-3GB
 # ============================================================================
 
 # Core Framework
 agno==2.1.3
 fastapi==0.110.0
-uvicorn[standard]==0.29.0
 python-dotenv==1.0.1
 python-multipart==0.0.6
 structlog==24.1.0
 tenacity==8.2.3
+uvicorn[standard]==0.29.0
 
 # Database
-sqlalchemy==2.0.28
-sqlmodel==0.0.16
 mysql-connector-python==8.4.0
 redis==5.0.3
+sqlalchemy==2.0.28
+sqlmodel==0.0.16
 
 # Task Queue
 celery==5.3.6
 
 # AI/ML (essenciais)
-google-genai>=1.0.0
-openai>=1.25.0,<2.0.0
+beautifulsoup4==4.12.3
 chromadb==0.4.22
+google-generativeai>=0.4.0
+httpx==0.27.0
+numpy==1.26.4
+pandas==2.2.2
+requests==2.31.0
 tavily-python==0.3.3
 
-# Data Processing (lightweight)
-pandas==2.2.2
-numpy==1.26.4
-beautifulsoup4==4.12.3
-requests==2.31.0
-httpx==0.27.0
-
-# ML Essencial (removidos os pesados)
+# ML Essencial
 lightgbm==4.3.0
 scikit-learn==1.4.2
 
 # Utils
 email-validator==2.1.1
 reportlab==4.0.9
-
-# ============================================================================
-# REMOVIDOS (para reduzir tamanho):
-# - playwright (700MB+ com browsers)
-# - prophet (pesado, dependências complexas)
-# - sentence-transformers (agora usa Gemini embeddings)
-# - matplotlib (não usado em produção)
-# - faker (apenas para testes)
-# - wikipedia (não essencial)
-# ============================================================================

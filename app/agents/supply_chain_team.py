@@ -1,81 +1,46 @@
 """
-Team de agentes colaborativos usando Agno 2.1.3 para análise e recomendação de compras.
+Team de agentes colaborativos usando Agno 2.1.3 + Google Gemini para análise e recomendação de compras.
 
-CORREÇÕES FINAIS APLICADAS (Agno 2.1.3 - 2025-10-09):
+MIGRAÇÃO COMPLETA PARA GEMINI (2025-10-10):
+===========================================
 
-ATUALIZAÇÃO COMPLETA PARA AGNO 2.1.3:
-1. Imports corretos:
-   - ✅ from agno.agent import Agent
-   - ✅ from agno.models.openai import OpenAIChat (não OpenAI!)
-   - ✅ from agno.team import Team
+✅ MUDANÇAS APLICADAS:
+1. Removidas TODAS as dependências OpenAI/OpenRouter (código legado eliminado)
+2. Importação centralizada do Gemini via app.agents.llm_config
+3. Uso exclusivo de get_gemini_llm() para configuração do LLM
+4. Padronização de todos os agentes com o mesmo modelo
+5. Documentação atualizada e comentários explicativos
 
-2. OpenAIChat configurado corretamente:
-   - ✅ id: str (nome do modelo) - CORRETO para Agno 2.1.3
-   - ✅ api_key: str
-   - ✅ base_url: str  
-   - ✅ temperature: float
+📋 STACK ATUAL:
+- LLM: Google Gemini 1.5 Pro (models/gemini-1.5-pro-latest)
+- Framework: Agno 2.1.3
+- Embeddings: Google text-embedding-004 (via rag_service.py)
+- Tools: SupplyChainToolkit customizado
 
-3. Agent configurado conforme API 2.1.3:
-   - ✅ name: str (nome do agente)
-   - ✅ model: OpenAIChat (instância do LLM)
-   - ✅ instructions: List[str] (lista de diretrizes)
-   - ✅ tools: List[Toolkit] (ferramentas disponíveis)
-   - ✅ markdown: bool (formatação)
-   - ✅ description: str (descrição opcional do papel)
+🎯 AGENTES ESPECIALIZADOS:
+1. Analista de Demanda: Previsão e análise de estoque
+2. Pesquisador de Mercado: Coleta de preços e inteligência competitiva
+3. Analista de Logística: Otimização de fornecedores e custos
+4. Gerente de Compras: Síntese e recomendação final
 
-4. Team configurado conforme API 2.1.3:
-   - ✅ members: List[Agent] (não "agents"!)
-   - ✅ Não usa "mode" - coordenação é automática
-
-REFERÊNCIA: Agno v2.1.3 (instalado e validado)
+REFERÊNCIAS:
+- Agno Docs: https://docs.agno.com/
+- Gemini API: https://ai.google.dev/gemini-api/docs
+- Config LLM: app/agents/llm_config.py
 """
 
 from __future__ import annotations
 
 import json
-import os
 from typing import Dict, Optional
 
 from agno.agent import Agent
-from agno.models.google import Gemini
 from agno.team import Team
 from agno.tools import Toolkit
 
+# ✅ IMPORTAÇÃO CENTRALIZADA: Única fonte de configuração do LLM
+from app.agents.llm_config import get_gemini_llm
 from app.agents.tools import SupplyChainToolkit, lookup_product, load_demand_forecast
-
-
-# Configuração do modelo Gemini
-def _get_llm_for_agno(temperature: float = 0.2) -> Gemini:
-    """
-    Retorna modelo Gemini 2.5 Flash configurado.
-    
-    VANTAGENS DO GEMINI 2.5 FLASH:
-    - ✅ Gratuito até 1500 req/dia
-    - ✅ 3-5x mais rápido que modelos anteriores
-    - ✅ Context window: 1M tokens
-    - ✅ Suporta function calling nativo
-    
-    Args:
-        temperature: Controle de aleatoriedade (0.2 = padrão para análises técnicas)
-        
-    Returns:
-        Instância Gemini configurada
-        
-    Raises:
-        RuntimeError: Se GOOGLE_API_KEY não estiver configurada
-    """
-    api_key = os.getenv("GOOGLE_API_KEY")
-    if not api_key:
-        raise RuntimeError(
-            "Variável de ambiente 'GOOGLE_API_KEY' não configurada. "
-            "Obtenha sua chave em: https://aistudio.google.com/app/apikey"
-        )
-
-    return Gemini(
-        id="gemini-2.5-pro",  
-        api_key=api_key,
-        temperature=temperature,
-    )
 
 
 # Prompts dos agentes especialistas
@@ -183,64 +148,88 @@ Retorne APENAS um JSON válido com:
 
 def create_supply_chain_team() -> Team:
     """
-    Cria e retorna o Team de análise de cadeia de suprimentos.
+    Cria e retorna o Team de análise de cadeia de suprimentos usando Google Gemini.
     
-    Utiliza a API do Agno 2.1.3 com parâmetros corretos:
-    - name: Nome do agente
-    - model: Instância do modelo LLM (OpenAIChat)
-    - instructions: Lista de diretrizes de comportamento
-    - tools: Lista de ferramentas disponíveis (Toolkits)
-    - markdown: Habilita formatação markdown nas respostas
-    - description: Descrição opcional do papel do agente
+    ✅ ARQUITETURA ATUALIZADA (Agno 2.1.3 + Gemini):
+    - LLM: Google Gemini 1.5 Pro (configurado via get_gemini_llm())
+    - Framework: Agno 2.1.3 com coordenação automática de agentes
+    - Tools: SupplyChainToolkit customizado com 6 ferramentas especializadas
+    - Output: JSON estruturado com recomendação de compra
+    
+    🎯 AGENTES ESPECIALIZADOS:
+    1. Analista de Demanda (temp=0.2): Previsão e análise de estoque
+    2. Pesquisador de Mercado (temp=0.2): Coleta de preços
+    3. Analista de Logística (temp=0.2): Otimização de fornecedores
+    4. Gerente de Compras (temp=0.1): Decisão final (mais determinístico)
+    
+    Returns:
+        Team: Equipe configurada e pronta para análise
+        
+    Raises:
+        ValueError: Se GOOGLE_API_KEY não estiver configurada
     """
     
-    # Inicializa o toolkit compartilhado
+    # ✅ CONFIGURAÇÃO CENTRALIZADA: Uma única instância do Gemini para todos os agentes
+    # Isso garante consistência e facilita manutenção
+    print("🤖 Configurando agentes com Google Gemini 1.5 Pro...")
+    gemini_llm = get_gemini_llm(temperature=0.2)
+    gemini_llm_precise = get_gemini_llm(temperature=0.1)  # Mais determinístico para decisões finais
+    
+    # Inicializa o toolkit compartilhado (todas as ferramentas disponíveis)
     toolkit = SupplyChainToolkit()
     
-    # Cria os agentes especialistas com API do Agno 2.1.3
+    # ✅ AGENTE 1: Analista de Demanda
+    # Responsável por determinar SE precisamos comprar
     analista_demanda = Agent(
         name="AnalistaDemanda",
         description="Especialista em previsão de demanda e análise de estoque",
-        model=_get_llm_for_agno(temperature=0.2),
+        model=gemini_llm,  # ✅ Usando Gemini configurado centralmente
         instructions=[ANALISTA_DEMANDA_PROMPT],
         tools=[toolkit],
         markdown=True,
     )
     
+    # ✅ AGENTE 2: Pesquisador de Mercado
+    # Responsável por encontrar ONDE e POR QUANTO comprar
     pesquisador_mercado = Agent(
         name="PesquisadorMercado",
         description="Especialista em inteligência competitiva e análise de preços",
-        model=_get_llm_for_agno(temperature=0.2),
+        model=gemini_llm,  # ✅ Usando Gemini configurado centralmente
         instructions=[PESQUISADOR_MERCADO_PROMPT],
         tools=[toolkit],
         markdown=True,
     )
     
+    # ✅ AGENTE 3: Analista de Logística
+    # Responsável por avaliar QUAL fornecedor é melhor (custo total)
     analista_logistica = Agent(
         name="AnalistaLogistica",
         description="Especialista em otimização de cadeia de suprimentos e logística",
-        model=_get_llm_for_agno(temperature=0.2),
+        model=gemini_llm,  # ✅ Usando Gemini configurado centralmente
         instructions=[ANALISTA_LOGISTICA_PROMPT],
         tools=[toolkit],
         markdown=True,
     )
     
+    # ✅ AGENTE 4: Gerente de Compras
+    # Responsável pela DECISÃO FINAL e síntese
     gerente_compras = Agent(
         name="GerenteCompras",
         description="Responsável pela decisão final de aquisição",
-        model=_get_llm_for_agno(temperature=0.1),
+        model=gemini_llm_precise,  # ✅ Temperature mais baixa para decisões críticas
         instructions=[GERENTE_COMPRAS_PROMPT],
         markdown=True,
     )
     
-    # Cria o team com 'members' (não 'agents')
-    # Agno 2.1.3 coordena automaticamente (não usa 'mode')
+    # ✅ COORDENAÇÃO AUTOMÁTICA: Agno 2.1.3 gerencia a ordem de execução
+    # O Team executa os agentes na sequência ideal automaticamente
     team = Team(
         members=[analista_demanda, pesquisador_mercado, analista_logistica, gerente_compras],
         name="SupplyChainTeam",
-        description="Equipe de análise e recomendação de compras",
+        description="Equipe de análise e recomendação de compras usando Google Gemini",
     )
     
+    print("✅ Supply Chain Team criado com sucesso (4 agentes especializados)")
     return team
 
 

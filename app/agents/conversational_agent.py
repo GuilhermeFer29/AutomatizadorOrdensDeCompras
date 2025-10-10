@@ -1,67 +1,45 @@
 """
-Agente Conversacional - Orquestrador de chat com NLU e RAG.
+Agente Conversacional - Orquestrador de chat com NLU e RAG usando Google Gemini.
 
-CORREÇÕES FINAIS APLICADAS (Agno 2.1.3 - 2025-10-09):
+MIGRAÇÃO COMPLETA PARA GEMINI (2025-10-10):
+============================================
 
-ATUALIZAÇÃO COMPLETA PARA AGNO 2.1.3:
-1. Imports corretos:
-   - ✅ from agno.agent import Agent
-   - ✅ from agno.models.openai import OpenAIChat (não OpenAI!)
+✅ MUDANÇAS APLICADAS:
+1. Removidas TODAS as dependências OpenAI/OpenRouter (código legado eliminado)
+2. Importação centralizada do Gemini via app.agents.llm_config
+3. Uso de get_gemini_for_nlu() otimizado para extração de entidades
+4. JSON Mode nativo do Gemini para saídas estruturadas
+5. Resolução automática de nome de produto para SKU
 
-2. OpenAIChat configurado corretamente:
-   - ✅ id: str (nome do modelo) - CORRETO para Agno 2.1.3
-   - ✅ api_key: str
-   - ✅ base_url: str
-   - ✅ temperature: float
+📋 STACK ATUAL:
+- LLM: Google Gemini 1.5 Pro (models/gemini-1.5-pro-latest)
+- Framework: Agno 2.1.3
+- NLU: Extração de entidades com JSON mode nativo
+- RAG: Busca semântica com embeddings Gemini (text-embedding-004)
 
-3. Agent NLU configurado conforme API 2.1.3:
-   - ✅ name: str (nome do agente)
-   - ✅ model: OpenAIChat (instância do LLM)
-   - ✅ instructions: List[str] (lista de diretrizes)
-   - ✅ output_schema: Type[BaseModel] (estrutura de saída - substitui response_model)
-   - ✅ use_json_mode: bool (força JSON)
-   - ✅ markdown: bool (formatação - False para JSON puro)
+🎯 FUNCIONALIDADES:
+1. Extração de Entidades (NLU): SKU, product_name, intent, quantity
+2. Resolução de Contexto: Mantém histórico da sessão
+3. RAG: Busca contexto relevante no histórico
+4. Routing: Direciona para agentes especializados
+5. Fallback Híbrido: Regex + LLM para robustez
 
-4. Funcionalidade adicional implementada:
-   - ✅ Resolução automática de nome de produto para SKU
-   - ✅ Busca fuzzy no banco de dados (exata, parcial, reversa)
-
-REFERÊNCIA: Agno v2.1.3 (instalado e validado)
+REFERÊNCIAS:
+- Agno Docs: https://docs.agno.com/
+- Gemini API: https://ai.google.dev/gemini-api/docs
+- Config LLM: app/agents/llm_config.py
 """
 
 from __future__ import annotations
 import json
-import os
 import re
 from typing import Dict, Any, Optional
 from sqlmodel import Session, select
 from app.models.models import Produto, ChatContext
 from agno.agent import Agent
-from agno.models.google import Gemini
 
-
-def _get_llm_for_agno(temperature: float = 0.3) -> Gemini:
-    """
-    Retorna modelo Gemini 2.5 Flash configurado para NLU.
-    
-    Args:
-        temperature: Controle de aleatoriedade (0.3 = padrão para NLU)
-        
-    Returns:
-        Instância Gemini configurada
-    """
-    api_key = os.getenv("GOOGLE_API_KEY")
-    if not api_key:
-        raise RuntimeError(
-            "Variável de ambiente 'GOOGLE_API_KEY' não configurada. "
-            "Obtenha sua chave em: https://aistudio.google.com/app/apikey"
-        )
-    
-    return Gemini(
-        id="gemini-2.5-pro",  # Mesmo modelo do supply_chain_team
-        temperature=temperature,
-        api_key=api_key
-    )
+# ✅ IMPORTAÇÃO CENTRALIZADA: Configuração otimizada para NLU
+from app.agents.llm_config import get_gemini_for_nlu
 
 
 def resolve_product_name_to_sku(session: Session, product_name: str) -> Optional[str]:
@@ -118,51 +96,62 @@ def resolve_product_name_to_sku(session: Session, product_name: str) -> Optional
 
 def extract_entities_with_llm(message: str, session: Session, session_id: int) -> Dict[str, Any]:
     """
-    Extrai entidades usando Agno Agent com JSON mode.
+    Extrai entidades usando Gemini Agent com JSON mode nativo.
     
-    Usa use_json_mode=True para garantir que a saída seja JSON válido,
-    eliminando a necessidade de parsing manual.
+    ✅ ATUALIZAÇÕES (Gemini):
+    - Usa get_gemini_for_nlu() otimizado (temperature=0.1 para NLU)
+    - JSON mode nativo do Gemini garante saída estruturada
+    - Fallback híbrido (LLM + Regex) para robustez máxima
+    - Resolução automática de product_name → SKU
+    
+    Args:
+        message: Mensagem do usuário para análise
+        session: Sessão do banco de dados
+        session_id: ID da sessão de chat
+        
+    Returns:
+        Dict com entidades extraídas: sku, product_name, intent, quantity, confidence
     """
     
     # Carrega contexto da sessão
     context = load_session_context(session, session_id)
     
-    # Busca contexto relevante com RAG
+    # Busca contexto relevante com RAG (embeddings Gemini)
     from app.services.rag_service import get_relevant_context
     rag_context = get_relevant_context(message, session)
     
-    # Define as instruções para o agente
+    # Define as instruções para o agente NLU
     instructions = [
-        """Você é um assistente de análise de mensagens para um sistema de compras.""",
-        """Extraia as seguintes informações da mensagem do usuário:
+        """Você é um especialista em Natural Language Understanding (NLU) para um sistema de compras industriais.""",
+        """Extraia as seguintes entidades da mensagem do usuário:
         - sku: Código do produto (formato SKU_XXX ou null)
-        - product_name: Nome do produto mencionado (ou null) - IMPORTANTE: Extraia SEMPRE o nome do produto, mesmo que seja informal
-        - intent: Um de [forecast, price_check, stock_check, purchase_decision, logistics, general_inquiry]
+        - product_name: Nome do produto mencionado (ou null) - SEMPRE extraia o nome, mesmo que seja informal
+        - intent: Intenção do usuário [forecast, price_check, stock_check, purchase_decision, logistics, general_inquiry]
         - quantity: Quantidade numérica mencionada (ou null)
-        - confidence: Seu nível de confiança (high/medium/low)""",
+        - confidence: Seu nível de confiança na extração [high, medium, low]""",
         """REGRAS DE EXTRAÇÃO:
-        1. Se o usuário mencionar um nome de produto (ex: "Parafuso M8", "Cabo USB", "Cadeira de Escritório"), extraia para product_name
-        2. Se o usuário mencionar um SKU (ex: "SKU_001", "SKU-123"), extraia para sku
+        1. Se o usuário mencionar um nome de produto (ex: "Parafuso M8", "Cabo USB", "Cadeira"), extraia para product_name
+        2. Se o usuário mencionar um SKU explícito (ex: "SKU_001", "SKU-123"), extraia para sku
         3. Se ambos forem mencionados, preencha ambos os campos
-        4. Se o usuário usar pronomes como "ele", "dela", "isso", use o contexto para resolver a referência
-        5. Prefira extrair product_name sempre que possível, pois o sistema pode resolver automaticamente para SKU""",
-        """MAPEAMENTO DE INTENT:
-        - forecast: Previsão de demanda, média de vendas, histórico, tendência, análise, consumo, giro
-        - price_check: Preços, custo, valor de mercado, cotação
-        - stock_check: Estoque, quantidade disponível, tem produto
-        - purchase_decision: Comprar, fazer pedido, ordem de compra
-        - logistics: Fornecedor, entrega, prazo, logística
-        - general_inquiry: Qualquer outra pergunta genérica""",
+        4. Se o usuário usar pronomes ("ele", "isso", "aquele produto"), resolva usando o contexto
+        5. SEMPRE prefira extrair product_name, pois o sistema resolve automaticamente para SKU""",
+        """MAPEAMENTO DE INTENT (palavras-chave):
+        - forecast: previsão, demanda, média, histórico, tendência, análise, consumo, vendas, giro
+        - price_check: preço, custo, valor, mercado, cotação, quanto custa
+        - stock_check: estoque, quantidade, disponível, tem produto
+        - purchase_decision: comprar, fazer pedido, ordem de compra, preciso
+        - logistics: fornecedor, entrega, prazo, logística, supplier
+        - general_inquiry: perguntas genéricas ou não classificáveis acima""",
     ]
     
-    # Cria agente Agno 2.1.3 com JSON mode ativado
+    # ✅ AGENTE NLU: Gemini otimizado para extração de entidades
     agent = Agent(
         name="EntityExtractor",
-        description="Extrator de Entidades - Analisa mensagens e extrai informações estruturadas",
-        model=_get_llm_for_agno(temperature=0.2),
+        description="Extrator de Entidades NLU usando Google Gemini",
+        model=get_gemini_for_nlu(),  # ✅ Configuração centralizada (temp=0.1)
         instructions=instructions,
-        use_json_mode=True,  # ✅ Força resposta em JSON (Agno 2.1.3)
-        markdown=False,
+        use_json_mode=True,  # ✅ JSON mode nativo do Gemini
+        markdown=False,  # Saída pura (não-markdown para JSON)
     )
     
     try:
