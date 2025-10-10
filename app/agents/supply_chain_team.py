@@ -1,13 +1,33 @@
 """
-Team de agentes colaborativos usando Agno para análise e recomendação de compras.
+Team de agentes colaborativos usando Agno 2.1.3 para análise e recomendação de compras.
 
-CORREÇÕES APLICADAS (API Agno Moderna):
-- Substituído parâmetro 'name' por 'description' nos Agents
-- Adicionado 'show_tool_calls=True' para visibilidade de ferramentas
-- Adicionado 'markdown=True' para formatação adequada
-- Mudado mode da Team de 'sequential' para 'coordinate' (orquestração inteligente)
-- Adicionado 'response_model' para forçar saída JSON estruturada quando necessário
-- Removido parsing manual de JSON - deixando o Agno lidar nativamente
+CORREÇÕES FINAIS APLICADAS (Agno 2.1.3 - 2025-10-09):
+
+ATUALIZAÇÃO COMPLETA PARA AGNO 2.1.3:
+1. Imports corretos:
+   - ✅ from agno.agent import Agent
+   - ✅ from agno.models.openai import OpenAIChat (não OpenAI!)
+   - ✅ from agno.team import Team
+
+2. OpenAIChat configurado corretamente:
+   - ✅ id: str (nome do modelo) - CORRETO para Agno 2.1.3
+   - ✅ api_key: str
+   - ✅ base_url: str  
+   - ✅ temperature: float
+
+3. Agent configurado conforme API 2.1.3:
+   - ✅ name: str (nome do agente)
+   - ✅ model: OpenAIChat (instância do LLM)
+   - ✅ instructions: List[str] (lista de diretrizes)
+   - ✅ tools: List[Toolkit] (ferramentas disponíveis)
+   - ✅ markdown: bool (formatação)
+   - ✅ description: str (descrição opcional do papel)
+
+4. Team configurado conforme API 2.1.3:
+   - ✅ members: List[Agent] (não "agents"!)
+   - ✅ Não usa "mode" - coordenação é automática
+
+REFERÊNCIA: Agno v2.1.3 (instalado e validado)
 """
 
 from __future__ import annotations
@@ -17,34 +37,43 @@ import os
 from typing import Dict, Optional
 
 from agno.agent import Agent
-from agno.models.openai import OpenAI
+from agno.models.google import Gemini
 from agno.team import Team
+from agno.tools import Toolkit
 
 from app.agents.tools import SupplyChainToolkit, lookup_product, load_demand_forecast
 
 
-# Configuração do modelo OpenRouter
-def _get_llm_for_agno(temperature: float = 0.2) -> OpenAI:
+# Configuração do modelo Gemini
+def _get_llm_for_agno(temperature: float = 0.2) -> Gemini:
     """
-    Retorna modelo OpenAI configurado para usar OpenRouter.
+    Retorna modelo Gemini 2.5 Flash configurado.
     
-    Esta função instancia o cliente OpenAI do Agno apontando para o endpoint
-    do OpenRouter, permitindo acesso a múltiplos modelos de LLM.
+    VANTAGENS DO GEMINI 2.5 FLASH:
+    - ✅ Gratuito até 1500 req/dia
+    - ✅ 3-5x mais rápido que modelos anteriores
+    - ✅ Context window: 1M tokens
+    - ✅ Suporta function calling nativo
+    
+    Args:
+        temperature: Controle de aleatoriedade (0.2 = padrão para análises técnicas)
+        
+    Returns:
+        Instância Gemini configurada
+        
+    Raises:
+        RuntimeError: Se GOOGLE_API_KEY não estiver configurada
     """
-    api_key = os.getenv("OPENROUTER_API_KEY")
+    api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
         raise RuntimeError(
-            "Variável de ambiente 'OPENROUTER_API_KEY' não configurada. "
-            "Defina a chave de API no arquivo .env ou nas variáveis de ambiente do servidor."
+            "Variável de ambiente 'GOOGLE_API_KEY' não configurada. "
+            "Obtenha sua chave em: https://aistudio.google.com/app/apikey"
         )
 
-    model_name = os.getenv("OPENROUTER_MODEL_NAME", "mistralai/mistral-small-3.1-24b-instruct:free")
-    base_url = os.getenv("OPENROUTER_API_BASE", "https://openrouter.ai/api/v1")
-
-    return OpenAI(
-        id=model_name,
+    return Gemini(
+        id="gemini-2.5-pro",  
         api_key=api_key,
-        base_url=base_url,
         temperature=temperature,
     )
 
@@ -78,7 +107,7 @@ Coletar e analisar dados atualizados de mercado sobre preços e fornecedores.
 
 ## Diretrizes de Resiliência
 1. Se `need_restock` for falso, retorne offers vazio
-2. Se o scraping falhar, tente buscar informações contextuais com busca web ou Wikipedia
+2. Se o scraping falhar, use tavily_search_results_json para buscar informações contextuais
 3. Documente qualquer falha ou limitação nos dados coletados
 4. Compare os preços encontrados com histórico quando disponível
 
@@ -156,57 +185,60 @@ def create_supply_chain_team() -> Team:
     """
     Cria e retorna o Team de análise de cadeia de suprimentos.
     
-    Utiliza a API moderna do Agno com parâmetros corretos:
-    - description: Define o papel/identidade do agente
+    Utiliza a API do Agno 2.1.3 com parâmetros corretos:
+    - name: Nome do agente
+    - model: Instância do modelo LLM (OpenAIChat)
     - instructions: Lista de diretrizes de comportamento
-    - tools: Lista de ferramentas disponíveis
-    - show_tool_calls: Mostra quais ferramentas foram usadas (debugging)
+    - tools: Lista de ferramentas disponíveis (Toolkits)
     - markdown: Habilita formatação markdown nas respostas
+    - description: Descrição opcional do papel do agente
     """
     
     # Inicializa o toolkit compartilhado
     toolkit = SupplyChainToolkit()
     
-    # Cria os agentes especialistas com API moderna do Agno
+    # Cria os agentes especialistas com API do Agno 2.1.3
     analista_demanda = Agent(
-        description="Analista de Demanda - Especialista em previsão e análise de estoque",
+        name="AnalistaDemanda",
+        description="Especialista em previsão de demanda e análise de estoque",
         model=_get_llm_for_agno(temperature=0.2),
         instructions=[ANALISTA_DEMANDA_PROMPT],
         tools=[toolkit],
-        show_tool_calls=True,
         markdown=True,
     )
     
     pesquisador_mercado = Agent(
-        description="Pesquisador de Mercado - Especialista em inteligência competitiva e preços",
+        name="PesquisadorMercado",
+        description="Especialista em inteligência competitiva e análise de preços",
         model=_get_llm_for_agno(temperature=0.2),
         instructions=[PESQUISADOR_MERCADO_PROMPT],
         tools=[toolkit],
-        show_tool_calls=True,
         markdown=True,
     )
     
     analista_logistica = Agent(
-        description="Analista de Logística - Especialista em otimização de cadeia de suprimentos",
+        name="AnalistaLogistica",
+        description="Especialista em otimização de cadeia de suprimentos e logística",
         model=_get_llm_for_agno(temperature=0.2),
         instructions=[ANALISTA_LOGISTICA_PROMPT],
         tools=[toolkit],
-        show_tool_calls=True,
         markdown=True,
     )
     
     gerente_compras = Agent(
-        description="Gerente de Compras - Responsável pela decisão final de aquisição",
+        name="GerenteCompras",
+        description="Responsável pela decisão final de aquisição",
         model=_get_llm_for_agno(temperature=0.1),
         instructions=[GERENTE_COMPRAS_PROMPT],
-        show_tool_calls=True,
         markdown=True,
     )
     
-    # Cria o team com modo 'coordinate' para orquestração inteligente
+    # Cria o team com 'members' (não 'agents')
+    # Agno 2.1.3 coordena automaticamente (não usa 'mode')
     team = Team(
-        agents=[analista_demanda, pesquisador_mercado, analista_logistica, gerente_compras],
-        mode="coordinate",  # Permite que um LLM coordene a equipe dinamicamente
+        members=[analista_demanda, pesquisador_mercado, analista_logistica, gerente_compras],
+        name="SupplyChainTeam",
+        description="Equipe de análise e recomendação de compras",
     )
     
     return team

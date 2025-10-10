@@ -30,7 +30,7 @@ class SupplyChainState(TypedDict, total=False):
     recommendation: Dict[str, object]
 
 
-DEFAULT_OPENROUTER_MODEL = "mistralai/mistral-small-3.1-24b-instruct:free"
+DEFAULT_OPENROUTER_MODEL = "deepseek/deepseek-chat-v3-0324:free"
 DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 
@@ -136,12 +136,11 @@ Coletar e analisar dados atualizados de mercado sobre preços e fornecedores.
 
 ## Ferramentas Disponíveis
 - scrape_latest_price: Coleta preços atuais do Mercado Livre
-- tavily_search_results_json (se disponível): Busca notícias e informações sobre fornecedores
-- wikipedia: Busca contexto sobre produtos ou componentes
+- tavily_search_results_json: Busca notícias e informações atualizadas sobre fornecedores e produtos
 
 ## Diretrizes de Resiliência
 1. Se `need_restock` for falso, retorne offers vazio
-2. Se o scraping falhar, tente buscar informações contextuais com Tavily ou Wikipedia
+2. Se o scraping falhar, use tavily_search_results_json para buscar informações contextuais
 3. Documente qualquer falha ou limitação nos dados coletados
 4. Compare os preços encontrados com histórico quando disponível
 
@@ -239,7 +238,7 @@ def build_supply_chain_graph() -> StateGraph:
     pesquisador_mercado = _build_agent(
         agent_name="PesquisadorMercado",
         system_prompt=PESQUISADOR_MERCADO_PROMPT,
-        tool_names=["scrape_latest_price", "tavily_search_results_json", "wikipedia"],
+        tool_names=["scrape_latest_price", "tavily_search_results_json"],
     )
 
     analista_logistica = _build_agent(

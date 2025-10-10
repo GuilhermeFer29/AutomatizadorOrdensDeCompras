@@ -33,12 +33,19 @@ def create_celery_app() -> Celery:
         worker_disable_rate_limits=True,
     )
 
+    # ========================================================================
+    # SCRAPER AUTOMÁTICO DESATIVADO (2025-10-09)
+    # ========================================================================
+    # Para reativar, descomente o bloco abaixo:
     celery_app.conf.beat_schedule = {
         "scrape-mercadolivre-a-cada-8h": {
             "task": "app.tasks.scraping.scrape_all_products",
             "schedule": crontab(minute=0, hour="*/8"),
         }
     }
+    
+    # Beat schedule vazio (scraping manual apenas)
+    celery_app.conf.beat_schedule = {}
 
     celery_app.set_default()
 
@@ -48,6 +55,7 @@ def create_celery_app() -> Celery:
 celery_app: Celery = create_celery_app()
 
 # Import tasks to ensure they are registered with the Celery application.
+import app.tasks.agent_tasks  # noqa: E402,F401
 import app.tasks.debug_tasks  # noqa: E402,F401
 import app.tasks.ml_tasks  # noqa: E402,F401
 import app.tasks.scraping_tasks  # noqa: E402,F401

@@ -69,12 +69,16 @@ def process_user_message(session: Session, session_id: int, message_text: str):
     # 2. Extrai entidades (SKU, intent, etc)
     entities = extract_entities(message_text, session, session_id)
     
+    # DEBUG: Log entities extraídas
+    print(f"🔍 DEBUG - Entities extraídas: {entities}")
+    
     # 3. Salva SKU no contexto se foi identificado
     if entities.get("sku"):
         save_session_context(session, session_id, "current_sku", entities["sku"])
     
     # 4. Roteia para o agente especialista
     routing = route_to_specialist(entities["intent"], entities)
+    print(f"🔍 DEBUG - Routing: {routing}")
     
     # 5. Executa baseado no tipo de agente
     if routing["agent"] == "direct_query":
@@ -88,7 +92,7 @@ def process_user_message(session: Session, session_id: int, message_text: str):
         
     elif routing["agent"] == "supply_chain_analysis":
         # Dispara análise completa (assíncrono)
-        response_content, metadata = handle_supply_chain_analysis(session, entities, routing)
+        response_content, metadata = handle_supply_chain_analysis(session, session_id, entities, routing)
     
     else:
         response_content = "Desculpe, não consegui processar sua solicitação."
@@ -142,8 +146,11 @@ def handle_stock_check(session: Session, entities: dict) -> tuple[str, dict]:
     return response, metadata
 
 
-def handle_supply_chain_analysis(session: Session, entities: dict, routing: dict) -> tuple[str, dict]:
-    """Dispara análise completa da supply chain de forma assíncrona."""
+def handle_supply_chain_analysis(session: Session, session_id: int, entities: dict, routing: dict) -> tuple[str, dict]:
+    """Dispara análise completa da supply chain de forma assíncrona.
+    
+    CORREÇÃO: Agora passa session_id para a task salvar o resultado automaticamente.
+    """
     sku = entities.get("sku")
     
     if not sku:
@@ -152,9 +159,9 @@ def handle_supply_chain_analysis(session: Session, entities: dict, routing: dict
             {"type": "error", "reason": "missing_sku"}
         )
     
-    # Dispara tarefa em segundo plano
+    # ✅ CORREÇÃO: Passa session_id para task salvar resultado
     from app.tasks.agent_tasks import execute_agent_analysis_task
-    task = execute_agent_analysis_task.delay(sku=sku)
+    task = execute_agent_analysis_task.delay(sku=sku, session_id=session_id)
     
     response = (
         f"🔍 Iniciando análise completa para {sku}...\n\n"
@@ -163,7 +170,7 @@ def handle_supply_chain_analysis(session: Session, entities: dict, routing: dict
         f"- Preços de mercado\n"
         f"- Análise logística\n"
         f"- Recomendação de compra\n\n"
-        f"Aguarde um momento..."
+        f"⏱️ Isso pode levar até 2 minutos. Aguarde que responderei em breve!"
     )
     
     metadata = {

@@ -6,3 +6,4 @@ models/*.py[cod]
 .csv
 .env
 .DS_Store
+venv/

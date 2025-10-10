@@ -5,7 +5,9 @@ import api from '@/services/api';
 export const useChat = (sessionId: number | null) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [hasAsyncTask, setHasAsyncTask] = useState(false);
   const websocket = useRef<WebSocket | null>(null);
+  const pollingInterval = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -13,6 +15,12 @@ export const useChat = (sessionId: number | null) => {
     // Fetch initial history
     api.get(`/api/chat/sessions/${sessionId}/messages`).then(response => {
       setMessages(response.data);
+      
+      // Verifica se há task assíncrona em andamento
+      const hasAsync = response.data.some((msg: ChatMessage) => 
+        msg.metadata?.async === true || msg.metadata?.type === 'analysis_started'
+      );
+      setHasAsyncTask(hasAsync);
     });
 
     // Setup WebSocket
@@ -27,6 +35,11 @@ export const useChat = (sessionId: number | null) => {
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
       setMessages(prevMessages => [...prevMessages, message]);
+      
+      // Ativa polling se for uma task assíncrona
+      if (message.metadata?.async === true || message.metadata?.type === 'analysis_started') {
+        setHasAsyncTask(true);
+      }
     };
 
     ws.onclose = () => {
@@ -36,8 +49,56 @@ export const useChat = (sessionId: number | null) => {
 
     return () => {
       ws.close();
+      if (pollingInterval.current) {
+        clearInterval(pollingInterval.current);
+      }
     };
   }, [sessionId]);
+
+  // ✅ CORREÇÃO: Polling para buscar resultado de tasks assíncronas
+  useEffect(() => {
+    if (!sessionId || !hasAsyncTask) return;
+
+    console.log('🔄 Iniciando polling para task assíncrona...');
+
+    const pollMessages = async () => {
+      try {
+        const response = await api.get(`/api/chat/sessions/${sessionId}/messages`);
+        const newMessages = response.data;
+        
+        // Verifica se há nova mensagem de resultado
+        const hasResult = newMessages.some((msg: ChatMessage) => 
+          msg.metadata?.type === 'analysis_result' || msg.metadata?.type === 'analysis_error'
+        );
+        
+        if (hasResult) {
+          console.log('✅ Resultado da análise recebido!');
+          setMessages(newMessages);
+          setHasAsyncTask(false); // Para o polling
+          
+          if (pollingInterval.current) {
+            clearInterval(pollingInterval.current);
+            pollingInterval.current = null;
+          }
+        } else {
+          // Atualiza mensagens sem parar o polling
+          setMessages(newMessages);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar mensagens:', error);
+      }
+    };
+
+    // Faz polling a cada 2 segundos (mais responsivo)
+    pollingInterval.current = setInterval(pollMessages, 2000);
+
+    return () => {
+      if (pollingInterval.current) {
+        clearInterval(pollingInterval.current);
+        pollingInterval.current = null;
+      }
+    };
+  }, [sessionId, hasAsyncTask]);
 
   const sendMessage = (content: string) => {
     if (websocket.current && websocket.current.readyState === WebSocket.OPEN) {

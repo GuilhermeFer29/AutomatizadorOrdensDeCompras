@@ -8,11 +8,8 @@ from dataclasses import asdict
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
-
 from agno.tools import Toolkit
 from sqlmodel import Session, select
-import wikipedia
-
 from app.core.database import engine
 from app.ml.training import METADATA_PATH, predict_prices
 from app.models.models import Produto
@@ -69,9 +66,8 @@ class SupplyChainToolkit(Toolkit):
         self.register(self.load_demand_forecast)
         self.register(self.scrape_latest_price)
         self.register(self.compute_distance)
-        self.register(self.wikipedia_search)
         
-        # Adiciona Tavily se disponível
+        # Adiciona Tavily (recomendado para buscas contextuais)
         if TAVILY_AVAILABLE and os.getenv("TAVILY_API_KEY"):
             self.register(self.tavily_search)
     
@@ -191,25 +187,6 @@ class SupplyChainToolkit(Toolkit):
             return json.dumps(result)
         except Exception as e:
             return json.dumps({"error": str(e)})
-    
-    def wikipedia_search(self, query: str) -> str:
-        """Busca informações enciclopédicas sobre produtos, componentes ou conceitos de mercado.
-
-        Args:
-            query: Termo de busca.
-        
-        Returns:
-            Resumo do artigo da Wikipedia ou mensagem de erro.
-        """
-        try:
-            result = wikipedia.summary(query, sentences=5, auto_suggest=True)
-            return result
-        except wikipedia.exceptions.DisambiguationError as e:
-            return f"Múltiplos resultados encontrados. Seja mais específico. Opções: {', '.join(e.options[:5])}"
-        except wikipedia.exceptions.PageError:
-            return f"Nenhum artigo encontrado para '{query}'."
-        except Exception as e:
-            return f"Erro na busca: {str(e)}"
     
     def tavily_search(self, query: str) -> str:
         """Busca informações atualizadas na web sobre fornecedores, tendências de mercado.

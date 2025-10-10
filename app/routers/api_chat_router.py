@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, HTTPExce
 from sqlmodel import Session, select
 from app.core.database import get_session
 from app.services.chat_service import get_or_create_chat_session, get_chat_history, process_user_message, add_chat_message
+from app.services.websocket_manager import websocket_manager
 from app.models.models import ChatAction
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
@@ -98,7 +99,9 @@ def execute_chat_action(
 
 @router.websocket("/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: int, session: Session = Depends(get_session)):
-    await websocket.accept()
+    # ✅ CORREÇÃO: Usa manager para permitir push de mensagens
+    await websocket_manager.connect(websocket, session_id)
+    
     try:
         while True:
             data = await websocket.receive_text()
@@ -116,4 +119,5 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int, session: Ses
             }
             await websocket.send_json(response_data)
     except WebSocketDisconnect:
+        websocket_manager.disconnect(websocket, session_id)
         print(f"Client disconnected from session {session_id}")

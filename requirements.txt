@@ -1,31 +1,56 @@
-fastapi
+# ============================================================================
+# OTIMIZADO + CORRIGIDO (2025-10-09 23:59):
+# - Removidas dependências pesadas desnecessárias
+# - Mantidas apenas essenciais para produção
+# - CORREÇÃO CRÍTICA: google-genai>=1.0.0 (compatível com agno 2.1.3)
+# - Redução estimada: 8.4GB → ~2-3GB
+# ============================================================================
+
+# Core Framework
+agno==2.1.3
+fastapi==0.110.0
 uvicorn[standard]==0.29.0
-celery==5.3.6
-redis==5.0.3
-sqlalchemy
-sqlmodel
 python-dotenv==1.0.1
-mysql-connector-python==8.4.0
-numpy==1.26.4
-pandas==2.2.2
-matplotlib==3.8.4
-prophet==1.1.5
 python-multipart==0.0.6
-beautifulsoup4==4.12.3
-httpx==0.27.0
-tenacity==8.2.3
 structlog==24.1.0
-playwright==1.45.0
-reportlab==4.0.9
-email-validator==2.1.1
-requests
-agno
-openai==1.59.5
+tenacity==8.2.3
+
+# Database
+sqlalchemy==2.0.28
+sqlmodel==0.0.16
+mysql-connector-python==8.4.0
+redis==5.0.3
+
+# Task Queue
+celery==5.3.6
+
+# AI/ML (essenciais)
+google-genai>=1.0.0
+openai>=1.25.0,<2.0.0
+chromadb==0.4.22
+tavily-python==0.3.3
+
+# Data Processing (lightweight)
+pandas==2.2.2
+numpy==1.26.4
+beautifulsoup4==4.12.3
+requests==2.31.0
+httpx==0.27.0
+
+# ML Essencial (removidos os pesados)
 lightgbm==4.3.0
 scikit-learn==1.4.2
-faker
-tavily-python==0.3.3
-wikipedia==1.4.0
-chromadb==0.4.22
-sentence-transformers==2.3.1
-openai
+
+# Utils
+email-validator==2.1.1
+reportlab==4.0.9
+
+# ============================================================================
+# REMOVIDOS (para reduzir tamanho):
+# - playwright (700MB+ com browsers)
+# - prophet (pesado, dependências complexas)
+# - sentence-transformers (agora usa Gemini embeddings)
+# - matplotlib (não usado em produção)
+# - faker (apenas para testes)
+# - wikipedia (não essencial)
+# ============================================================================

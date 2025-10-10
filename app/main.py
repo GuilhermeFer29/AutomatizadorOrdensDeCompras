@@ -61,7 +61,36 @@ def create_application() -> FastAPI:
     @application.on_event("startup")
     async def on_startup() -> None:  # noqa: D401 - simple startup hook
         create_db_and_tables()
+        
+        # ✅ Inicia listener do Redis para notificações em tempo real
+        try:
+            from app.services.redis_events import redis_events
+            from app.services.websocket_manager import websocket_manager
+            
+            await redis_events.connect()
+            
+            # Handler que recebe mensagens do Redis e envia via WebSocket
+            async def handle_redis_message(session_id: int, message_data: dict):
+                LOGGER.info(f"📥 Redis → WebSocket: session_id={session_id}")
+                await websocket_manager.send_message(session_id, message_data)
+            
+            # Inicia escuta em background
+            await redis_events.start_listening(handle_redis_message)
+            LOGGER.info("✅ Redis listener iniciado com sucesso")
+        except Exception as e:
+            LOGGER.warning(f"⚠️ Redis listener não iniciado: {e}")
+        
         LOGGER.info("FastAPI application started successfully")
+    
+    @application.on_event("shutdown")
+    async def on_shutdown() -> None:
+        """Cleanup ao desligar."""
+        try:
+            from app.services.redis_events import redis_events
+            await redis_events.disconnect()
+            LOGGER.info("Redis listener desconectado")
+        except Exception as e:
+            LOGGER.warning(f"Erro ao desconectar Redis: {e}")
 
     @application.get("/health", tags=["health"])
     async def healthcheck() -> Dict[str, Any]:

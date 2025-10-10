@@ -34,6 +34,9 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env
+    environment:
+      # ✅ GEMINI 2.5 FLASH - Rápido e Gratuito
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
     depends_on:
       db:
         condition: service_healthy

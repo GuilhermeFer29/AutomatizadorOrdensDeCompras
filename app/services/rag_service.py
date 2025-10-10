@@ -1,4 +1,10 @@
-"""Serviço de RAG (Retrieval Augmented Generation) para o chat."""
+"""Serviço de RAG (Retrieval Augmented Generation) para o chat.
+
+ATUALIZAÇÃO (2025-10-09 23:13):
+- Migrado para Google Gemini embeddings
+- Modelo: models/text-embedding-004 (768 dimensões)
+- Vantagens: Gratuito, mais preciso, integração nativa com Gemini
+"""
 
 from __future__ import annotations
 import os
@@ -6,7 +12,6 @@ from pathlib import Path
 from typing import List, Dict, Any
 import chromadb
 from chromadb.config import Settings
-from openai import OpenAI as OpenAIClient
 from sqlmodel import Session, select
 from app.models.models import ChatMessage, Produto, OrdemDeCompra
 
@@ -14,33 +19,62 @@ from app.models.models import ChatMessage, Produto, OrdemDeCompra
 CHROMA_PERSIST_DIR = Path(__file__).resolve().parents[2] / "data" / "chroma"
 CHROMA_PERSIST_DIR.mkdir(parents=True, exist_ok=True)
 
-# Cliente OpenAI global para embeddings
-_openai_client = None
+# Cliente Gemini global
+_gemini_client = None
 
 
-def _get_openai_client() -> OpenAIClient:
-    """Retorna cliente OpenAI configurado para OpenRouter."""
-    global _openai_client
-    if _openai_client is None:
-        api_key = os.getenv("OPENROUTER_API_KEY")
-        base_url = os.getenv("OPENROUTER_API_BASE", "https://openrouter.ai/api/v1")
-        _openai_client = OpenAIClient(api_key=api_key, base_url=base_url)
-    return _openai_client
+def _get_gemini_client():
+    """
+    Retorna cliente Google Gemini para embeddings.
+    
+    Usa google-genai (mesma biblioteca do Agno).
+    """
+    global _gemini_client
+    if _gemini_client is None:
+        try:
+            from google import genai
+            
+            api_key = os.getenv("GOOGLE_API_KEY")
+            if not api_key:
+                raise RuntimeError("GOOGLE_API_KEY não configurada no .env")
+            
+            _gemini_client = genai.Client(api_key=api_key)
+        except ImportError:
+            raise ImportError(
+                "google-genai não instalado. Execute: pip install google-genai"
+            )
+    
+    return _gemini_client
 
 
 def _get_embedding(text: str) -> List[float]:
-    """Gera embedding para um texto usando OpenRouter."""
+    """
+    Gera embedding usando Google Gemini text-embedding-004.
+    
+    Modelo: models/text-embedding-004
+    - Dimensões: 768 (2x mais que all-MiniLM-L6-v2)
+    - Performance: Superior ao sentence-transformers
+    - Custo: Gratuito até 1500 req/dia
+    
+    Docs: https://ai.google.dev/gemini-api/docs/embeddings
+    """
     try:
-        client = _get_openai_client()
-        response = client.embeddings.create(
-            model="text-embedding-3-small",
-            input=text
+        client = _get_gemini_client()
+        
+        # API do Gemini para embeddings
+        response = client.models.embed_content(
+            model="models/text-embedding-004",
+            content=text
         )
-        return response.data[0].embedding
+        
+        # Extrai o vetor de embedding
+        embedding = response.embeddings[0].values
+        return list(embedding)
+        
     except Exception as e:
-        print(f"Erro ao gerar embedding: {e}")
-        # Fallback: retorna vetor zero
-        return [0.0] * 1536
+        print(f"Erro ao gerar embedding com Gemini: {e}")
+        # Fallback: retorna vetor zero com 768 dimensões
+        return [0.0] * 768
 
 
 def _get_chroma_client() -> chromadb.Client:
@@ -52,9 +86,36 @@ def _get_chroma_client() -> chromadb.Client:
 
 
 def _get_or_create_collection(collection_name: str):
-    """Retorna ou cria uma collection no ChromaDB."""
+    """
+    Retorna ou cria uma collection no ChromaDB.
+    
+    IMPORTANTE: Mudança de dimensões (384 → 768)
+    - Se você já tinha collections antigas, delete-as:
+      docker-compose exec api rm -rf /app/data/chroma
+    - ChromaDB infere dimensões automaticamente do primeiro embedding
+    """
     client = _get_chroma_client()
     return client.get_or_create_collection(name=collection_name)
+
+
+def reset_collections():
+    """
+    ⚠️ ATENÇÃO: Deleta TODAS as collections e recria do zero.
+    
+    Use apenas se estiver mudando de modelo de embeddings ou
+    se houver incompatibilidade de dimensões.
+    """
+    client = _get_chroma_client()
+    
+    # Lista todas as collections
+    collections = client.list_collections()
+    
+    # Deleta cada uma
+    for collection in collections:
+        client.delete_collection(collection.name)
+        print(f"Collection '{collection.name}' deletada")
+    
+    print("✅ Todas as collections foram resetadas")
 
 
 def index_chat_message(message: ChatMessage):
