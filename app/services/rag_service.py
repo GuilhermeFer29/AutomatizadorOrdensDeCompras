@@ -197,7 +197,7 @@ def query_product_catalog_with_google_rag(query: str) -> str:
     """
     try:
         rag_chain = create_rag_chain()
-        response = rag_chain.invoke(query)
+        response = rag_chain.invoke({"question": query})
         return response
     except Exception as e:
         error_msg = f"❌ Erro ao consultar catálogo: {str(e)}"

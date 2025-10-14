@@ -57,10 +57,29 @@ def create_application() -> FastAPI:
     # Adicionando a rota de fornecedores
     from app.routers.supplier_router import router as supplier_router
     application.include_router(supplier_router)
+    
+    # Rota de gerenciamento do RAG
+    from app.routers.rag_router import router as rag_router
+    application.include_router(rag_router)
 
     @application.on_event("startup")
     async def on_startup() -> None:  # noqa: D401 - simple startup hook
         create_db_and_tables()
+        
+        # ✅ Sincronização automática do RAG com banco de dados
+        try:
+            from app.services.rag_sync_service import initialize_rag_on_startup
+            
+            LOGGER.info("🔄 Iniciando sincronização automática do RAG...")
+            result = initialize_rag_on_startup()
+            
+            if result["status"] == "success":
+                LOGGER.info(f"✅ RAG sincronizado: {result['products_indexed']} produtos indexados")
+            else:
+                LOGGER.warning(f"⚠️ RAG não sincronizado: {result['message']}")
+        except Exception as e:
+            LOGGER.error(f"❌ Erro ao inicializar RAG: {e}")
+            # Não bloqueia a inicialização da API se RAG falhar
         
         # ✅ Inicia listener do Redis para notificações em tempo real
         try:
