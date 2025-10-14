@@ -1,33 +1,39 @@
 """
-Agente Conversacional - Orquestrador de chat com NLU e RAG usando Google Gemini.
+Agente Conversacional - Assistente Natural com Arquitetura Híbrida Agno + LangChain.
 
-MIGRAÇÃO COMPLETA PARA GEMINI (2025-10-10):
-============================================
+ARQUITETURA HÍBRIDA (2025-10-14):
+===================================
 
-✅ MUDANÇAS APLICADAS:
-1. Removidas TODAS as dependências OpenAI/OpenRouter (código legado eliminado)
-2. Importação centralizada do Gemini via app.agents.llm_config
-3. Uso de get_gemini_for_nlu() otimizado para extração de entidades
-4. JSON Mode nativo do Gemini para saídas estruturadas
-5. Resolução automática de nome de produto para SKU
+✅ CAMADA DE CONVERSAÇÃO (Agno):
+- Gerencia diálogo e memória de sessão
+- Decide quando usar ferramentas automaticamente
+- Linguagem natural fluida e contextual
 
-📋 STACK ATUAL:
-- LLM: Google Gemini 1.5 Pro (models/gemini-1.5-pro-latest)
-- Framework: Agno 2.1.3
-- NLU: Extração de entidades com JSON mode nativo
-- RAG: Busca semântica com embeddings Gemini (text-embedding-004)
+✅ CAMADA DE CONHECIMENTO (LangChain + Google AI):
+- RAG para busca precisa no catálogo
+- Embeddings Google text-embedding-004
+- LLM Gemini Flash para respostas
 
-🎯 FUNCIONALIDADES:
-1. Extração de Entidades (NLU): SKU, product_name, intent, quantity
-2. Resolução de Contexto: Mantém histórico da sessão
-3. RAG: Busca contexto relevante no histórico
-4. Routing: Direciona para agentes especializados
-5. Fallback Híbrido: Regex + LLM para robustez
+✅ DESIGN DESACOPLADO:
+- ProductCatalogTool: Ponte entre camadas
+- Agente proativo em acionar ferramentas
+- Conversação sem comandos robotizados
+
+📋 STACK COMPLETO:
+- Framework Agente: Agno 2.1.3
+- Framework RAG: LangChain 0.2.1
+- LLM: Google Gemini 1.5 Flash/Pro
+- Embeddings: Google text-embedding-004
+- Vector Store: ChromaDB
+
+🎯 OBJETIVO:
+Conversa fluida onde o usuário fala naturalmente e o agente
+busca informações de forma autônoma para responder com precisão.
 
 REFERÊNCIAS:
-- Agno Docs: https://docs.agno.com/
-- Gemini API: https://ai.google.dev/gemini-api/docs
-- Config LLM: app/agents/llm_config.py
+- Agno: https://docs.agno.com/
+- LangChain: https://docs.langchain.com/
+- Google AI: https://ai.google.dev/
 """
 
 from __future__ import annotations
@@ -38,8 +44,9 @@ from sqlmodel import Session, select
 from app.models.models import Produto, ChatContext
 from agno.agent import Agent
 
-# ✅ IMPORTAÇÃO CENTRALIZADA: Configuração otimizada para NLU
-from app.agents.llm_config import get_gemini_for_nlu
+# ✅ IMPORTAÇÕES: LLM configs e ferramentas
+from app.agents.llm_config import get_gemini_for_nlu, get_gemini_for_creative
+from app.agents.tools import ProductCatalogTool, SupplyChainToolkit
 
 
 def resolve_product_name_to_sku(session: Session, product_name: str) -> Optional[str]:
@@ -500,3 +507,116 @@ def generate_clarification_message(entities: Dict[str, Any]) -> str:
         "- 🚚 Informações logísticas\n\n"
         "O que você gostaria de saber?"
     )
+
+
+# ============================================================================
+# AGENTE CONVERSACIONAL PRINCIPAL - Arquitetura Híbrida
+# ============================================================================
+
+def get_conversational_agent(session_id: str) -> Agent:
+    """
+    Cria e configura o agente de conversação principal com arquitetura híbrida.
+    
+    ARQUITETURA:
+    - Agno: Gerencia conversação, memória e decisões
+    - LangChain RAG: Busca informações precisas no catálogo
+    - Google AI: LLM e embeddings unificados
+    
+    COMPORTAMENTO:
+    - Conversa natural sem necessidade de comandos
+    - Proativo em buscar informações quando necessário
+    - Mantém contexto da sessão para perguntas subsequentes
+    - Respostas completas e amigáveis, não apenas dados brutos
+    
+    Args:
+        session_id: Identificador único da sessão de chat
+        
+    Returns:
+        Agent: Instância configurada do agente conversacional
+        
+    Example:
+        >>> agent = get_conversational_agent(session_id="user_123")
+        >>> response = agent.run("Tem parafusadeira no estoque?")
+        >>> print(response.content)
+        "Sim! Encontrei as seguintes parafusadeiras no estoque..."
+    """
+    
+    # Instruções para conversação natural (PONTO CRÍTICO para UX)
+    instructions = [
+        "Seu nome é 'Assistente de Compras Inteligente' e você trabalha no setor de suprimentos de uma indústria.",
+        
+        "## PERSONALIDADE E TOM:",
+        "- Seja amigável, prestativo e profissional",
+        "- Converse de forma natural, como um colega de trabalho experiente",
+        "- Use emojis ocasionalmente para tornar a conversa mais leve (📦 🔧 ✅ etc.)",
+        "- Evite ser excessivamente formal ou robotizado",
+        
+        "## COMPREENSÃO DE LINGUAGEM NATURAL:",
+        "- O usuário NÃO precisa usar comandos específicos",
+        "- Interprete perguntas informais: 'e a parafusadeira?' = 'qual o estoque da parafusadeira?'",
+        "- Entenda contexto: se o usuário perguntou sobre um produto e depois diz 'e o preço?', saiba que é sobre o mesmo produto",
+        "- Resolva pronomes: 'quanto tem dela?' refere-se ao último produto mencionado",
+        
+        "## USO DA FERRAMENTA DE CATÁLOGO (ProductCatalogTool):",
+        "**SEMPRE que a conversa envolver produtos, use a ferramenta `get_product_info` imediatamente.**",
+        "Exemplos de quando usar:",
+        "- 'Tem parafusadeira Makita?' → use a ferramenta",
+        "- 'Qual o estoque da SKU_005?' → use a ferramenta",
+        "- 'Quantas serras temos?' → use a ferramenta",
+        "- 'Me fale sobre ferramentas elétricas' → use a ferramenta",
+        "- 'Precisa comprar mais parafusos?' → use a ferramenta para verificar estoque",
+        
+        "## FORMULAÇÃO DE RESPOSTAS:",
+        "- Use as informações retornadas pela ferramenta para formular respostas COMPLETAS e CONTEXTUALIZADAS",
+        "- NÃO apenas repasse os dados brutos - interprete e apresente de forma amigável",
+        "- Se a ferramenta retornar informações de estoque, adicione insights: 'está próximo do mínimo', 'estoque saudável', etc.",
+        "- Sempre mencione o SKU quando falar de produtos específicos",
+        
+        "## QUANDO A INFORMAÇÃO NÃO FOR ENCONTRADA:",
+        "- Seja educado e prestativo",
+        "- Exemplo: 'Verifiquei no sistema e não encontrei este produto. Você poderia me dar mais detalhes, como o nome completo ou categoria?'",
+        "- Ofereça alternativas quando possível",
+        
+        "## MEMÓRIA E CONTEXTO:",
+        "- Mantenha o contexto da conversa para responder perguntas subsequentes",
+        "- Se o usuário perguntar 'e a voltagem?' após falar de uma parafusadeira, use a ferramenta para buscar detalhes desse produto",
+        "- Lembre-se dos produtos mencionados recentemente na conversa",
+        
+        "## FORMATO DAS RESPOSTAS:",
+        "- Respostas curtas e diretas para perguntas simples",
+        "- Respostas estruturadas (com bullet points) para informações complexas",
+        "- Use formatação Markdown quando apropriado: **negrito** para destaque, listas para múltiplos itens",
+        
+        "## OUTRAS FERRAMENTAS:",
+        "- Você também tem acesso ao SupplyChainToolkit para análises avançadas",
+        "- Use `lookup_product` se precisar de metadados técnicos específicos do banco",
+        "- Use `load_demand_forecast` para previsões de demanda",
+        "- Use `scrape_latest_price` para buscar preços atualizados no mercado",
+    ]
+    
+    # Configuração do agente com temperatura criativa para respostas naturais
+    agent = Agent(
+        name="ConversationalAssistant",
+        description="Assistente conversacional para gerenciamento de compras e estoque",
+        
+        # Modelo criativo (temp=0.5) para respostas mais naturais
+        model=get_gemini_for_creative(),
+        
+        # Instruções detalhadas para conversação natural
+        instructions=instructions,
+        
+        # Ferramentas disponíveis (ordem de prioridade)
+        tools=[
+            ProductCatalogTool(),      # Principal: Busca RAG no catálogo
+            SupplyChainToolkit(),      # Avançado: Análises especializadas
+        ],
+        
+        # Configurações de comportamento
+        show_tool_calls=True,          # Debug: mostra quando ferramentas são acionadas
+        markdown=True,                 # Respostas em Markdown
+        
+        # Memória da sessão (se suportado pelo Agno)
+        # session_id=session_id,  # Descomentar se o Agno suportar nativamente
+    )
+    
+    return agent

@@ -1,12 +1,24 @@
 """
-Configuração Centralizada do LLM Gemini.
+Configuração Centralizada do LLM Gemini 2.5.
 
-Este módulo fornece uma função única para configurar e retornar instâncias
-do modelo Gemini, garantindo consistência em todo o projeto e facilitando
+Este módulo fornece funções para configurar e retornar instâncias
+dos modelos Gemini 2.5, garantindo consistência em todo o projeto e facilitando
 manutenção futura.
 
+MODELOS DISPONÍVEIS (Google AI 2.5):
+=====================================
+• gemini-2.5-flash-latest: Alta performance, resposta rápida (PADRÃO)
+• gemini-2.5-pro-latest: Raciocínio avançado, tarefas complexas
+
+FUNÇÕES PRINCIPAIS:
+===================
+• get_gemini_llm(): Modelo padrão (Flash) configurável
+• get_gemini_for_nlu(): Otimizado para NLU (temp=0.1)
+• get_gemini_for_creative(): Otimizado para criatividade (temp=0.7)
+• get_gemini_for_advanced_tasks(): Modelo PRO para tarefas complexas
+
 Autor: Sistema de Automação de Compras
-Data: 2025-10-10
+Atualização: 2025-10-14 (Migração para Gemini 2.5)
 """
 
 import os
@@ -127,6 +139,47 @@ def get_gemini_for_creative() -> Gemini:
         Gemini: Instância otimizada para criação de conteúdo.
     """
     return get_gemini_llm(temperature=0.7)
+
+
+def get_gemini_for_advanced_tasks() -> Gemini:
+    """
+    Retorna uma instância do Gemini otimizada para tarefas complexas e avançadas.
+    
+    Configuração especializada:
+    - Modelo: gemini-2.5-pro-latest (máximo poder de raciocínio)
+    - Temperature: 0.7 (criativo mas controlado)
+    - Ideal para: Análises complexas, geração criativa, instruções elaboradas
+    
+    Casos de uso:
+    - Análise profunda de cadeia de suprimentos
+    - Geração de relatórios executivos
+    - Tomada de decisões complexas
+    - Síntese de informações de múltiplas fontes
+    
+    Returns:
+        Gemini: Instância do modelo PRO otimizada para tarefas avançadas.
+    
+    Example:
+        ```python
+        from app.agents.llm_config import get_gemini_for_advanced_tasks
+        from agno.agent import Agent
+        
+        # Agente para análise complexa
+        analyst = Agent(
+            model=get_gemini_for_advanced_tasks(),
+            instructions="Realize análise profunda de dados de supply chain..."
+        )
+        ```
+    
+    Notas:
+        - O modelo PRO é mais lento mas significativamente mais preciso
+        - Use apenas quando a tarefa realmente exigir raciocínio avançado
+        - Para tarefas simples, use get_gemini_llm() (Flash é mais rápido)
+    """
+    return get_gemini_llm(
+        temperature=0.7,
+        model_id="models/gemini-2.5-pro-latest"
+    )
 
 
 # Validação ao importar o módulo

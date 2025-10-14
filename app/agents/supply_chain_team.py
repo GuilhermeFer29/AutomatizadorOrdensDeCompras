@@ -1,29 +1,32 @@
 """
-Team de agentes colaborativos usando Agno 2.1.3 + Google Gemini para análise e recomendação de compras.
+Team de agentes colaborativos usando Agno 2.1.3 + Google Gemini 2.5 para análise e recomendação de compras.
 
-MIGRAÇÃO COMPLETA PARA GEMINI (2025-10-10):
-===========================================
+ATUALIZAÇÃO PARA GEMINI 2.5 (2025-10-14):
+==========================================
 
 ✅ MUDANÇAS APLICADAS:
-1. Removidas TODAS as dependências OpenAI/OpenRouter (código legado eliminado)
-2. Importação centralizada do Gemini via app.agents.llm_config
+1. Migração completa para modelos Google AI 2.5
+2. Importação centralizada via app.agents.llm_config
 3. Uso exclusivo de get_gemini_llm() para configuração do LLM
-4. Padronização de todos os agentes com o mesmo modelo
-5. Documentação atualizada e comentários explicativos
+4. Padronização de todos os agentes com Gemini 2.5 Flash
+5. Documentação atualizada com novos modelos
 
-📋 STACK ATUAL:
-- LLM: Google Gemini 1.5 Pro (models/gemini-1.5-pro-latest)
+📋 STACK ATUAL (Google AI 2.5):
+================================
+- LLM: Google Gemini 2.5 Flash (models/gemini-2.5-flash-latest)
 - Framework: Agno 2.1.3
 - Embeddings: Google text-embedding-004 (via rag_service.py)
 - Tools: SupplyChainToolkit customizado
 
 🎯 AGENTES ESPECIALIZADOS:
+==========================
 1. Analista de Demanda: Previsão e análise de estoque
 2. Pesquisador de Mercado: Coleta de preços e inteligência competitiva
 3. Analista de Logística: Otimização de fornecedores e custos
 4. Gerente de Compras: Síntese e recomendação final
 
 REFERÊNCIAS:
+============
 - Agno Docs: https://docs.agno.com/
 - Gemini API: https://ai.google.dev/gemini-api/docs
 - Config LLM: app/agents/llm_config.py
@@ -148,10 +151,10 @@ Retorne APENAS um JSON válido com:
 
 def create_supply_chain_team() -> Team:
     """
-    Cria e retorna o Team de análise de cadeia de suprimentos usando Google Gemini.
+    Cria e retorna o Team de análise de cadeia de suprimentos usando Google Gemini 2.5.
     
-    ✅ ARQUITETURA ATUALIZADA (Agno 2.1.3 + Gemini):
-    - LLM: Google Gemini 1.5 Pro (configurado via get_gemini_llm())
+    ✅ ARQUITETURA ATUALIZADA (Agno 2.1.3 + Gemini 2.5):
+    - LLM: Google Gemini 2.5 Flash (configurado via get_gemini_llm())
     - Framework: Agno 2.1.3 com coordenação automática de agentes
     - Tools: SupplyChainToolkit customizado com 6 ferramentas especializadas
     - Output: JSON estruturado com recomendação de compra
@@ -169,9 +172,9 @@ def create_supply_chain_team() -> Team:
         ValueError: Se GOOGLE_API_KEY não estiver configurada
     """
     
-    # ✅ CONFIGURAÇÃO CENTRALIZADA: Uma única instância do Gemini para todos os agentes
-    # Isso garante consistência e facilita manutenção
-    print("🤖 Configurando agentes com Google Gemini 1.5 Pro...")
+    # ✅ CONFIGURAÇÃO CENTRALIZADA: Gemini 2.5 Flash para todos os agentes
+    # Isso garante consistência, performance e facilita manutenção
+    print("🤖 Configurando agentes com Google Gemini 2.5 Flash...")
     gemini_llm = get_gemini_llm(temperature=0.2)
     gemini_llm_precise = get_gemini_llm(temperature=0.1)  # Mais determinístico para decisões finais
     

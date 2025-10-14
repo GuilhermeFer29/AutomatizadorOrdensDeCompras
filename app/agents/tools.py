@@ -1,4 +1,12 @@
-"""Definição das ferramentas Agno para orquestrar os serviços existentes."""
+"""
+Definição das ferramentas Agno para orquestrar os serviços existentes.
+
+ARQUITETURA HÍBRIDA (2025-10-14):
+===================================
+✅ ProductCatalogTool: Ferramenta RAG para consultas naturais ao catálogo
+✅ SupplyChainToolkit: Ferramentas especializadas para análise de supply chain
+✅ Integração: Agno (orquestração) + LangChain (RAG) + Google AI (LLM/embeddings)
+"""
 
 from __future__ import annotations
 
@@ -15,6 +23,7 @@ from app.ml.training import METADATA_PATH, predict_prices
 from app.models.models import Produto
 from app.services.geolocation_service import calculate_distance
 from app.services.scraping_service import ScrapingOutcome, scrape_and_save_price
+from app.services.rag_service import query_product_catalog_with_google_rag
 
 # Importação condicional do Tavily
 try:
@@ -27,7 +36,77 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_FORECAST_HORIZON = 14
 
 
+# ============================================================================
+# PRODUCT CATALOG TOOL - Ponte entre Agno e LangChain RAG
+# ============================================================================
 
+class ProductCatalogTool(Toolkit):
+    """
+    Ferramenta especialista em buscar informações sobre produtos no estoque.
+    
+    Esta ferramenta é a ponte entre o Agno Agent e o serviço RAG baseado em LangChain.
+    Use-a sempre que a conversa mencionar produtos, seja por nome, SKU ou características,
+    para verificar estoque, detalhes ou categorias.
+    
+    QUANDO USAR:
+    - Perguntas sobre produtos específicos (por nome ou SKU)
+    - Consultas de estoque e disponibilidade
+    - Informações sobre categorias de produtos
+    - Verificação de detalhes técnicos
+    
+    ARQUITETURA:
+    - Input: Pergunta do usuário em linguagem natural
+    - Processamento: LangChain RAG com embeddings Google AI
+    - Output: Resposta contextualizada baseada no catálogo
+    """
+    
+    def __init__(self):
+        super().__init__(name="product_catalog")
+        self.register(self.get_product_info)
+    
+    def get_product_info(self, user_question: str) -> str:
+        """
+        Busca informações detalhadas sobre produtos para responder a pergunta do usuário.
+        
+        Esta ferramenta usa RAG (Retrieval Augmented Generation) para encontrar
+        produtos relevantes no catálogo e gerar uma resposta precisa e contextual.
+        
+        Args:
+            user_question: A pergunta original e completa do usuário sobre o produto.
+                          Exemplos:
+                          - "Tem a parafusadeira Makita no estoque?"
+                          - "Qual o SKU da serra circular?"
+                          - "Quantas furadeiras temos disponíveis?"
+                          - "Me fale sobre os produtos da categoria ferramentas elétricas"
+        
+        Returns:
+            str: Resposta detalhada e contextualizada sobre o produto, incluindo
+                 informações de estoque, SKU, categoria e outras características
+                 encontradas no catálogo.
+        
+        Example:
+            >>> tool = ProductCatalogTool()
+            >>> tool.get_product_info("Qual o estoque da parafusadeira Bosch?")
+            "A Parafusadeira Bosch GSR 12V (SKU_003) possui atualmente 28 unidades..."
+        """
+        try:
+            print(f"🔧 [Product Catalog Tool] Buscando informações para: '{user_question}'")
+            
+            # Chama o serviço RAG que usa LangChain + Google AI
+            response = query_product_catalog_with_google_rag(user_question)
+            
+            print(f"✅ [Product Catalog Tool] Resposta obtida ({len(response)} chars)")
+            return response
+            
+        except Exception as e:
+            error_msg = f"Desculpe, encontrei um erro ao buscar informações: {str(e)}"
+            print(f"❌ [Product Catalog Tool] Erro: {e}")
+            return error_msg
+
+
+# ============================================================================
+# SUPPLY CHAIN TOOLKIT - Ferramentas especializadas
+# ============================================================================
 
 def _format_outcome(outcome: ScrapingOutcome) -> Dict[str, Any]:
     payload = asdict(outcome)
