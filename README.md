@@ -14,27 +14,6 @@ Este projeto implementa um sistema end-to-end para a automação inteligente de 
 
 ## Arquitetura do Sistema
 
-O sistema é composto por serviços independentes que se comunicam entre si, orquestrados pelo `docker-compose`.
-
-```mermaid
-flowchart TD
-    subgraph "Host Machine"
-        A[Usuário] --> B{Navegador Web}
-    end
-
-    subgraph "Docker Environment"
-        B --> C[API (FastAPI)]
-        C --> D[Banco de Dados (MySQL)]
-        C --> E[Modelo ML (LightGBM)]
-        C --> F[Broker (Redis)]
-        F --> G[Worker (Celery)]
-        G --> D
-    end
-
-    style C fill:#f9f,stroke:#333,stroke-width:2px
-    style D fill:#bbf,stroke:#333,stroke-width:2px
-    style E fill:#ff9,stroke:#333,stroke-width:2px
-```
 
 - **API (FastAPI)**: O coração da aplicação. Serve o dashboard, processa as requisições do usuário e chama o modelo de ML para obter previsões.
 - **Banco de Dados (MySQL)**: Armazena todas as informações persistentes, como produtos, histórico de preços e vendas, e metadados dos modelos treinados.
