@@ -7,18 +7,9 @@ from typing import Any, Optional
 from fastapi import APIRouter, Body, HTTPException, status
 from pydantic import BaseModel, Field
 
-from app.services.task_service import (
-    get_task_status,
-    trigger_long_running_task,
-)
+from app.services.task_service import get_task_status
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
-
-
-class TaskRequest(BaseModel):
-    """Payload to enqueue a debug task."""
-
-    duration_seconds: int = Field(default=5, ge=0, le=3600)
 
 
 class TaskResponse(BaseModel):
@@ -33,13 +24,6 @@ class TaskStatusResponse(BaseModel):
     task_id: str
     state: str
     result: Optional[Any] = None
-
-
-@router.post("/test", response_model=TaskResponse, status_code=status.HTTP_202_ACCEPTED)
-def enqueue_test_task(payload: TaskRequest = Body(default=TaskRequest())) -> TaskResponse:
-    """Enqueue the debug task and return its identifier."""
-    async_result = trigger_long_running_task(duration_seconds=payload.duration_seconds)
-    return TaskResponse(task_id=async_result.id)
 
 
 @router.get("/{task_id}", response_model=TaskStatusResponse)
