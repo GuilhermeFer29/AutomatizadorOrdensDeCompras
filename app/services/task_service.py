@@ -8,7 +8,7 @@ from celery.result import AsyncResult
 
 from app.core.celery_app import celery_app
 from app.tasks.debug_tasks import long_running_task
-from app.tasks.ml_tasks import retrain_global_model_task
+from app.tasks.ml_tasks import train_product_model_task, train_all_products_task
 
 
 def trigger_long_running_task(duration_seconds: int = 5) -> AsyncResult:
@@ -16,10 +16,14 @@ def trigger_long_running_task(duration_seconds: int = 5) -> AsyncResult:
     return long_running_task.delay(duration_seconds)
 
 
-def trigger_retrain_global_model_task() -> AsyncResult:
-    """Agenda o treinamento global LightGBM."""
+def trigger_train_product_model_task(sku: str, optimize: bool = False) -> AsyncResult:
+    """Agenda o treinamento de um modelo de produto específico."""
+    return train_product_model_task.delay(sku, optimize)
 
-    return retrain_global_model_task.delay()
+
+def trigger_train_all_products_task(optimize: bool = False, limit: int = None) -> AsyncResult:
+    """Agenda o treinamento de modelos para todos os produtos."""
+    return train_all_products_task.delay(optimize, limit)
 
 
 def get_task_status(task_id: str) -> Dict[str, Optional[Any]]:

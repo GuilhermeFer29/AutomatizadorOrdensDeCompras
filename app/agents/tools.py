@@ -18,7 +18,8 @@ from typing import Any, Dict, List, Tuple
 from agno.tools import Toolkit
 from sqlmodel import Session, select
 from app.core.database import engine
-from app.ml.training import METADATA_PATH, predict_prices
+from app.ml.prediction import predict_prices_for_product
+from app.ml.model_manager import list_trained_models, get_model_info
 from app.models.models import Produto
 from app.services.geolocation_service import calculate_distance
 from app.services.rag_service import query_product_catalog_with_google_rag
@@ -115,17 +116,18 @@ def _load_product_by_sku(sku: str) -> Produto:
         return produto
 
 
-def _load_global_metadata() -> Tuple[Dict[str, float], str | None]:
-    if not METADATA_PATH.is_file():
-        return {}, None
-
+def _load_product_metadata(sku: str) -> Tuple[Dict[str, float], str | None]:
+    """Carrega metadados do modelo de um produto específico."""
     try:
-        payload = json.loads(METADATA_PATH.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        model_info = get_model_info(sku)
+        if not model_info.get("exists"):
+            return {}, None
+        
+        metrics = model_info.get("metrics", {})
+        trained_at = model_info.get("trained_at")
+        return metrics, trained_at
+    except Exception:
         return {}, None
-
-    metrics = {key: float(value) for key, value in (payload.get("metrics", {}) or {}).items()}
-    return metrics, payload.get("trained_at")
 
 
 class SupplyChainToolkit(Toolkit):
@@ -177,19 +179,23 @@ class SupplyChainToolkit(Toolkit):
         """
         try:
             produto = _load_product_by_sku(sku)
-            predictions = predict_prices(skus=[produto.sku], horizon_days=horizon_days)
-            values = predictions.get(produto.sku, [])
-
-            start_date = date.today() + timedelta(days=1)
+            result = predict_prices_for_product(sku=produto.sku, days_ahead=horizon_days)
+            
+            if "error" in result:
+                return json.dumps({"error": result["error"]})
+            
+            values = result.get("prices", [])
+            dates = result.get("dates", [])
+            
             forecast_payload = [
                 {
-                    "date": (start_date + timedelta(days=index)).strftime("%Y-%m-%d"),
+                    "date": date_str,
                     "predicted": float(price),
                 }
-                for index, price in enumerate(values)
+                for date_str, price in zip(dates, values)
             ]
 
-            metrics, trained_at = _load_global_metadata()
+            metrics, trained_at = _load_product_metadata(sku)
 
             result = {
                 "produto_id": produto.id,

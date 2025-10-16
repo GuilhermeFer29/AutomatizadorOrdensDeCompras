@@ -20,7 +20,6 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.core.database import engine
-from app.ml.training import train_global_lgbm_model
 from app.models.models import PrecosHistoricos, Produto, VendasHistoricas as Venda
 
 LOGGER = logging.getLogger(__name__)
@@ -151,24 +150,13 @@ def run_seed(num_products: int, history_days: int) -> None:
         sys.exit(1)
 
 
-def run_training() -> None:
-    """Executa o treinamento do modelo global LightGBM."""
-    LOGGER.info("Iniciando o treinamento do modelo global...")
-    try:
-        train_global_lgbm_model()
-        LOGGER.info("Treinamento do modelo concluído com sucesso.")
-    except Exception as e:
-        LOGGER.error(f"Falha durante o treinamento do modelo: {e}", exc_info=True)
-        sys.exit(1)
-
-
 def main() -> None:
     """Função principal para orquestrar as ações via CLI."""
     parser = argparse.ArgumentParser(description="Setup do ambiente de desenvolvimento.")
     parser.add_argument(
         "action",
-        choices=["seed", "train", "generate_data", "all"],
-        help="Ação a ser executada: 'seed' para popular o banco, 'train' para treinar o modelo, 'generate_data' para dados sintéticos realistas, 'all' para seed+train.",
+        choices=["seed", "generate_data"],
+        help="Ação a ser executada: 'seed' para popular o banco, 'generate_data' para dados sintéticos realistas.",
     )
     parser.add_argument("--num-products", type=int, default=200, help="Número de produtos a serem gerados.")
     parser.add_argument("--history-days", type=int, default=365, help="Número de dias de histórico de vendas.")
@@ -185,11 +173,8 @@ def main() -> None:
         generate_realistic_data_command()
         return
 
-    if args.action == "seed" or args.action == "all":
+    if args.action == "seed":
         run_seed(args.num_products, args.history_days)
-
-    if args.action == "train" or args.action == "all":
-        run_training()
 
 
 def generate_realistic_data_command():
