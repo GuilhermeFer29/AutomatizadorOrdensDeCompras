@@ -44,5 +44,4 @@ celery_app: Celery = create_celery_app()
 
 # Import tasks to ensure they are registered with the Celery application.
 import app.tasks.agent_tasks  # noqa: E402,F401
-import app.tasks.debug_tasks  # noqa: E402,F401
 import app.tasks.ml_tasks  # noqa: E402,F401

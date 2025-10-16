@@ -21,7 +21,6 @@ from app.core.database import engine
 from app.ml.prediction import predict_prices_for_product
 from app.ml.model_manager import list_trained_models, get_model_info
 from app.models.models import Produto
-from app.services.geolocation_service import calculate_distance
 from app.services.rag_service import query_product_catalog_with_google_rag
 
 # Importação condicional do Tavily
@@ -210,41 +209,6 @@ class SupplyChainToolkit(Toolkit):
         except Exception as e:
             return json.dumps({"error": str(e)})
 
-    def compute_distance(
-        self,
-        origem_lat: float,
-        origem_lon: float,
-        destino_lat: float,
-        destino_lon: float,
-    ) -> str:
-        """Calcula a distância em quilômetros entre dois pares de coordenadas.
-
-        Args:
-            origem_lat: Latitude do ponto de origem.
-            origem_lon: Longitude do ponto de origem.
-            destino_lat: Latitude do ponto de destino.
-            destino_lon: Longitude do ponto de destino.
-        
-        Returns:
-            JSON com a distância calculada.
-        """
-        try:
-            distance_km = calculate_distance(
-                origem_lat,
-                origem_lon,
-                destino_lat,
-                destino_lon,
-            )
-
-            result = {
-                "origem": {"lat": origem_lat, "lon": origem_lon},
-                "destino": {"lat": destino_lat, "lon": destino_lon},
-                "distance_km": distance_km,
-            }
-            return json.dumps(result)
-        except Exception as e:
-            return json.dumps({"error": str(e)})
-    
     def tavily_search(self, query: str) -> str:
         """Busca informações atualizadas na web sobre fornecedores, tendências de mercado.
 

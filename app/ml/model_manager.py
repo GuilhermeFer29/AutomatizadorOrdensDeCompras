@@ -4,7 +4,7 @@ Gerenciamento do ciclo de vida de modelos de ML por produto.
 ARQUITETURA:
 ============
 ✅ Modelos especializados por SKU (um modelo por produto)
-✅ Estrutura granular: models/{sku}/model.pkl, scaler.pkl, metadata.json
+✅ Estrutura granular: model/{sku}/model.pkl, scaler.pkl, metadata.json
 ✅ Versionamento automático com timestamps
 ✅ Registro no banco de dados (tabela modelos_predicao)
 ✅ Serialização com joblib (otimizado para numpy/sklearn)
@@ -36,7 +36,7 @@ from app.models.models import ModeloPredicao, Produto
 LOGGER = structlog.get_logger(__name__)
 
 # Diretório base para modelos
-MODELS_DIR = ROOT_DIR / "models"
+MODELS_DIR = ROOT_DIR / "model"
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 
