@@ -7,13 +7,7 @@ from typing import Any, Dict, Optional
 from celery.result import AsyncResult
 
 from app.core.celery_app import celery_app
-from app.tasks.debug_tasks import long_running_task
 from app.tasks.ml_tasks import train_product_model_task, train_all_products_task
-
-
-def trigger_long_running_task(duration_seconds: int = 5) -> AsyncResult:
-    """Schedule the debug long running task and return the async result handle."""
-    return long_running_task.delay(duration_seconds)
 
 
 def trigger_train_product_model_task(sku: str, optimize: bool = False) -> AsyncResult:
