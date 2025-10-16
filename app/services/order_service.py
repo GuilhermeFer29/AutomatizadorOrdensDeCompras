@@ -1,7 +1,6 @@
 from typing import Optional
 from sqlmodel import Session, select
 from app.models.models import OrdemDeCompra, Produto
-from app.services.task_service import trigger_retrain_global_model_task
 
 def get_orders(session: Session, status: Optional[str] = None, search: Optional[str] = None):
     statement = select(OrdemDeCompra).join(Produto)
@@ -31,7 +30,7 @@ def create_order(session: Session, order_data: dict):
     session.commit()
     session.refresh(new_order)
 
-    # Dispara o retreinamento do modelo em segundo plano
-    trigger_retrain_global_model_task.delay()
+    # Nota: Treinamento de modelos agora é manual por SKU via /ml/train/{sku}
+    # Para retreinar automaticamente, implemente lógica customizada conforme necessidade
 
     return new_order

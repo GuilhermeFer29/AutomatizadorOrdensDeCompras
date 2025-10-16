@@ -24,14 +24,47 @@ severity: 'success' | 'warning' | 'error';
 export interface Product {
 id: number;
 sku: string;
-name: string;
-supplier: string;
-price: number;
-stock: number;
+nome: string;
+categoria?: string;
+fornecedor_padrao?: string;
+preco_medio?: number;
+estoque_atual: number;
+estoque_minimo: number;
 }
 
 export interface ProductWithHistory extends Product {
 priceHistory: PricePoint[];
+}
+
+// ============= ML Prediction Types =============
+export interface MLPrediction {
+sku: string;
+product_name: string;
+dates: string[];
+prices: number[];
+method: string;
+confidence?: string;
+}
+
+export interface MLModel {
+sku: string;
+exists: boolean;
+model_type?: string;
+version?: string;
+trained_at?: string;
+metrics?: {
+rmse: number;
+mae: number;
+mape: number;
+};
+features_count?: number;
+training_samples?: number;
+}
+
+export interface PriceHistoryPoint {
+date: string;
+price: number;
+is_prediction: boolean;
 }
 
 // ============= Agent Types =============

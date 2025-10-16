@@ -8,7 +8,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
 
 from app.services.sales_ingestion_service import ingest_sales_dataframe, load_sales_dataframe
-from app.services.task_service import trigger_retrain_global_model_task
+# Nota: Treinamento de modelos agora é por produto via /ml/train/{sku}
 
 router = APIRouter(prefix="/vendas", tags=["vendas"])
 
@@ -42,12 +42,13 @@ async def upload_sales_csv(
                 detail="Nenhum registro válido foi encontrado no arquivo enviado.",
             )
 
-        async_result = trigger_retrain_global_model_task()
+        # Nota: Treinamento agora é manual via endpoint /ml/train/{sku}
         response = SalesUploadResponse(
             produtos=produto_ids,
-            task_id=async_result.id,
+            task_id="manual_training_required",
             mensagem=(
-                "Treinamento global LightGBM agendado. Modelos individuais foram substituídos pelo fluxo global."
+                f"Dados de vendas importados com sucesso para {len(produto_ids)} produtos. "
+                "Use o endpoint /ml/train/{{sku}} para treinar modelos individuais."
             ),
         )
     except ValueError as error:
@@ -60,10 +61,10 @@ async def upload_sales_csv(
 
 @router.post("/retrain/{produto_id}", status_code=status.HTTP_202_ACCEPTED)
 def retrain_model(produto_id: int) -> dict:
-    """Trigger retraining for a specific product."""
-    async_result = trigger_retrain_global_model_task()
+    """Endpoint descontinuado. Use /ml/train/{sku} para treinar modelos individuais."""
     return {
         "produto_id": produto_id,
-        "task_id": async_result.id,
-        "mensagem": "Treinamento global acionado. Modelos Prophet individuais foram descontinuados.",
+        "task_id": None,
+        "mensagem": "Este endpoint foi descontinuado. Use POST /ml/train/{{sku}} para treinar modelos por produto.",
+        "deprecated": True,
     }

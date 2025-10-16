@@ -1,365 +1,419 @@
-"""Treinamento global de preços com LightGBM e previsões multi-produto."""
+"""
+Pipeline de treinamento de modelos ML por produto com feature engineering avançado.
+
+ARQUITETURA NOVA (2025-10-16):
+===============================
+✅ Modelos especializados por produto (não mais global)
+✅ Feature engineering de alta qualidade (calendário, lag, rolling, feriados)
+✅ Validação cruzada com TimeSeriesSplit
+✅ Otimização de hiperparâmetros com Optuna
+✅ Modelo LightGBM otimizado para séries temporais
+✅ Gestão granular via model_manager.py
+
+MELHORES PRÁTICAS:
+==================
+- Features de calendário: dia semana, mês, trimestre, feriados
+- Features de lag: D-1, D-2, D-7, D-14, D-30
+- Features de janela móvel: média/std/min/max em 7, 14, 30 dias
+- TimeSeriesSplit: Validação respeitando ordem temporal
+- Optuna: Otimização bayesiana de hiperparâmetros
+- Early stopping: Prevenir overfitting
+"""
 
 from __future__ import annotations
 
-import json
-import os
-from collections import deque
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
-import joblib
+import holidays
 import numpy as np
 import pandas as pd
 import structlog
-from lightgbm import LGBMRegressor, early_stopping
+from lightgbm import LGBMRegressor
+from sklearn.model_selection import TimeSeriesSplit
+from sklearn.preprocessing import StandardScaler
 from sqlmodel import Session, select
+import optuna
 
-from app.core.config import ROOT_DIR
 from app.core.database import engine
-from app.models.models import ModeloGlobal, PrecosHistoricos, Produto
+from app.ml.model_manager import ModelMetadata, save_model
+from app.models.models import PrecosHistoricos, Produto, VendasHistoricas
 
 LOGGER = structlog.get_logger(__name__)
 
-MODELS_DIR = ROOT_DIR / "models"
-DEFAULT_MODEL_PATH = MODELS_DIR / "global_lgbm_model.pkl"
-METADATA_PATH = MODELS_DIR / "global_lgbm_metadata.json"
+# Configurações
+MINIMUM_HISTORY_DAYS = 120  # Mínimo de 4 meses de histórico
+VALIDATION_DAYS = 30  # Holdout final para validação
+N_SPLITS_CV = 3  # Número de splits no TimeSeriesSplit
+OPTUNA_TRIALS = 50  # Número de trials para otimização
 
-MINIMUM_HISTORY_POINTS = 120
-HOLDOUT_DAYS = 30
-
-for directory in (MODELS_DIR,):
-    directory.mkdir(parents=True, exist_ok=True)
-
-
-class InsufficientHistoryError(RuntimeError):
-    """Erro lançado quando o histórico não é suficiente para treinar ou prever."""
+# Feriados brasileiros
+BR_HOLIDAYS = holidays.Brazil()
 
 
-def _load_price_history(session: Session) -> pd.DataFrame:
-    registros = list(
-        session.exec(
-            select(PrecosHistoricos, Produto)
-            .join(Produto, PrecosHistoricos.produto_id == Produto.id)
-            .order_by(PrecosHistoricos.produto_id, PrecosHistoricos.coletado_em)
-        )
-    )
-
-    if not registros:
-        raise InsufficientHistoryError("Nenhum histórico de preços foi encontrado.")
-
-    rows: List[Dict[str, object]] = []
-    for preco, produto in registros:
-        coleta = preco.coletado_em
-        if coleta.tzinfo is None:
-            coleta = coleta.replace(tzinfo=timezone.utc)
-        coleta = coleta.astimezone(timezone.utc).replace(tzinfo=None)
-
-        rows.append(
-            {
-                "produto_id": produto.id,
-                "sku": produto.sku,
-                "ds": coleta,
-                "price": float(preco.preco),
-            }
-        )
-
-    history_df = pd.DataFrame(rows)
-
-    # Lida com timestamps duplicados para o mesmo produto, tirando a média dos preços do dia.
-    history_df = history_df.groupby(["produto_id", "sku", "ds"]).agg(price=("price", "mean")).reset_index()
-
-    grouped = history_df.groupby("produto_id")
-    enough_data = grouped.size() >= MINIMUM_HISTORY_POINTS
-    valid_ids = enough_data[enough_data].index.tolist()
-    if not valid_ids:
-        raise InsufficientHistoryError(
-            f"Histórico insuficiente. Pelo menos {MINIMUM_HISTORY_POINTS} registros por produto são necessários."
-        )
-
-    filtered = history_df[history_df["produto_id"].isin(valid_ids)].copy()
-    filtered.sort_values(["produto_id", "ds"], inplace=True)
-    return filtered
+class InsufficientDataError(Exception):
+    """Exceção lançada quando não há dados suficientes para treinamento."""
 
 
-def _create_feature_rich_dataframe(session: Session) -> pd.DataFrame:
-    history = _load_price_history(session)
-
-    def _expand_product(df: pd.DataFrame) -> pd.DataFrame:
-        df = df.set_index("ds").asfreq("D")
-        df["sku"] = df["sku"].ffill()
-        df["price"] = df["price"].interpolate(method="time").ffill().bfill()
-        df["produto_id"] = df["produto_id"].ffill()
-        df.reset_index(inplace=True)
-        df.rename(columns={"index": "ds"}, inplace=True)
-        return df
-
-    expanded = history.groupby("produto_id", group_keys=False).apply(_expand_product)
-
-    expanded["day_of_week"] = expanded["ds"].dt.dayofweek
-    expanded["week_of_year"] = expanded["ds"].dt.isocalendar().week.astype(int)
-    expanded["month"] = expanded["ds"].dt.month
-
-    for lag in (1, 7, 14):
-        expanded[f"lag_{lag}"] = expanded.groupby("produto_id")["price"].shift(lag)
-
-    for window in (7, 30):
-        expanded[f"rolling_mean_{window}"] = (
-            expanded.groupby("produto_id")["price"].rolling(window).mean().reset_index(level=0, drop=True)
-        )
-        expanded[f"rolling_std_{window}"] = (
-            expanded.groupby("produto_id")["price"].rolling(window).std().reset_index(level=0, drop=True)
-        )
-
-    expanded.dropna(inplace=True)
-
-    expanded["produto_id"] = expanded["produto_id"].astype("category")
-
-    feature_columns = [
-        "produto_id",
-        "day_of_week",
-        "week_of_year",
-        "month",
-        "lag_1",
-        "lag_7",
-        "lag_14",
-        "rolling_mean_7",
-        "rolling_std_7",
-        "rolling_mean_30",
-        "rolling_std_30",
-    ]
-
-    expanded.rename(columns={"price": "target"}, inplace=True)
-    expanded = expanded.sort_values("ds")
-
-    expanded[feature_columns] = expanded[feature_columns].astype({"produto_id": "category"})
-    expanded.reset_index(drop=True, inplace=True)
-
-    expanded.attrs["feature_columns"] = feature_columns
-    return expanded
-
-
-def _save_metadata(metrics: Dict[str, float], *, version: str, model_path: Path) -> None:
-    payload = {
-        "model_type": "lightgbm_global",
-        "version": version,
-        "model_path": str(model_path.relative_to(ROOT_DIR)) if model_path.is_absolute() else str(model_path),
-        "metrics": metrics,
-        "trained_at": datetime.now(timezone.utc).isoformat(),
-    }
-    METADATA_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-
-    with Session(engine) as session:
-        registro = ModeloGlobal(
-            modelo_tipo="lightgbm_global",
-            versao=version,
-            holdout_dias=HOLDOUT_DAYS,
-            caminho_modelo=payload["model_path"],
-            caminho_relatorio="",
-            metricas=metrics,
-            treinado_em=datetime.now(timezone.utc),
-        )
-        session.add(registro)
-        session.commit()
-
-
-def train_global_lgbm_model() -> Dict[str, float]:
-    """Treina o modelo global LightGBM e retorna as métricas de validação."""
-
-    LOGGER.info("ml.training.lgbm.start")
-    with Session(engine) as session:
-        dataset = _create_feature_rich_dataframe(session)
-
-    feature_columns: List[str] = dataset.attrs["feature_columns"]
-    categorical_features = ["produto_id"]
-
-    dataset["produto_id"] = dataset["produto_id"].cat.codes.astype(int)
-
-    dataset = dataset.sort_values(["ds", "produto_id"])
-
-    holdout_cutoff = dataset["ds"].max() - timedelta(days=HOLDOUT_DAYS)
-    train_df = dataset[dataset["ds"] <= holdout_cutoff].copy()
-    valid_df = dataset[dataset["ds"] > holdout_cutoff].copy()
-
-    if train_df.empty or valid_df.empty:
-        raise InsufficientHistoryError("Não foi possível separar janela de validação temporal.")
-
-    X_train = train_df[feature_columns]
-    y_train = train_df["target"]
-    X_valid = valid_df[feature_columns]
-    y_valid = valid_df["target"]
-
-    model = LGBMRegressor(
-        objective="regression",
-        n_estimators=2000,
-        learning_rate=0.05,
-        max_depth=-1,
-        subsample=0.9,
-        colsample_bytree=0.9,
-        random_state=42,
-    )
-
-    model.fit(
-        X_train,
-        y_train,
-        eval_set=[(X_valid, y_valid)],
-        eval_metric="rmse",
-        callbacks=[
-            early_stopping(stopping_rounds=50, verbose=True)
-        ],
-        categorical_feature=[feature_columns.index(col) for col in categorical_features],
-    )
-
-    y_pred = model.predict(X_valid)
-    rmse = float(np.sqrt(np.mean((y_valid - y_pred) ** 2)))
-    metrics = {"rmse": round(rmse, 4)}
-
-    joblib.dump(model, DEFAULT_MODEL_PATH)
-    version = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    _save_metadata(metrics, version=version, model_path=DEFAULT_MODEL_PATH)
-
-    LOGGER.info("ml.training.lgbm.completed", metrics=metrics, registros=len(dataset))
-    return metrics
-
-
-def _load_model() -> LGBMRegressor:
-    if not DEFAULT_MODEL_PATH.is_file():
-        raise FileNotFoundError(
-            "Modelo global não encontrado. Execute `train_global_lgbm_model()` antes de gerar previsões."
-        )
-    return joblib.load(DEFAULT_MODEL_PATH)
-
-
-def _prepare_history_for_prediction(session: Session, produto_id: int) -> pd.Series:
-    registros = list(
+def _load_product_data(session: Session, sku: str) -> Tuple[Produto, pd.DataFrame]:
+    """
+    Carrega dados de preços e vendas de um produto.
+    
+    Returns:
+        Tupla (produto, dataframe) com dados históricos
+    """
+    # Buscar produto
+    produto = session.exec(select(Produto).where(Produto.sku == sku)).first()
+    if not produto:
+        raise ValueError(f"Produto com SKU '{sku}' não encontrado")
+    
+    # Carregar preços
+    precos = list(
         session.exec(
             select(PrecosHistoricos)
-            .where(PrecosHistoricos.produto_id == produto_id)
+            .where(PrecosHistoricos.produto_id == produto.id)
             .order_by(PrecosHistoricos.coletado_em)
         )
     )
-    if len(registros) < MINIMUM_HISTORY_POINTS:
-        raise InsufficientHistoryError(
-            f"Produto {produto_id} possui apenas {len(registros)} registros. É necessário {MINIMUM_HISTORY_POINTS}."
+    
+    # Carregar vendas
+    vendas = list(
+        session.exec(
+            select(VendasHistoricas)
+            .where(VendasHistoricas.produto_id == produto.id)
+            .order_by(VendasHistoricas.data_venda)
         )
+    )
+    
+    if len(precos) < MINIMUM_HISTORY_DAYS:
+        raise InsufficientDataError(
+            f"Produto {sku} possui apenas {len(precos)} dias de histórico. "
+            f"Mínimo necessário: {MINIMUM_HISTORY_DAYS}"
+        )
+    
+    # Criar DataFrame de preços
+    price_rows = []
+    for preco in precos:
+        date = preco.coletado_em
+        if date.tzinfo is None:
+            date = date.replace(tzinfo=timezone.utc)
+        price_rows.append({
+            "date": date.astimezone(timezone.utc).replace(tzinfo=None).date(),
+            "price": float(preco.preco),
+        })
+    
+    df_prices = pd.DataFrame(price_rows)
+    df_prices = df_prices.groupby("date").agg({"price": "mean"}).reset_index()
+    
+    # Criar DataFrame de vendas
+    sales_rows = []
+    for venda in vendas:
+        date = venda.data_venda
+        if date.tzinfo is None:
+            date = date.replace(tzinfo=timezone.utc)
+        sales_rows.append({
+            "date": date.astimezone(timezone.utc).replace(tzinfo=None).date(),
+            "quantity": venda.quantidade,
+        })
+    
+    df_sales = pd.DataFrame(sales_rows) if sales_rows else pd.DataFrame(columns=["date", "quantity"])
+    if not df_sales.empty:
+        df_sales = df_sales.groupby("date").agg({"quantity": "sum"}).reset_index()
+    
+    # Merge preços e vendas
+    df = df_prices.copy()
+    if not df_sales.empty:
+        df = df.merge(df_sales, on="date", how="left")
+        df["quantity"] = df["quantity"].fillna(0)
+    else:
+        df["quantity"] = 0
+    
+    df = df.sort_values("date").reset_index(drop=True)
+    
+    return produto, df
 
-    series = []
-    for registro in registros:
-        coleta = registro.coletado_em
-        if coleta.tzinfo is None:
-            coleta = coleta.replace(tzinfo=timezone.utc)
-        coleta = coleta.astimezone(timezone.utc).replace(tzinfo=None)
-        series.append((coleta.date(), float(registro.preco)))
 
-    df = pd.DataFrame(series, columns=["ds", "price"])
-    df = df.groupby("ds").agg(price=("price", "mean"))
-    df = df.asfreq("D")
+def _engineer_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Cria features avançadas para séries temporais.
+    
+    Features criadas:
+    - Calendário: dia da semana, mês, trimestre, dia do mês, semana do ano
+    - Feriados: is_holiday, days_to_holiday, days_from_holiday
+    - Lag: preços e vendas de D-1, D-2, D-7, D-14, D-30
+    - Rolling: média, std, min, max em janelas de 7, 14, 30 dias
+    """
+    df = df.copy()
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.set_index("date").asfreq("D")
+    
+    # Interpolar valores faltantes
     df["price"] = df["price"].interpolate(method="time").ffill().bfill()
-    return df["price"]
+    df["quantity"] = df["quantity"].fillna(0)
+    
+    df = df.reset_index()
+    
+    # ==========================
+    # 1. FEATURES DE CALENDÁRIO
+    # ==========================
+    df["day_of_week"] = df["date"].dt.dayofweek  # 0=Monday, 6=Sunday
+    df["day_of_month"] = df["date"].dt.day
+    df["week_of_year"] = df["date"].dt.isocalendar().week.astype(int)
+    df["month"] = df["date"].dt.month
+    df["quarter"] = df["date"].dt.quarter
+    df["is_weekend"] = (df["day_of_week"] >= 5).astype(int)
+    df["is_month_start"] = df["date"].dt.is_month_start.astype(int)
+    df["is_month_end"] = df["date"].dt.is_month_end.astype(int)
+    
+    # ==========================
+    # 2. FEATURES DE FERIADOS
+    # ==========================
+    df["is_holiday"] = df["date"].apply(lambda x: x.date() in BR_HOLIDAYS).astype(int)
+    
+    # Dias até o próximo feriado e desde o último
+    def days_to_next_holiday(date):
+        for i in range(1, 31):  # Procurar nos próximos 30 dias
+            future_date = date + timedelta(days=i)
+            if future_date.date() in BR_HOLIDAYS:
+                return i
+        return 30
+    
+    def days_from_last_holiday(date):
+        for i in range(1, 31):  # Procurar nos últimos 30 dias
+            past_date = date - timedelta(days=i)
+            if past_date.date() in BR_HOLIDAYS:
+                return i
+        return 30
+    
+    df["days_to_holiday"] = df["date"].apply(days_to_next_holiday)
+    df["days_from_holiday"] = df["date"].apply(days_from_last_holiday)
+    
+    # ==========================
+    # 3. FEATURES DE LAG
+    # ==========================
+    for lag in [1, 2, 7, 14, 30]:
+        df[f"price_lag_{lag}"] = df["price"].shift(lag)
+        df[f"quantity_lag_{lag}"] = df["quantity"].shift(lag)
+    
+    # ==========================
+    # 4. FEATURES DE ROLLING WINDOW
+    # ==========================
+    for window in [7, 14, 30]:
+        # Preço
+        df[f"price_rolling_mean_{window}"] = df["price"].rolling(window).mean()
+        df[f"price_rolling_std_{window}"] = df["price"].rolling(window).std()
+        df[f"price_rolling_min_{window}"] = df["price"].rolling(window).min()
+        df[f"price_rolling_max_{window}"] = df["price"].rolling(window).max()
+        
+        # Quantidade
+        df[f"quantity_rolling_mean_{window}"] = df["quantity"].rolling(window).mean()
+        df[f"quantity_rolling_std_{window}"] = df["quantity"].rolling(window).std()
+        df[f"quantity_rolling_sum_{window}"] = df["quantity"].rolling(window).sum()
+    
+    # ==========================
+    # 5. FEATURES DERIVADAS
+    # ==========================
+    # Razão preço atual vs. média móvel
+    df["price_vs_ma7"] = df["price"] / (df["price_rolling_mean_7"] + 1e-6)
+    df["price_vs_ma30"] = df["price"] / (df["price_rolling_mean_30"] + 1e-6)
+    
+    # Volatilidade recente
+    df["price_volatility_7"] = df["price_rolling_std_7"] / (df["price_rolling_mean_7"] + 1e-6)
+    
+    # Remover linhas com NaN (das janelas e lags)
+    df = df.dropna()
+    
+    return df
 
 
-def _build_feature_row(
-    *,
-    produto_id_code: int,
-    date: datetime,
-    history_window: deque,
-    feature_columns: List[str],
-) -> Dict[str, float]:
-    values = list(history_window)
-    latest_series = pd.Series(values)
+def _optimize_hyperparameters(
+    X: pd.DataFrame,
+    y: pd.Series,
+    n_trials: int = OPTUNA_TRIALS,
+) -> Dict:
+    """
+    Otimiza hiperparâmetros do LightGBM usando Optuna.
+    
+    Usa TimeSeriesSplit para validação cruzada respeitando ordem temporal.
+    """
+    LOGGER.info(f"Iniciando otimização de hiperparâmetros com {n_trials} trials...")
+    
+    def objective(trial: optuna.Trial) -> float:
+        # Definir espaço de busca
+        params = {
+            "objective": "regression",
+            "metric": "rmse",
+            "verbosity": -1,
+            "n_estimators": trial.suggest_int("n_estimators", 100, 1000),
+            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
+            "max_depth": trial.suggest_int("max_depth", 3, 12),
+            "num_leaves": trial.suggest_int("num_leaves", 20, 200),
+            "min_child_samples": trial.suggest_int("min_child_samples", 10, 100),
+            "subsample": trial.suggest_float("subsample", 0.6, 1.0),
+            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.6, 1.0),
+            "reg_alpha": trial.suggest_float("reg_alpha", 1e-8, 10.0, log=True),
+            "reg_lambda": trial.suggest_float("reg_lambda", 1e-8, 10.0, log=True),
+            "random_state": 42,
+        }
+        
+        # Time Series Cross Validation
+        tscv = TimeSeriesSplit(n_splits=N_SPLITS_CV)
+        scores = []
+        
+        for train_idx, val_idx in tscv.split(X):
+            X_train_fold, X_val_fold = X.iloc[train_idx], X.iloc[val_idx]
+            y_train_fold, y_val_fold = y.iloc[train_idx], y.iloc[val_idx]
+            
+            model = LGBMRegressor(**params)
+            model.fit(
+                X_train_fold,
+                y_train_fold,
+                eval_set=[(X_val_fold, y_val_fold)],
+                callbacks=[
+                    optuna.integration.LightGBMPruningCallback(trial, "rmse")
+                ],
+            )
+            
+            y_pred = model.predict(X_val_fold)
+            rmse = np.sqrt(np.mean((y_val_fold - y_pred) ** 2))
+            scores.append(rmse)
+        
+        return np.mean(scores)
+    
+    # Criar estudo Optuna
+    study = optuna.create_study(
+        direction="minimize",
+        sampler=optuna.samplers.TPESampler(seed=42),
+    )
+    
+    study.optimize(
+        objective,
+        n_trials=n_trials,
+        show_progress_bar=False,
+        n_jobs=1,  # LightGBM já paraleliza internamente
+    )
+    
+    LOGGER.info(f"Melhores hiperparâmetros encontrados: RMSE={study.best_value:.4f}")
+    
+    return study.best_params
 
-    def _get_lag(offset: int) -> float:
-        if len(values) < offset:
-            return float(values[-1])
-        return float(values[-offset])
 
-    def _rolling(window: int) -> tuple[float, float]:
-        subset = latest_series.tail(window)
-        return float(subset.mean()), float(subset.std(ddof=0))
-
-    mean_7, std_7 = _rolling(7)
-    mean_30, std_30 = _rolling(30)
-
-    row = {
-        "produto_id": produto_id_code,
-        "day_of_week": date.weekday(),
-        "week_of_year": date.isocalendar().week,
-        "month": date.month,
-        "lag_1": _get_lag(1),
-        "lag_7": _get_lag(7),
-        "lag_14": _get_lag(14),
-        "rolling_mean_7": mean_7,
-        "rolling_std_7": std_7 if np.isfinite(std_7) else 0.0,
-        "rolling_mean_30": mean_30,
-        "rolling_std_30": std_30 if np.isfinite(std_30) else 0.0,
-    }
-
-    return {column: row[column] for column in feature_columns}
-
-
-def predict_prices(skus: List[str], horizon_days: int) -> Dict[str, List[float]]:
-    """Gera previsões diárias para uma lista de SKUs usando o modelo global."""
-
-    if horizon_days < 1:
-        raise ValueError("O horizonte de previsão deve ser maior ou igual a 1.")
-
-    model = _load_model()
-    feature_columns = [
-        "produto_id",
-        "day_of_week",
-        "week_of_year",
-        "month",
-        "lag_1",
-        "lag_7",
-        "lag_14",
-        "rolling_mean_7",
-        "rolling_std_7",
-        "rolling_mean_30",
-        "rolling_std_30",
-    ]
-
+def train_model_for_product(
+    sku: str,
+    optimize: bool = True,
+    n_trials: int = OPTUNA_TRIALS,
+) -> Dict:
+    """
+    Treina modelo especializado para um produto específico.
+    
+    Args:
+        sku: SKU do produto
+        optimize: Se True, otimiza hiperparâmetros com Optuna
+        n_trials: Número de trials para otimização
+    
+    Returns:
+        Dicionário com métricas de performance
+    """
+    LOGGER.info(f"Iniciando treinamento para produto: {sku}")
+    
     with Session(engine) as session:
-        produtos = list(session.exec(select(Produto).where(Produto.sku.in_(skus))))
-        if not produtos:
-            raise ValueError("Nenhum SKU válido encontrado para previsão.")
-
-        id_map = {produto.sku: produto.id for produto in produtos}
-        categorical_map = {produto.id: idx for idx, produto in enumerate(sorted(produtos, key=lambda p: p.id))}
-
-        forecasts: Dict[str, List[float]] = {}
-
-        for sku, produto_id in id_map.items():
-            history_series = _prepare_history_for_prediction(session, produto_id)
-
-            window = deque(history_series.tail(60).tolist(), maxlen=60)
-            produto_code = categorical_map[produto_id]
-
-            last_date = history_series.index[-1]
-            sku_predictions: List[float] = []
-
-            for step in range(1, horizon_days + 1):
-                next_date = last_date + timedelta(days=step)
-                feature_row = _build_feature_row(
-                    produto_id_code=produto_code,
-                    date=datetime.combine(next_date, datetime.min.time()),
-                    history_window=window,
-                    feature_columns=feature_columns,
-                )
-
-                feature_values = np.array([feature_row[col] for col in feature_columns]).reshape(1, -1)
-                prediction = float(model.predict(feature_values)[0])
-
-                window.append(prediction)
-                sku_predictions.append(prediction)
-
-            forecasts[sku] = sku_predictions
-
-    return forecasts
+        # Carregar dados
+        produto, df = _load_product_data(session, sku)
+        LOGGER.info(f"Dados carregados: {len(df)} dias de histórico")
+        
+        # Feature engineering
+        df_featured = _engineer_features(df)
+        LOGGER.info(f"Features criadas: {len(df_featured)} amostras após feature engineering")
+        
+        # Separar features e target
+        feature_cols = [col for col in df_featured.columns if col not in ["date", "price", "quantity"]]
+        X = df_featured[feature_cols]
+        y = df_featured["price"]
+        
+        LOGGER.info(f"Features utilizadas ({len(feature_cols)}): {feature_cols[:10]}...")
+        
+        # Holdout final para validação
+        n_validation = VALIDATION_DAYS
+        X_train_full, X_test = X.iloc[:-n_validation], X.iloc[-n_validation:]
+        y_train_full, y_test = y.iloc[:-n_validation], y.iloc[-n_validation:]
+        
+        LOGGER.info(f"Split: {len(X_train_full)} treino, {len(X_test)} validação")
+        
+        # Otimizar hiperparâmetros (se solicitado)
+        if optimize:
+            best_params = _optimize_hyperparameters(X_train_full, y_train_full, n_trials=n_trials)
+            best_params["random_state"] = 42
+            best_params["objective"] = "regression"
+            best_params["metric"] = "rmse"
+            best_params["verbosity"] = -1
+        else:
+            # Hiperparâmetros padrão razoáveis
+            best_params = {
+                "objective": "regression",
+                "metric": "rmse",
+                "n_estimators": 500,
+                "learning_rate": 0.05,
+                "max_depth": 7,
+                "num_leaves": 50,
+                "min_child_samples": 20,
+                "subsample": 0.8,
+                "colsample_bytree": 0.8,
+                "reg_alpha": 0.1,
+                "reg_lambda": 0.1,
+                "random_state": 42,
+                "verbosity": -1,
+            }
+        
+        # Treinar modelo final
+        LOGGER.info("Treinando modelo final...")
+        model = LGBMRegressor(**best_params)
+        model.fit(X_train_full, y_train_full)
+        
+        # Avaliar no conjunto de teste
+        y_pred_test = model.predict(X_test)
+        rmse = np.sqrt(np.mean((y_test - y_pred_test) ** 2))
+        mae = np.mean(np.abs(y_test - y_pred_test))
+        mape = np.mean(np.abs((y_test - y_pred_test) / y_test)) * 100
+        
+        metrics = {
+            "rmse": round(float(rmse), 4),
+            "mae": round(float(mae), 4),
+            "mape": round(float(mape), 4),
+        }
+        
+        LOGGER.info(f"Métricas de validação: {metrics}")
+        
+        # Normalizar features (opcional, para melhor estabilidade)
+        scaler = StandardScaler()
+        scaler.fit(X_train_full)
+        
+        # Salvar modelo
+        metadata = ModelMetadata(
+            sku=sku,
+            model_type="LightGBM",
+            version=datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
+            hyperparameters=best_params,
+            metrics=metrics,
+            features=feature_cols,
+            trained_at=datetime.now(timezone.utc).isoformat(),
+            training_samples=len(X_train_full),
+        )
+        
+        save_model(sku=sku, model=model, scaler=scaler, metadata=metadata)
+        
+        LOGGER.info(f"✅ Modelo treinado e salvo com sucesso para {sku}")
+        
+        return {
+            "sku": sku,
+            "success": True,
+            "metrics": metrics,
+            "training_samples": len(X_train_full),
+            "validation_samples": len(X_test),
+            "features_count": len(feature_cols),
+        }
 
 
 __all__ = [
-    "train_global_lgbm_model",
-    "predict_prices",
-    "InsufficientHistoryError",
+    "train_model_for_product",
+    "InsufficientDataError",
 ]

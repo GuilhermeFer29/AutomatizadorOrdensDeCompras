@@ -16,7 +16,7 @@ from sqlmodel import Session, select
 
 from app.core.config import DEFAULT_HORIZON_DAYS, ROOT_DIR
 from app.core.database import engine
-from app.ml.training import predict_prices
+from app.ml.prediction import predict_prices_for_product
 from app.models.models import PrecosHistoricos, Produto
 
 LOGGER = structlog.get_logger(__name__)
@@ -152,12 +152,19 @@ def _load_global_forecast(produtos: list[Produto]) -> Optional[GlobalDashboardCo
   if not produtos:
     return None
 
-  skus = [p.sku for p in produtos]
+  # Obter previsões para cada produto
+  forecasts_by_sku = {}
+  for produto in produtos:
+    try:
+      result = predict_prices_for_product(sku=produto.sku, days_ahead=DEFAULT_HORIZON_DAYS)
+      if "error" not in result and result.get("prices"):
+        forecasts_by_sku[produto.sku] = result["prices"]
+    except Exception:
+      # Pular produtos sem modelo ou com erro
+      continue
 
-  try:
-    forecasts = predict_prices(skus=skus, horizon_days=DEFAULT_HORIZON_DAYS)
-  except Exception as exc:
-    LOGGER.warning("dashboard.global.forecast_failure", error=str(exc))
+  if not forecasts_by_sku:
+    LOGGER.warning("dashboard.global.forecast_failure", reason="no_forecasts_available")
     return None
 
   labels: List[str] = []
@@ -167,8 +174,7 @@ def _load_global_forecast(produtos: list[Produto]) -> Optional[GlobalDashboardCo
   for day_offset in range(DEFAULT_HORIZON_DAYS):
     label = (base_date + timedelta(days=day_offset + 1)).strftime("%Y-%m-%d")
     aggregated: List[float] = []
-    for sku in skus:
-      sku_forecasts = forecasts.get(sku, [])
+    for sku, sku_forecasts in forecasts_by_sku.items():
       if day_offset < len(sku_forecasts):
         aggregated.append(sku_forecasts[day_offset])
     if aggregated:
@@ -239,12 +245,13 @@ def _build_product_chart_payload(
     return _empty_chart_payload(), {}, datetime.now()
 
   try:
-    forecasts = predict_prices(skus=[produto.sku], horizon_days=horizon)
+    result = predict_prices_for_product(sku=produto.sku, days_ahead=horizon)
+    if "error" in result or not result.get("prices"):
+      raise Exception(result.get("error", "No forecast available"))
+    forecast_values = result["prices"]
   except Exception as exc:
     LOGGER.warning("dashboard.forecast_failure", produto_id=produto.id, error=str(exc))
     return _create_empty_forecast_payload(labels, real_series, synthetic_series), {}, datetime.now()
-
-  forecast_values = forecasts.get(produto.sku, [])
   future_labels = _future_labels(labels[-1], len(forecast_values))
   forecast_map = {label: round(value, 4) for label, value in zip(future_labels, forecast_values)}
 
