@@ -1,9 +1,9 @@
 # ============================================================================
-# MIGRAÇÃO COMPLETA PARA GEMINI (2025-10-10 00:15):
-# - CORREÇÃO CRÍTICA: google-generativeai (nome oficial do pacote)
-# - Removidas dependências OpenAI/OpenRouter (legado eliminado)
-# - Mantidas apenas essenciais para produção
-# - Redução estimada: 8.4GB → ~2-3GB
+# REFATORAÇÃO PÓS-AUDITORIA (2025-10-16):
+# - Scraping desativado: removido beautifulsoup4
+# - Consolidado Google AI: apenas google-generativeai
+# - LangChain mantido: arquitetura híbrida RAG ativa
+# - Base limpa para módulo ML avançado
 # ============================================================================
 
 # Core Framework
@@ -25,10 +25,8 @@ sqlmodel
 celery
 
 # AI/ML (essenciais)
-beautifulsoup4
 chromadb
 google-generativeai
-google-genai
 httpx
 numpy
 pandas
@@ -41,6 +39,7 @@ langchain-core
 langchain-community
 langchain-google-genai
 langchain-chroma
+
 # ML Essencial
 lightgbm
 scikit-learn
@@ -48,3 +47,4 @@ scikit-learn
 # Utils
 email-validator
 reportlab
+faker
