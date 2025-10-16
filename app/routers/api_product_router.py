@@ -1,9 +1,10 @@
 from typing import List, Optional
 import logging
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from sqlmodel import Session
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
+from sqlmodel import Session, select
 from app.core.database import get_session
 from app.services.product_service import get_products, get_product_by_id, create_product, update_product
+from app.models.models import PrecosHistoricos, Produto
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -94,3 +95,45 @@ def handle_update_product(
     logger.info(f"🔄 Produto atualizado: ID {product_id} - RAG será sincronizado")
     
     return updated_product
+
+
+@router.get("/{sku}/price-history")
+def get_product_price_history(
+    sku: str,
+    limit: int = Query(default=30, ge=1, le=365),
+    session: Session = Depends(get_session)
+):
+    """
+    Retorna o histórico de preços de um produto por SKU.
+    
+    Args:
+        sku: SKU do produto
+        limit: Número máximo de registros (padrão: 30, máximo: 365)
+    """
+    # Buscar produto pelo SKU
+    produto = session.exec(select(Produto).where(Produto.sku == sku)).first()
+    if not produto:
+        raise HTTPException(status_code=404, detail=f"Produto com SKU '{sku}' não encontrado")
+    
+    # Buscar histórico de preços
+    precos = list(
+        session.exec(
+            select(PrecosHistoricos)
+            .where(PrecosHistoricos.produto_id == produto.id)
+            .order_by(PrecosHistoricos.coletado_em.desc())
+            .limit(limit)
+        )
+    )
+    
+    # Reverter ordem para cronológica
+    precos.reverse()
+    
+    return [
+        {
+            "date": preco.coletado_em.isoformat(),
+            "coletado_em": preco.coletado_em.isoformat(),
+            "preco": float(preco.preco),
+            "price": float(preco.preco),
+        }
+        for preco in precos
+    ]

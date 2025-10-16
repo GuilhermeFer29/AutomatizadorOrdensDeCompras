@@ -16,7 +16,11 @@ interface ChartDataPoint {
   prediction?: number;
 }
 
-export function PriceChart() {
+interface PriceChartProps {
+  onModelMetricsChange?: (metrics: { mape: number; sku: string; productName: string } | null) => void;
+}
+
+export function PriceChart({ onModelMetricsChange }: PriceChartProps = {}) {
   const [selectedSku, setSelectedSku] = useState<string | null>(null);
   const [historicalData, setHistoricalData] = useState<ChartDataPoint[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -31,15 +35,25 @@ export function PriceChart() {
     const fetchHistory = async () => {
       setLoadingHistory(true);
       try {
-        const response = await api.get(`/precos/historico/${selectedSku}`, {
+        const response = await api.get(`/api/products/${selectedSku}/price-history`, {
           params: { limit: 30 } // Últimos 30 dias
         });
         
-        const historyData = response.data.map((item: any) => ({
-          date: new Date(item.coletado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-          price: parseFloat(item.preco)
-        }));
+        if (!response.data || response.data.length === 0) {
+          console.warn('Nenhum dado histórico encontrado para', selectedSku);
+          setHistoricalData([]);
+          return;
+        }
         
+        const historyData = response.data.map((item: any) => {
+          const dateObj = new Date(item.date);
+          return {
+            date: dateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+            price: parseFloat(item.price)
+          };
+        });
+        
+        console.log('Histórico carregado:', historyData.length, 'registros');
         setHistoricalData(historyData);
       } catch (error) {
         console.error('Erro ao buscar histórico:', error);
@@ -61,17 +75,34 @@ export function PriceChart() {
 
   // Combinar histórico com previsões
   const chartData = useMemo(() => {
-    const combined: ChartDataPoint[] = [...historicalData];
+    const combined: ChartDataPoint[] = [];
+    
+    // Adicionar histórico
+    historicalData.forEach(item => {
+      combined.push({
+        date: item.date,
+        price: item.price,
+        prediction: undefined
+      });
+    });
 
+    // Adicionar previsões
     if (predictions && predictions.dates && predictions.prices) {
-      // Adicionar previsões
       predictions.dates.forEach((date: string, index: number) => {
+        const dateFormatted = new Date(date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
         combined.push({
-          date: new Date(date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+          date: dateFormatted,
+          price: undefined,
           prediction: predictions.prices[index]
         });
       });
     }
+
+    console.log('Dados do gráfico:', {
+      historico: historicalData.length,
+      previsoes: predictions?.prices?.length || 0,
+      total: combined.length
+    });
 
     return combined;
   }, [historicalData, predictions]);
@@ -79,6 +110,21 @@ export function PriceChart() {
   const selectedProduct = useMemo(() => {
     return products?.find((p: Product) => p.sku === selectedSku);
   }, [products, selectedSku]);
+
+  // Notificar Dashboard sobre mudanças nas métricas
+  useEffect(() => {
+    if (onModelMetricsChange) {
+      if (predictions && predictions.metrics && selectedProduct) {
+        onModelMetricsChange({
+          mape: predictions.metrics.mape || 0,
+          sku: selectedSku || '',
+          productName: selectedProduct.nome
+        });
+      } else {
+        onModelMetricsChange(null);
+      }
+    }
+  }, [predictions, selectedProduct, selectedSku, onModelMetricsChange]);
 
   if (productsLoading) {
     return <Skeleton className="h-[450px] w-full" />;

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { TrendingUp, ShoppingBag, Package, Target } from "lucide-react";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { PriceChart } from "@/components/dashboard/PriceChart";
@@ -9,6 +10,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 export default function Dashboard() {
   const { data: kpiData, isLoading: kpiLoading, error: kpiError } = useDashboardKPIs();
   const { data: alerts, isLoading: alertsLoading } = useDashboardAlerts();
+  const [selectedProductMetrics, setSelectedProductMetrics] = useState<{
+    mape: number;
+    sku: string;
+    productName: string;
+  } | null>(null);
 
   if (kpiLoading || alertsLoading) {
     return <div className="space-y-6">
@@ -57,14 +63,23 @@ export default function Dashboard() {
         />
         <KPICard
           title="Acurácia do Modelo"
-          value={`${(kpiData?.modelAccuracy || 0) * 100}%`}
+          value={
+            selectedProductMetrics
+              ? `${(100 - selectedProductMetrics.mape).toFixed(1)}%`
+              : `${(kpiData?.modelAccuracy || 0) * 100}%`
+          }
+          subtitle={
+            selectedProductMetrics
+              ? `${selectedProductMetrics.productName.substring(0, 30)}...`
+              : "Média Global"
+          }
           icon={Target}
           iconColor="text-primary"
         />
       </div>
 
       {/* Price Prediction Chart */}
-      <PriceChart />
+      <PriceChart onModelMetricsChange={setSelectedProductMetrics} />
 
       {/* Alerts Table */}
       <AlertsTable alerts={alerts || []} />

@@ -42,7 +42,7 @@ export const useProducts = () => {
 return useQuery({
 queryKey: ['products'],
 queryFn: async () => {
-const response = await api.get('/produtos/');
+const response = await api.get('/api/products');
 return response.data;
 },
 });
