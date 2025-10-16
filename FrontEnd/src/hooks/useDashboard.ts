@@ -36,3 +36,41 @@ return response.data;
 enabled: !!productId, // Só executa se productId existir
 });
 };
+
+// Hook para buscar lista de produtos do catálogo
+export const useProducts = () => {
+return useQuery({
+queryKey: ['products'],
+queryFn: async () => {
+const response = await api.get('/produtos/');
+return response.data;
+},
+});
+};
+
+// Hook para buscar previsões de preço de um produto por SKU
+export const useProductPredictions = (sku: string | null, daysAhead: number = 14) => {
+return useQuery({
+queryKey: ['ml', 'predictions', sku, daysAhead],
+queryFn: async () => {
+if (!sku) return null;
+const response = await api.get(`/ml/predict/${sku}`, {
+params: { days_ahead: daysAhead }
+});
+return response.data;
+},
+enabled: !!sku,
+retry: 1,
+});
+};
+
+// Hook para buscar modelos ML treinados
+export const useMLModels = () => {
+return useQuery({
+queryKey: ['ml', 'models'],
+queryFn: async () => {
+const response = await api.get('/ml/models');
+return response.data;
+},
+});
+};
