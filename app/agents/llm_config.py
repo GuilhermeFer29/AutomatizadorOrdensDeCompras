@@ -7,8 +7,8 @@ manutenção futura.
 
 MODELOS DISPONÍVEIS (Google AI 2.5):
 =====================================
-• gemini-2.5-flash-latest: Alta performance, resposta rápida (PADRÃO)
-• gemini-2.5-pro-latest: Raciocínio avançado, tarefas complexas
+• gemini-2.5-flash: Alta performance, resposta rápida (PADRÃO)
+• gemini-2.5-pro: Raciocínio avançado, tarefas complexas
 
 FUNÇÕES PRINCIPAIS:
 ===================
@@ -28,7 +28,7 @@ from agno.models.google import Gemini
 
 def get_gemini_llm(
     temperature: float = 0.3,
-    model_id: str = "models/gemini-2.5-flash-latest"
+    model_id: str = "models/gemini-2.5-flash"
 ) -> Gemini:
     """
     Configura e retorna uma instância do modelo Google Gemini.
@@ -44,10 +44,10 @@ def get_gemini_llm(
         temperature: Controla a aleatoriedade das respostas (0.0 = determinístico, 1.0 = criativo).
                     Padrão: 0.3 (bom para tarefas analíticas)
         model_id: ID do modelo Gemini a ser usado.
-                 Padrão: "models/gemini-2.5-flash-latest" (mais recente e estável)
+                 Padrão: "models/gemini-2.5-flash" (mais recente e estável)
                  Alternativas:
-                 - "models/gemini-2.5-flash-latest" (mais rápido, menos preciso)
-                 - "models/gemini-2.5-pro-latest" (versão anterior)
+                 - "models/gemini-2.5-flash" (mais rápido, menos preciso)
+                 - "models/gemini-2.5-pro" (versão anterior)
     
     Returns:
         Gemini: Instância configurada do modelo Gemini pronta para uso.

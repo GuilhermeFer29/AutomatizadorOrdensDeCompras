@@ -40,7 +40,7 @@ langchain
 langchain-core
 langchain-community
 langchain-google-genai
-
+langchain-chroma
 # ML Essencial
 lightgbm
 scikit-learn

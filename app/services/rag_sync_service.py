@@ -197,28 +197,45 @@ def initialize_rag_on_startup() -> dict:
     Função helper para inicialização do RAG no startup da aplicação.
     
     Esta função deve ser chamada no evento @app.on_event("startup") do FastAPI.
+    Inclui retry para aguardar o banco de dados estar pronto.
     
     Returns:
         dict: Resultado da inicialização
     """
+    import time
+    
     logger.info("=" * 80)
     logger.info("🚀 INICIALIZANDO RAG AUTOMÁTICO")
     logger.info("=" * 80)
     
-    result = rag_sync_service.sync_full_catalog(force_clear=True)
+    # Retry logic: aguarda banco de dados estar pronto
+    max_retries = 5
+    retry_delay = 2  # segundos
     
-    if result["status"] == "success":
-        logger.info("=" * 80)
-        logger.info("✅ RAG INICIALIZADO COM SUCESSO")
-        logger.info(f"   • Produtos indexados: {result['products_indexed']}")
-        logger.info(f"   • Tempo: {result['duration_seconds']}s")
-        logger.info(f"   • ChromaDB: {result['chroma_dir']}")
-        logger.info("=" * 80)
-    else:
-        logger.error("=" * 80)
-        logger.error("❌ FALHA NA INICIALIZAÇÃO DO RAG")
-        logger.error(f"   • Erro: {result['message']}")
-        logger.error("=" * 80)
+    for attempt in range(1, max_retries + 1):
+        logger.info(f"🔄 Tentativa {attempt}/{max_retries} de sincronização...")
+        
+        result = rag_sync_service.sync_full_catalog(force_clear=True)
+        
+        if result["status"] == "success" and result["products_indexed"] > 0:
+            logger.info("=" * 80)
+            logger.info("✅ RAG INICIALIZADO COM SUCESSO")
+            logger.info(f"   • Produtos indexados: {result['products_indexed']}")
+            logger.info(f"   • Tempo: {result['duration_seconds']}s")
+            logger.info(f"   • ChromaDB: {result['chroma_dir']}")
+            logger.info("=" * 80)
+            return result
+        
+        if attempt < max_retries:
+            logger.warning(f"⏳ Nenhum produto encontrado, aguardando {retry_delay}s antes de tentar novamente...")
+            time.sleep(retry_delay)
+    
+    # Se chegou aqui, todas as tentativas falharam
+    logger.error("=" * 80)
+    logger.error("❌ FALHA NA INICIALIZAÇÃO DO RAG")
+    logger.error(f"   • Erro: {result['message']}")
+    logger.error(f"   • Tentativas: {max_retries}")
+    logger.error("=" * 80)
     
     return result
 

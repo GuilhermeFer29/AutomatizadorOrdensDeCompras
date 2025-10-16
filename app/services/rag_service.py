@@ -30,7 +30,7 @@ from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
-from langchain_community.vectorstores import Chroma
+from langchain_chroma import Chroma
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from sqlmodel import Session, select
 
@@ -57,12 +57,20 @@ def get_vector_store() -> Chroma:
     """
     Retorna instância do vector store ChromaDB configurado com embeddings do Google.
     
+    Usa o singleton ChromaClientSingleton para evitar o erro:
+    "An instance of Chroma already exists with different settings"
+    
     Returns:
         Chroma: Vector store pronto para uso
     """
+    from app.services.chroma_client import get_chroma_client
+    
+    # Usa o cliente singleton
+    client = get_chroma_client(CHROMA_PERSIST_DIR)
+    
     return Chroma(
+        client=client,
         collection_name="products",
-        persist_directory=CHROMA_PERSIST_DIR,
         embedding_function=google_embeddings
     )
 
@@ -87,26 +95,40 @@ def index_product_catalog(db_session: Session) -> None:
         return
     
     # Cria documentos LangChain a partir dos produtos
-    documents = [
-        Document(
-            page_content=(
-                f"Produto: {p.nome}\n"
-                f"SKU: {p.sku}\n"
-                f"Categoria: {p.categoria or 'N/A'}\n"
-                f"Estoque Atual: {p.estoque_atual} unidades\n"
-                f"Estoque Mínimo: {p.estoque_minimo} unidades"
-            ),
-            metadata={
-                "product_id": p.id,
-                "sku": p.sku,
-                "nome": p.nome,
-                "categoria": p.categoria or "N/A",
-                "estoque_atual": p.estoque_atual,
-                "estoque_minimo": p.estoque_minimo
-            }
+    documents = []
+    for p in products:
+        # Determina status do estoque
+        estoque_status = "ESTOQUE BAIXO - CRÍTICO" if p.estoque_atual <= p.estoque_minimo else "Estoque normal"
+        diferenca = p.estoque_atual - p.estoque_minimo
+        
+        # Conteúdo enriquecido com informações explícitas sobre estoque
+        content = (
+            f"Produto: {p.nome}\n"
+            f"SKU: {p.sku}\n"
+            f"Categoria: {p.categoria or 'N/A'}\n"
+            f"Estoque Atual: {p.estoque_atual} unidades\n"
+            f"Estoque Mínimo: {p.estoque_minimo} unidades\n"
+            f"Status: {estoque_status}\n"
         )
-        for p in products
-    ]
+        
+        # Adiciona informação explícita se estoque está baixo
+        if p.estoque_atual <= p.estoque_minimo:
+            content += f"⚠️ ATENÇÃO: Produto com estoque abaixo do mínimo! Faltam {abs(diferenca)} unidades para atingir o estoque mínimo.\n"
+        
+        documents.append(
+            Document(
+                page_content=content,
+                metadata={
+                    "product_id": p.id,
+                    "sku": p.sku,
+                    "nome": p.nome,
+                    "categoria": p.categoria or "N/A",
+                    "estoque_atual": p.estoque_atual,
+                    "estoque_minimo": p.estoque_minimo,
+                    "estoque_baixo": p.estoque_atual <= p.estoque_minimo  # Flag booleana
+                }
+            )
+        )
     
     if documents:
         vector_store = get_vector_store()
@@ -121,7 +143,7 @@ def create_rag_chain():
     Pipeline (LangChain LCEL):
     1. Retriever: Busca documentos relevantes (top-k=5) usando ChromaDB
     2. Prompt: Template especializado para produtos industriais
-    3. LLM: Gemini 2.5 Flash (gemini-2.5-flash-latest, temp=0.1)
+    3. LLM: Gemini 2.5 Flash (gemini-2.5-flash, temp=0.1)
     4. Parser: Converte resposta para string limpa
     
     Returns:
@@ -132,9 +154,9 @@ def create_rag_chain():
         - LLM com temperatura baixa (0.1) para respostas factuais precisas
         - Pipeline otimizado para latência mínima com máxima precisão
     """
-    # 1. Configurar retriever com busca top-5
+    # 1. Configurar retriever com busca top-20 para capturar mais produtos
     retriever = get_vector_store().as_retriever(
-        search_kwargs={'k': 5}
+        search_kwargs={'k': 20}
     )
     
     # 2. Template de prompt otimizado para catálogo de produtos
@@ -142,10 +164,14 @@ def create_rag_chain():
 
 **REGRAS IMPORTANTES:**
 1. Use APENAS as informações do CONTEXTO abaixo como fonte de verdade
-2. Responda de forma concisa e direta
+2. Responda de forma concisa, clara e bem formatada (use markdown: negrito, listas)
 3. Se a informação não estiver no contexto, diga claramente que não encontrou
 4. Mantenha um tom profissional e prestativo
 5. Sempre cite o SKU quando falar de um produto específico
+6. Para perguntas sobre "estoque baixo", procure por produtos com status "ESTOQUE BAIXO - CRÍTICO"
+7. Liste TODOS os produtos relevantes encontrados no contexto, não apenas alguns
+8. Se houver dados estruturados (JSON) na pergunta, use-os para enriquecer sua resposta
+9. Organize a resposta de forma clara: use títulos, listas e destaque informações importantes
 
 CONTEXTO:
 {context}
@@ -153,13 +179,13 @@ CONTEXTO:
 PERGUNTA:
 {question}
 
-Resposta:"""
+Resposta (use markdown para formatação):"""
     
     prompt = ChatPromptTemplate.from_template(template)
     
     # 3. LLM do Google (Gemini 2.5 Flash - máxima performance)
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash-latest",
+        model="gemini-2.5-flash",
         temperature=0.1  # Quase determinístico para respostas factuais precisas
     )
     
@@ -179,14 +205,15 @@ Resposta:"""
     return rag_chain
 
 
-def query_product_catalog_with_google_rag(query: str) -> str:
+def query_product_catalog_with_google_rag(query: str, k: int = 20) -> str:
     """
     Interface principal para consultas RAG ao catálogo de produtos.
     
-    Esta é a função que deve ser chamada pelas ferramentas Agno.
+    Esta é a função que deve ser chamada pelas ferramentas Agno e pelo sistema híbrido.
     
     Args:
         query: Pergunta em linguagem natural sobre produtos
+        k: Número de documentos a recuperar (padrão: 20)
         
     Returns:
         str: Resposta gerada pelo RAG baseada no contexto relevante
@@ -194,14 +221,68 @@ def query_product_catalog_with_google_rag(query: str) -> str:
     Example:
         >>> query_product_catalog_with_google_rag("Qual o estoque da Parafusadeira Makita?")
         "A Parafusadeira Makita (SKU_005) possui atualmente 45 unidades em estoque..."
+        
+    Notas:
+        - Suporta dados estruturados JSON na query para enriquecimento
+        - Usa busca semântica com embeddings Google AI
+        - Temperatura baixa (0.1) para respostas precisas
     """
     try:
-        rag_chain = create_rag_chain()
-        response = rag_chain.invoke({"question": query})
+        # Cria retriever com k configurável
+        retriever = get_vector_store().as_retriever(
+            search_kwargs={'k': k}
+        )
+        
+        # Template de prompt
+        template = """Você é um sistema especialista em responder perguntas sobre um catálogo de produtos industriais.
+
+**REGRAS IMPORTANTES:**
+1. Use APENAS as informações do CONTEXTO abaixo como fonte de verdade
+2. Responda de forma concisa, clara e bem formatada (use markdown: negrito, listas)
+3. Se a informação não estiver no contexto, diga claramente que não encontrou
+4. Mantenha um tom profissional e prestativo
+5. Sempre cite o SKU quando falar de um produto específico
+6. Para perguntas sobre "estoque baixo", procure por produtos com status "ESTOQUE BAIXO - CRÍTICO"
+7. Liste TODOS os produtos relevantes encontrados no contexto, não apenas alguns
+8. Se houver dados estruturados (JSON) na pergunta, use-os para enriquecer sua resposta
+9. Organize a resposta de forma clara: use títulos, listas e destaque informações importantes
+
+CONTEXTO:
+{context}
+
+PERGUNTA:
+{question}
+
+Resposta (use markdown para formatação):"""
+        
+        prompt = ChatPromptTemplate.from_template(template)
+        
+        # LLM
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash",
+            temperature=0.1
+        )
+        
+        # Helper para formatar documentos
+        def format_docs(docs: List[Document]) -> str:
+            return "\n\n".join(doc.page_content for doc in docs)
+        
+        # Chain LCEL
+        rag_chain = (
+            {"context": retriever | format_docs, "question": RunnablePassthrough()}
+            | prompt
+            | llm
+            | StrOutputParser()
+        )
+        
+        # Executa
+        response = rag_chain.invoke(query)
         return response
     except Exception as e:
         error_msg = f"❌ Erro ao consultar catálogo: {str(e)}"
         print(error_msg)
+        import traceback
+        traceback.print_exc()
         return error_msg
 
 
@@ -213,17 +294,13 @@ def index_chat_message(message: ChatMessage) -> None:
     """
     Indexa mensagem de chat (funcionalidade legada mantida).
     
-    NOTA: Esta função usa a implementação antiga com ChromaDB direto.
-    Pode ser refatorada futuramente para usar LangChain completamente.
+    NOTA: Agora usa o singleton ChromaClientSingleton para evitar conflitos.
     """
     try:
-        import chromadb
-        from chromadb.config import Settings
+        from app.services.chroma_client import get_chroma_client
         
-        client = chromadb.PersistentClient(
-            path=CHROMA_PERSIST_DIR,
-            settings=Settings(anonymized_telemetry=False)
-        )
+        # Usa o cliente singleton
+        client = get_chroma_client(CHROMA_PERSIST_DIR)
         
         collection = client.get_or_create_collection(name="chat_history")
         

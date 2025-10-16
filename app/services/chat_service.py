@@ -1,11 +1,8 @@
 import json
 from sqlmodel import Session, select
-from app.models.models import ChatSession, ChatMessage, Produto
+from app.models.models import ChatSession, ChatMessage
 from app.agents.conversational_agent import (
     extract_entities,
-    route_to_specialist,
-    format_agent_response,
-    generate_clarification_message,
     save_session_context,
 )
 from app.services.rag_service import embed_and_store_message
@@ -61,44 +58,42 @@ def add_chat_message(
 
 
 def process_user_message(session: Session, session_id: int, message_text: str):
-    """Processa mensagem do usuário com NLU e roteamento inteligente."""
+    """
+    Processa mensagem do usuário com conversa fluida e natural.
+    
+    ESTRATÉGIA:
+    1. Perguntas sobre produtos → RAG responde diretamente
+    2. Solicitação de análise/compra com SKU → Dispara agente especialista
+    3. Qualquer outra coisa → RAG tenta responder
+    """
     
     # 1. Salva mensagem do usuário
     add_chat_message(session, session_id, 'human', message_text)
 
     # 2. Extrai entidades (SKU, intent, etc)
     entities = extract_entities(message_text, session, session_id)
-    
-    # DEBUG: Log entities extraídas
-    print(f"🔍 DEBUG - Entities extraídas: {entities}")
+    print(f"🔍 DEBUG - Entities: {entities}")
     
     # 3. Salva SKU no contexto se foi identificado
     if entities.get("sku"):
         save_session_context(session, session_id, "current_sku", entities["sku"])
     
-    # 4. Roteia para o agente especialista
-    routing = route_to_specialist(entities["intent"], entities)
-    print(f"🔍 DEBUG - Routing: {routing}")
+    intent = entities.get("intent", "unknown")
+    sku = entities.get("sku")
     
-    # 5. Executa baseado no tipo de agente
-    if routing["agent"] == "direct_query":
-        # Consulta direta ao banco (stock_check)
-        response_content, metadata = handle_stock_check(session, entities)
-        
-    elif routing["agent"] == "clarification":
-        # Pede esclarecimento
-        response_content = generate_clarification_message(entities)
-        metadata = {"type": "clarification", "entities": entities}
-        
-    elif routing["agent"] == "supply_chain_analysis":
-        # Dispara análise completa (assíncrono)
-        response_content, metadata = handle_supply_chain_analysis(session, session_id, entities, routing)
+    # 4. DECISÃO SIMPLIFICADA: Análise completa OU conversa natural
     
+    # Se pede análise/decisão de compra E tem SKU → Dispara agente especialista
+    if intent in ["purchase_decision", "forecast", "logistics"] and sku:
+        print(f"🚀 Disparando análise especializada para {sku}")
+        response_content, metadata = handle_supply_chain_analysis(session, session_id, entities)
+    
+    # QUALQUER OUTRA PERGUNTA → RAG responde naturalmente
     else:
-        response_content = "Desculpe, não consegui processar sua solicitação."
-        metadata = {"type": "error"}
+        print(f"💬 Usando RAG para conversa natural: '{message_text}'")
+        response_content, metadata = handle_natural_conversation(session, message_text, entities)
     
-    # 6. Salva resposta do agente
+    # 5. Salva resposta do agente
     agent_response = add_chat_message(
         session, session_id, 'agent', response_content, metadata
     )
@@ -106,47 +101,63 @@ def process_user_message(session: Session, session_id: int, message_text: str):
     return agent_response
 
 
-def handle_stock_check(session: Session, entities: dict) -> tuple[str, dict]:
-    """Consulta direta de estoque no banco de dados."""
-    sku = entities.get("sku")
+def handle_natural_conversation(session: Session, user_question: str, entities: dict) -> tuple[str, dict]:
+    """
+    Conversa natural usando sistema HÍBRIDO (RAG + SQL) - responde QUALQUER pergunta sobre produtos.
     
-    if not sku:
+    O sistema híbrido pode responder:
+    - Consultas estruturadas: estoque baixo, filtros, agregações (SQL)
+    - Consultas semânticas: descrições, comparações, características (RAG)
+    - Consultas complexas: combina SQL + RAG para resposta completa
+    """
+    from app.services.hybrid_query_service import execute_hybrid_query
+    
+    try:
+        print(f"💬 Sistema Híbrido (RAG + SQL) processando: '{user_question}'")
+        hybrid_response = execute_hybrid_query(user_question, session)
+        
+        # Se sistema híbrido respondeu com sucesso
+        if hybrid_response and not hybrid_response.startswith("❌"):
+            return (
+                hybrid_response,
+                {
+                    "type": "hybrid_conversation",
+                    "query": user_question,
+                    "entities": entities,
+                    "confidence": "high"
+                }
+            )
+        
+        # Se não conseguiu responder
+        print("⚠️ Sistema híbrido não conseguiu processar a pergunta")
         return (
-            "Por favor, informe o SKU do produto que deseja consultar.",
-            {"type": "error", "reason": "missing_sku"}
+            "Desculpe, não consegui encontrar informações sobre isso no catálogo. "
+            "Pode reformular sua pergunta ou ser mais específico?",
+            {
+                "type": "hybrid_no_answer",
+                "query": user_question,
+                "entities": entities
+            }
         )
-    
-    product = session.exec(
-        select(Produto).where(Produto.sku == sku)
-    ).first()
-    
-    if not product:
+        
+    except Exception as e:
+        print(f"❌ Erro no sistema híbrido: {e}")
+        import traceback
+        traceback.print_exc()
         return (
-            f"Produto {sku} não encontrado no catálogo.",
-            {"type": "not_found", "sku": sku}
+            "Desculpe, ocorreu um erro ao processar sua pergunta. "
+            "Por favor, tente novamente ou reformule de outra forma.",
+            {
+                "type": "hybrid_error",
+                "query": user_question,
+                "error": str(e)
+            }
         )
-    
-    status = "✅ OK" if product.estoque_atual >= product.estoque_minimo else "⚠️ BAIXO"
-    
-    response = (
-        f"📦 **{product.nome}** (SKU: {sku})\n\n"
-        f"Estoque Atual: {product.estoque_atual} unidades\n"
-        f"Estoque Mínimo: {product.estoque_minimo} unidades\n"
-        f"Status: {status}"
-    )
-    
-    metadata = {
-        "type": "stock_check",
-        "sku": sku,
-        "stock_atual": product.estoque_atual,
-        "stock_minimo": product.estoque_minimo,
-        "confidence": "high"
-    }
-    
-    return response, metadata
 
 
-def handle_supply_chain_analysis(session: Session, session_id: int, entities: dict, routing: dict) -> tuple[str, dict]:
+
+
+def handle_supply_chain_analysis(session: Session, session_id: int, entities: dict) -> tuple[str, dict]:
     """Dispara análise completa da supply chain de forma assíncrona.
     
     CORREÇÃO: Agora passa session_id para a task salvar o resultado automaticamente.

@@ -13,7 +13,7 @@ ATUALIZAÇÃO PARA GEMINI 2.5 (2025-10-14):
 
 📋 STACK ATUAL (Google AI 2.5):
 ================================
-- LLM: Google Gemini 2.5 Flash (models/gemini-2.5-flash-latest)
+- LLM: Google Gemini 2.5 Flash (models/gemini-2.5-flash)
 - Framework: Agno 2.1.3
 - Embeddings: Google text-embedding-004 (via rag_service.py)
 - Tools: SupplyChainToolkit customizado

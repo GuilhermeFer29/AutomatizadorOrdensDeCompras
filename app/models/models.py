@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Dict, List, Optional
 
-from sqlalchemy import Column
+from sqlalchemy import Column, Text
 from sqlalchemy.dialects.mysql import JSON as MySQLJSON
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -148,8 +148,8 @@ class ChatMessage(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     session_id: int = Field(foreign_key="chat_sessions.id")
     sender: str  # 'human', 'agent', 'system'
-    content: str
-    metadata_json: Optional[str] = Field(default=None)  # JSON com confidence, agent_name, etc
+    content: str = Field(sa_column=Column(Text))  # TEXT para suportar respostas longas
+    metadata_json: Optional[str] = Field(default=None, sa_column=Column(Text))  # TEXT para metadados grandes
     criado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     session: ChatSession = Relationship()
