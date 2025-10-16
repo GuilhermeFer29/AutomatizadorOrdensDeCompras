@@ -7,3 +7,4 @@ models/*.py[cod]
 .env
 .DS_Store
 venv/
+model/
