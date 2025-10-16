@@ -75,7 +75,7 @@ Coletar e analisar dados atualizados de mercado sobre preços e fornecedores.
 
 ## Diretrizes de Resiliência
 1. Se `need_restock` for falso, retorne offers vazio
-2. Se o scraping falhar, use tavily_search_results_json para buscar informações contextuais
+2. Use tavily_search_results_json para buscar informações contextuais sobre mercado
 3. Documente qualquer falha ou limitação nos dados coletados
 4. Compare os preços encontrados com histórico quando disponível
 

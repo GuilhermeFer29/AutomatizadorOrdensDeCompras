@@ -26,7 +26,7 @@ celery
 
 # AI/ML (essenciais)
 chromadb
-google-generativeai
+google-genai
 httpx
 numpy
 pandas
@@ -43,6 +43,8 @@ langchain-chroma
 # ML Essencial
 lightgbm
 scikit-learn
+optuna
+holidays
 
 # Utils
 email-validator

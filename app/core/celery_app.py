@@ -6,7 +6,6 @@ import os
 from functools import lru_cache
 
 from celery import Celery
-from celery.schedules import crontab
 
 DEFAULT_BROKER_URL = "redis://broker:6379/0"
 
@@ -33,18 +32,7 @@ def create_celery_app() -> Celery:
         worker_disable_rate_limits=True,
     )
 
-    # ========================================================================
-    # SCRAPER AUTOMÁTICO DESATIVADO (2025-10-09)
-    # ========================================================================
-    # Para reativar, descomente o bloco abaixo:
-    celery_app.conf.beat_schedule = {
-        "scrape-mercadolivre-a-cada-8h": {
-            "task": "app.tasks.scraping.scrape_all_products",
-            "schedule": crontab(minute=0, hour="*/8"),
-        }
-    }
-    
-    # Beat schedule vazio (scraping manual apenas)
+    # Beat schedule vazio (sem tarefas agendadas)
     celery_app.conf.beat_schedule = {}
 
     celery_app.set_default()
@@ -58,4 +46,3 @@ celery_app: Celery = create_celery_app()
 import app.tasks.agent_tasks  # noqa: E402,F401
 import app.tasks.debug_tasks  # noqa: E402,F401
 import app.tasks.ml_tasks  # noqa: E402,F401
-import app.tasks.scraping_tasks  # noqa: E402,F401

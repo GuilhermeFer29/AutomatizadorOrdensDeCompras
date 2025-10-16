@@ -167,8 +167,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Setup do ambiente de desenvolvimento.")
     parser.add_argument(
         "action",
-        choices=["seed", "train", "all"],
-        help="Ação a ser executada: 'seed' para popular o banco, 'train' para treinar o modelo, 'all' para ambos.",
+        choices=["seed", "train", "generate_data", "all"],
+        help="Ação a ser executada: 'seed' para popular o banco, 'train' para treinar o modelo, 'generate_data' para dados sintéticos realistas, 'all' para seed+train.",
     )
     parser.add_argument("--num-products", type=int, default=200, help="Número de produtos a serem gerados.")
     parser.add_argument("--history-days", type=int, default=365, help="Número de dias de histórico de vendas.")
@@ -181,11 +181,38 @@ def main() -> None:
     if not args.skip_dotenv:
         load_dotenv()
 
+    if args.action == "generate_data":
+        generate_realistic_data_command()
+        return
+
     if args.action == "seed" or args.action == "all":
         run_seed(args.num_products, args.history_days)
 
     if args.action == "train" or args.action == "all":
         run_training()
+
+
+def generate_realistic_data_command():
+    """Gera dados sintéticos realistas para treinamento de ML."""
+    from generate_realistic_data import generate_realistic_data, clear_synthetic_data
+    
+    print("\n" + "=" * 70)
+    print("GERAÇÃO DE DADOS SINTÉTICOS PARA ML")
+    print("=" * 70)
+    
+    response = input("\n⚠️  Deseja remover dados sintéticos existentes? (s/N): ").strip().lower()
+    if response == 's':
+        clear_synthetic_data()
+        print()
+    
+    result = generate_realistic_data(days=365, seed=42)
+    
+    if result.get("success"):
+        print("\n" + "=" * 70)
+        print("✅ Dados sintéticos gerados com sucesso!")
+        print("=" * 70)
+        print("\n💡 Próximo passo: Execute o treinamento dos modelos:")
+        print("   docker compose exec api python scripts/train_all_models.py")
 
 
 if __name__ == "__main__":
