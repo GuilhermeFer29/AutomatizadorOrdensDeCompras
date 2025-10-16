@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import asdict
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
@@ -22,7 +21,6 @@ from app.core.database import engine
 from app.ml.training import METADATA_PATH, predict_prices
 from app.models.models import Produto
 from app.services.geolocation_service import calculate_distance
-from app.services.scraping_service import ScrapingOutcome, scrape_and_save_price
 from app.services.rag_service import query_product_catalog_with_google_rag
 
 # Importação condicional do Tavily
@@ -108,12 +106,6 @@ class ProductCatalogTool(Toolkit):
 # SUPPLY CHAIN TOOLKIT - Ferramentas especializadas
 # ============================================================================
 
-def _format_outcome(outcome: ScrapingOutcome) -> Dict[str, Any]:
-    payload = asdict(outcome)
-    payload["price"] = float(payload["price"]) if payload.get("price") is not None else None
-    return payload
-
-
 def _load_product_by_sku(sku: str) -> Produto:
     with Session(engine) as session:
         produto = session.exec(select(Produto).where(Produto.sku == sku)).first()
@@ -143,7 +135,6 @@ class SupplyChainToolkit(Toolkit):
         super().__init__(name="supply_chain_toolkit")
         self.register(self.lookup_product)
         self.register(self.load_demand_forecast)
-        self.register(self.scrape_latest_price)
         self.register(self.compute_distance)
         
         # Adiciona Tavily (recomendado para buscas contextuais)
@@ -210,25 +201,6 @@ class SupplyChainToolkit(Toolkit):
                 "forecast": forecast_payload,
             }
             return json.dumps(result, ensure_ascii=False)
-        except Exception as e:
-            return json.dumps({"error": str(e)})
-
-    def scrape_latest_price(self, sku: str) -> str:
-        """Executa o scraping no Mercado Livre e persiste o último preço coletado.
-
-        Args:
-            sku: O SKU único do produto.
-        
-        Returns:
-            JSON com resultado do scraping (preço, fornecedor, etc).
-        """
-        try:
-            produto = _load_product_by_sku(sku)
-            outcome = scrape_and_save_price(produto_id=produto.id)
-            payload = _format_outcome(outcome)
-            payload["produto_sku"] = produto.sku
-            payload["produto_nome"] = produto.nome
-            return json.dumps(payload, ensure_ascii=False)
         except Exception as e:
             return json.dumps({"error": str(e)})
 
