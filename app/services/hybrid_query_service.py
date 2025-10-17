@@ -223,7 +223,7 @@ def execute_sales_analysis(intent: Dict[str, Any], db_session: Session) -> Any:
         
         # Filtrar por mês se especificado
         if month_num:
-            query = query.where(func.month(VendasHistoricas.data) == month_num)
+            query = query.where(func.extract('month', VendasHistoricas.data_venda) == month_num)
         
         # Agrupar e ordenar
         query = (
@@ -328,10 +328,10 @@ def format_sql_results(results: Any, question: str) -> str:
     # Se é estatística
     if isinstance(results, dict) and "total_produtos" in results:
         return (
-            f"📊 **Estatísticas do Estoque:**\n\n"
-            f"• Total de produtos: {results['total_produtos']}\n"
-            f"• Produtos com estoque baixo: {results['produtos_estoque_baixo']}\n"
-            f"• Estoque total: {results['estoque_total_unidades']} unidades\n"
+            f"## Estatísticas do Estoque\n\n"
+            f"- Total de produtos: {results['total_produtos']}\n"
+            f"- Produtos com estoque baixo: {results['produtos_estoque_baixo']}\n"
+            f"- Estoque total: {results['estoque_total_unidades']} unidades\n"
         )
     
     # Se é lista de produtos
@@ -345,18 +345,19 @@ def format_sql_results(results: Any, question: str) -> str:
             total = len(estoque_baixo)
             limite = 10  # Limita a 10 produtos para não exceder tamanho da coluna
             
-            response = f"⚠️ **Encontrei {total} produto(s) com estoque baixo:**\n\n"
+            response = f"## Produtos com Estoque Baixo\n\n"
+            response += f"Encontrei {total} produto(s) com estoque abaixo do mínimo.\n\n"
             
             for p in estoque_baixo[:limite]:
                 diferenca = p.get("diferenca", 0)
                 response += (
-                    f"• **{p['nome']}** (SKU: {p['sku']})\n"
+                    f"- **{p['nome']}** (SKU: {p['sku']})\n"
                     f"  - Estoque: {p['estoque_atual']}/{p['estoque_minimo']} unidades\n"
                     f"  - Faltam: {abs(diferenca)} unidades\n\n"
                 )
             
             if total > limite:
-                response += f"\n_...e mais {total - limite} produto(s). Use filtros para refinar a busca._"
+                response += f"\n*Foram encontrados mais {total - limite} produto(s). Use filtros para refinar a busca.*\n"
             
             return response
         
@@ -364,15 +365,17 @@ def format_sql_results(results: Any, question: str) -> str:
         total = len(results)
         limite = 10
         
-        response = f"📦 **Encontrei {total} produto(s):**\n\n"
+        response = f"## Produtos Encontrados\n\n"
+        response += f"Total: {total} produto(s)\n\n"
+        
         for p in results[:limite]:
             response += (
-                f"• **{p['nome']}** (SKU: {p['sku']})\n"
+                f"- **{p['nome']}** (SKU: {p['sku']})\n"
                 f"  - Estoque: {p['estoque_atual']} unidades\n\n"
             )
         
         if total > limite:
-            response += f"\n_...e mais {total - limite} produto(s)._"
+            response += f"\n*Foram encontrados mais {total - limite} produto(s).*\n"
         
         return response
     
@@ -396,31 +399,58 @@ def combine_advanced_response(
     
     prompt = ChatPromptTemplate.from_template("""Você é um assistente inteligente especializado em gestão de compras industriais.
 
-Responda à pergunta do usuário de forma NATURAL, CONVERSACIONAL e COMPLETA, combinando todas as fontes de informação disponíveis.
+Responda à pergunta do usuário de forma NATURAL, CONVERSACIONAL e BEM FORMATADA.
 
 PERGUNTA: {question}
 
-📊 DADOS DE VENDAS HISTÓRICAS:
+DADOS DE VENDAS HISTÓRICAS:
 {sales_data}
 
-🎯 PREVISÕES DE MACHINE LEARNING:
+PREVISÕES DE MACHINE LEARNING:
 {ml_predictions}
 
-📦 DADOS DE PRODUTOS (SQL):
+DADOS DE PRODUTOS (SQL):
 {sql_data}
 
-📚 CONTEXTO ADICIONAL (RAG):
+CONTEXTO ADICIONAL (RAG):
 {rag_context}
 
-INSTRUÇÕES IMPORTANTES:
-1. Responda de forma natural e conversacional, como se estivesse falando com um colega
-2. Use os dados de vendas para identificar produtos mais populares
-3. Use as previsões ML para dar insights sobre tendências futuras
-4. Combine tudo em uma narrativa coerente
-5. Use emojis e formatação markdown para tornar a resposta mais agradável
-6. Se houver tendências de preço, mencione explicitamente
-7. Seja específico com números, datas e valores
-8. Finalize com uma recomendação ou insight útil
+REGRAS IMPORTANTES:
+- NÃO use emojis ou símbolos especiais
+- Use markdown limpo: títulos (##), listas (-), tabelas
+- Use NEGRITO apenas em palavras-chave importantes
+- Seja direto, objetivo e profissional
+- Tom amigável mas corporativo
+- Use tabelas para apresentar múltiplos dados
+
+INSTRUÇÕES DE CONTEÚDO:
+1. Comece com um resumo direto da resposta
+2. Apresente dados em tabelas organizadas
+3. Destaque números e valores de forma clara
+4. Se houver previsões ML, mencione tendências
+5. Finalize com recomendação prática
+
+FORMATO ESPERADO:
+
+## Análise de [Tema]
+
+[Resumo direto em 1-2 linhas sobre a resposta]
+
+### Principais Resultados
+
+| Produto | SKU | Vendas | Receita |
+|---------|-----|--------|---------|
+| Nome 1  | XXX | 100    | R$ XXX  |
+| Nome 2  | YYY | 90     | R$ YYY  |
+
+### Insights
+
+- Tendência principal: [descrição]
+- Oportunidade identificada: [descrição]
+
+### Recomendação
+
+[Recomendação prática e acionável, 2-3 linhas]
 
 Resposta:""")
     
@@ -442,22 +472,37 @@ Resposta:""")
 
 
 def format_sales_results(sales_data: list, question: str) -> str:
-    """Formata resultados de vendas de forma visual."""
+    """Formata resultados de vendas de forma visual com tabelas."""
     if not sales_data:
         return "Não encontrei dados de vendas para esse período."
     
-    response = "📈 **Análise de Vendas:**\n\n"
+    # Cabeçalho
+    response = "## Análise de Vendas\n\n"
+    response += f"Encontrei {len(sales_data)} produto(s) com dados de vendas.\n\n"
+    
+    # Tabela com top 10
+    response += "### Principais Produtos\n\n"
+    response += "| Posição | Produto | SKU | Vendas | Receita | Ticket Médio |\n"
+    response += "|---------|---------|-----|--------|---------|-------------|\n"
     
     for i, item in enumerate(sales_data[:10], 1):
         response += (
-            f"{i}. **{item['nome']}** (SKU: {item['sku']})\n"
-            f"   • Total vendido: {item['total_vendido']} unidades\n"
-            f"   • Receita: R$ {item['receita_total']:.2f}\n"
-            f"   • Ticket médio: R$ {item['ticket_medio']:.2f}\n\n"
+            f"| {i} | {item['nome'][:30]} | {item['sku']} | "
+            f"{item['total_vendido']} un | "
+            f"R$ {item['receita_total']:,.2f} | "
+            f"R$ {item['ticket_medio']:.2f} |\n"
         )
     
     if len(sales_data) > 10:
-        response += f"\n_...e mais {len(sales_data) - 10} produtos._"
+        response += f"\n*Foram encontrados mais {len(sales_data) - 10} produtos além dos listados acima.*\n"
+    
+    # Resumo
+    total_vendas = sum(item['total_vendido'] for item in sales_data[:10])
+    total_receita = sum(item['receita_total'] for item in sales_data[:10])
+    
+    response += f"\n### Resumo dos Top 10\n\n"
+    response += f"- Total de unidades vendidas: {total_vendas:,}\n"
+    response += f"- Receita total: R$ {total_receita:,.2f}\n"
     
     return response
 
@@ -473,7 +518,7 @@ def combine_with_llm(question: str, sql_data: Any, rag_response: str) -> str:
     
     prompt = ChatPromptTemplate.from_template("""Você é um assistente especializado em produtos industriais.
 
-Combine as informações estruturadas do banco de dados com o contexto semântico para responder a pergunta do usuário.
+Combine as informações para responder de forma CLARA, OBJETIVA e BEM FORMATADA.
 
 PERGUNTA: {question}
 
@@ -483,8 +528,29 @@ DADOS ESTRUTURADOS (SQL):
 CONTEXTO SEMÂNTICO (RAG):
 {rag_context}
 
-Gere uma resposta natural, completa e bem formatada que combine ambas as fontes de informação.
-Use markdown para formatação (negrito, listas, etc).
+REGRAS IMPORTANTES:
+- NÃO use emojis ou símbolos especiais
+- Use markdown limpo: títulos (##), listas (-), tabelas
+- Use NEGRITO apenas em palavras-chave importantes
+- Seja direto e objetivo
+- Tom profissional mas amigável
+- Use tabelas para comparações
+
+FORMATO:
+
+## [Título da Seção]
+
+[Texto explicativo direto e natural]
+
+### Detalhes
+
+| Item | Valor |
+|------|-------|
+| ...  | ...   |
+
+### Recomendação
+
+[Recomendação prática em 2-3 linhas]
 
 Resposta:""")
     

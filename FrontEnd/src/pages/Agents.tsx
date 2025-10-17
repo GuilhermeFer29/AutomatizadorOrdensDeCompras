@@ -8,6 +8,8 @@ import { Send, Loader2, CheckCircle2, AlertCircle, Info } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export default function Agents() {
   const [sessionId, setSessionId] = useState<number | null>(null);
@@ -49,6 +51,14 @@ export default function Agents() {
     } catch (error) {
       console.error('Erro ao executar ação:', error);
     }
+  };
+
+  const formatMessageContent = (content: string) => {
+    // Remove ## e ### mas mantém o texto
+    return content
+      .replace(/^###\s+/gm, '')
+      .replace(/^##\s+/gm, '')
+      .replace(/^#\s+/gm, '');
   };
 
   const renderMessageMetadata = (metadata: any, msg: any) => {
@@ -156,8 +166,49 @@ export default function Agents() {
                   : 'bg-secondary'
               )}
             >
-              <CardContent className="p-3">
-                <p className="whitespace-pre-wrap">{msg.content}</p>
+              <CardContent className="p-4">
+                {msg.sender === 'agent' ? (
+                  <div className="prose prose-sm max-w-none dark:prose-invert">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        table: ({ node, ...props }) => (
+                          <div className="overflow-x-auto my-4">
+                            <table className="min-w-full border-collapse border border-border" {...props} />
+                          </div>
+                        ),
+                        thead: ({ node, ...props }) => (
+                          <thead className="bg-muted" {...props} />
+                        ),
+                        th: ({ node, ...props }) => (
+                          <th className="border border-border px-4 py-2 text-left font-semibold" {...props} />
+                        ),
+                        td: ({ node, ...props }) => (
+                          <td className="border border-border px-4 py-2" {...props} />
+                        ),
+                        tr: ({ node, ...props }) => (
+                          <tr className="hover:bg-muted/50 transition-colors" {...props} />
+                        ),
+                        p: ({ node, ...props }) => (
+                          <p className="mb-2 leading-relaxed" {...props} />
+                        ),
+                        ul: ({ node, ...props }) => (
+                          <ul className="list-disc list-inside space-y-1 mb-2" {...props} />
+                        ),
+                        ol: ({ node, ...props }) => (
+                          <ol className="list-decimal list-inside space-y-1 mb-2" {...props} />
+                        ),
+                        strong: ({ node, ...props }) => (
+                          <strong className="font-semibold text-foreground" {...props} />
+                        ),
+                      }}
+                    >
+                      {formatMessageContent(msg.content)}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                )}
                 {msg.sender === 'agent' && renderMessageMetadata(msg.metadata, msg)}
               </CardContent>
             </Card>
