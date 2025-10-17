@@ -35,6 +35,14 @@ from sklearn.preprocessing import StandardScaler
 from sqlmodel import Session, select
 import optuna
 
+# 🎮 GPU Support
+try:
+    import xgboost as xgb
+    from xgboost import XGBRegressor
+    XGBOOST_AVAILABLE = True
+except ImportError:
+    XGBOOST_AVAILABLE = False
+
 from app.core.database import engine
 from app.ml.model_manager import ModelMetadata, save_model
 from app.models.models import PrecosHistoricos, Produto, VendasHistoricas
@@ -49,6 +57,25 @@ OPTUNA_TRIALS = 50  # Número de trials para otimização
 
 # Feriados brasileiros
 BR_HOLIDAYS = holidays.Brazil()
+
+
+def _check_gpu_available() -> bool:
+    """Verifica se GPU CUDA está disponível."""
+    if not XGBOOST_AVAILABLE:
+        return False
+    try:
+        # Tenta criar um modelo XGBoost com GPU (sintaxe XGBoost 3.0)
+        test_model = XGBRegressor(device='cuda:0', tree_method='hist', n_estimators=1)
+        # Testa com dados dummy
+        import numpy as np
+        X_test = np.random.rand(10, 5)
+        y_test = np.random.rand(10)
+        test_model.fit(X_test, y_test, verbose=0)
+        LOGGER.info("🎮 GPU CUDA detectada e disponível!")
+        return True
+    except Exception as e:
+        LOGGER.warning(f"GPU não disponível: {e}")
+        return False
 
 
 class InsufficientDataError(Exception):
@@ -269,9 +296,6 @@ def _optimize_hyperparameters(
                 X_train_fold,
                 y_train_fold,
                 eval_set=[(X_val_fold, y_val_fold)],
-                callbacks=[
-                    optuna.integration.LightGBMPruningCallback(trial, "rmse")
-                ],
             )
             
             y_pred = model.predict(X_val_fold)
@@ -346,27 +370,70 @@ def train_model_for_product(
             best_params["objective"] = "regression"
             best_params["metric"] = "rmse"
             best_params["verbosity"] = -1
+            # Criar modelo com hiperparâmetros otimizados
+            model = LGBMRegressor(**best_params)
         else:
-            # Hiperparâmetros padrão razoáveis
-            best_params = {
-                "objective": "regression",
-                "metric": "rmse",
-                "n_estimators": 500,
-                "learning_rate": 0.05,
-                "max_depth": 7,
-                "num_leaves": 50,
-                "min_child_samples": 20,
-                "subsample": 0.8,
-                "colsample_bytree": 0.8,
-                "reg_alpha": 0.1,
-                "reg_lambda": 0.1,
-                "random_state": 42,
-                "verbosity": -1,
-            }
+            # 🎮 Verificar se GPU está disponível
+            gpu_available = _check_gpu_available()
+            
+            if gpu_available and XGBOOST_AVAILABLE:
+                # 🚀 XGBOOST COM GPU (RTX 2060 SUPER)
+                LOGGER.info("🎮 Usando XGBoost com aceleração GPU CUDA")
+                best_params = {
+                    # GPU Settings (XGBoost 3.0 sintaxe moderna)
+                    "device": "cuda:0",  # 🚀 Usa GPU CUDA
+                    "tree_method": "hist",  # Método otimizado
+                    # Complexidade (ALTA QUALIDADE)
+                    "n_estimators": 1000,
+                    "learning_rate": 0.03,
+                    "max_depth": 10,
+                    "min_child_weight": 3,
+                    # Regularização
+                    "subsample": 0.85,
+                    "colsample_bytree": 0.85,
+                    "colsample_bylevel": 0.85,
+                    "reg_alpha": 0.05,
+                    "reg_lambda": 0.05,
+                    "gamma": 0.01,
+                    # Sistema
+                    "random_state": 42,
+                    "verbosity": 0,
+                }
+                model = XGBRegressor(**best_params)
+            else:
+                # 💻 LIGHTGBM COM CPU (ALTA QUALIDADE)
+                LOGGER.info("💻 Usando LightGBM com CPU multi-core")
+                best_params = {
+                    "objective": "regression",
+                    "metric": "rmse",
+                    "boosting_type": "gbdt",
+                    # Complexidade do modelo (ALTA QUALIDADE)
+                    "n_estimators": 1000,
+                    "learning_rate": 0.03,
+                    "max_depth": 10,
+                    "num_leaves": 100,
+                    "min_child_samples": 15,
+                    "min_child_weight": 0.001,
+                    # Regularização
+                    "subsample": 0.85,
+                    "subsample_freq": 1,
+                    "colsample_bytree": 0.85,
+                    "reg_alpha": 0.05,
+                    "reg_lambda": 0.05,
+                    # Critérios de split
+                    "min_gain_to_split": 0.01,
+                    "min_split_gain": 0.01,
+                    # Performance (todos os cores)
+                    "n_jobs": -1,
+                    "force_col_wise": True,
+                    # Sistema
+                    "random_state": 42,
+                    "verbosity": -1,
+                }
+                model = LGBMRegressor(**best_params)
         
         # Treinar modelo final
         LOGGER.info("Treinando modelo final...")
-        model = LGBMRegressor(**best_params)
         model.fit(X_train_full, y_train_full)
         
         # Avaliar no conjunto de teste

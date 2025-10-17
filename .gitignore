@@ -1,7 +1,6 @@
 __pycache__/
 data/*.csv
 data/*.json
-models/*.py[cod]
 .venv/
 .csv
 .env
