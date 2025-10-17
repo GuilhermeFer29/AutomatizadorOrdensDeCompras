@@ -60,7 +60,8 @@ params: { days_ahead: daysAhead }
 return response.data;
 },
 enabled: !!sku,
-retry: 1,
+retry: false, // Não retenta em caso de erro (evita múltiplas chamadas)
+staleTime: 1000 * 60 * 5, // Cache por 5 minutos
 });
 };
 

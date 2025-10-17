@@ -39,7 +39,7 @@ from app.models.models import PrecosHistoricos, Produto, VendasHistoricas
 LOGGER = structlog.get_logger(__name__)
 
 # Configurações
-MINIMUM_HISTORY_DAYS = 60  # Histórico mínimo necessário para previsão
+MINIMUM_HISTORY_DAYS = 30  # Histórico mínimo necessário para previsão (reduzido de 60 para 30)
 DEFAULT_FORECAST_HORIZON = 14  # Dias à frente por padrão
 
 # Feriados brasileiros
@@ -280,7 +280,7 @@ def predict_prices_for_product(
         return _fallback_prediction(sku, days_ahead)
     
     with Session(engine) as session:
-        # Carregar histórico recente
+        # Carregar histórico recente (60 dias para features de lag/rolling adequadas)
         produto, df_history = _load_recent_history(session, sku, days=60)
         
         # Inicializar deques com histórico
