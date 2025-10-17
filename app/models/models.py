@@ -106,8 +106,28 @@ class Fornecedor(SQLModel, table=True):
     cep: Optional[str] = Field(default=None, max_length=20)
     latitude: Optional[float] = Field(default=None)
     longitude: Optional[float] = Field(default=None)
+    confiabilidade: float = Field(default=0.9, ge=0.0, le=1.0)  # 0.0 a 1.0
+    prazo_entrega_dias: int = Field(default=7, ge=1, le=60)  # Dias para entrega
     criado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
     atualizado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
+
+
+class OfertaProduto(SQLModel, table=True):
+    """Ofertas de produtos por fornecedores (simulação de mercado)."""
+
+    __tablename__ = "ofertas_produtos"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    produto_id: int = Field(foreign_key="produtos.id", index=True)
+    fornecedor_id: int = Field(foreign_key="fornecedores.id", index=True)
+    preco_ofertado: Decimal = Field(ge=Decimal("0.01"))
+    estoque_disponivel: int = Field(default=100, ge=0)
+    validade_oferta: Optional[datetime] = Field(default=None)  # Data de expiração da oferta
+    criado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
+    atualizado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
+
+    produto: Produto = Relationship()
+    fornecedor: Fornecedor = Relationship()
 
 
 class OrdemDeCompra(SQLModel, table=True):
