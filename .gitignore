@@ -7,3 +7,4 @@ data/*.json
 .DS_Store
 venv/
 model/
+data/
