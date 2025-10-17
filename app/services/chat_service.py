@@ -4,6 +4,7 @@ from app.models.models import ChatSession, ChatMessage
 from app.agents.conversational_agent import (
     extract_entities,
     save_session_context,
+    get_conversational_agent,
 )
 from app.services.rag_service import embed_and_store_message
 
@@ -91,7 +92,7 @@ def process_user_message(session: Session, session_id: int, message_text: str):
     # QUALQUER OUTRA PERGUNTA → RAG responde naturalmente
     else:
         print(f"💬 Usando RAG para conversa natural: '{message_text}'")
-        response_content, metadata = handle_natural_conversation(session, message_text, entities)
+        response_content, metadata = handle_natural_conversation(session, session_id, message_text, entities)
     
     # 5. Salva resposta do agente
     agent_response = add_chat_message(
@@ -101,52 +102,95 @@ def process_user_message(session: Session, session_id: int, message_text: str):
     return agent_response
 
 
-def handle_natural_conversation(session: Session, user_question: str, entities: dict) -> tuple[str, dict]:
+def handle_natural_conversation(session: Session, session_id: int, user_question: str, entities: dict) -> tuple[str, dict]:
     """
-    Conversa natural usando sistema HÍBRIDO (RAG + SQL) - responde QUALQUER pergunta sobre produtos.
+    Conversa natural usando AGENTE CONVERSACIONAL (Agno) com delegação inteligente.
     
-    O sistema híbrido pode responder:
-    - Consultas estruturadas: estoque baixo, filtros, agregações (SQL)
-    - Consultas semânticas: descrições, comparações, características (RAG)
-    - Consultas complexas: combina SQL + RAG para resposta completa
+    O agente pode:
+    - Responder perguntas simples diretamente (RAG, previsões rápidas)
+    - Delegar análises complexas ao time de especialistas
+    - Manter contexto da conversa
+    - Conversar de forma natural e amigável
     """
-    from app.services.hybrid_query_service import execute_hybrid_query
     
     try:
-        print(f"💬 Sistema Híbrido (RAG + SQL) processando: '{user_question}'")
-        hybrid_response = execute_hybrid_query(user_question, session)
+        print(f"🤖 Agente Conversacional processando: '{user_question}'")
         
-        # Se sistema híbrido respondeu com sucesso
-        if hybrid_response and not hybrid_response.startswith("❌"):
-            return (
-                hybrid_response,
-                {
-                    "type": "hybrid_conversation",
-                    "query": user_question,
-                    "entities": entities,
-                    "confidence": "high"
-                }
-            )
+        # Busca histórico de mensagens da sessão (para contexto)
+        history = get_chat_history(session, session_id)
         
-        # Se não conseguiu responder
-        print("⚠️ Sistema híbrido não conseguiu processar a pergunta")
+        # Formata histórico para o agente (apenas últimas 5 mensagens para não sobrecarregar)
+        recent_history = history[-10:] if len(history) > 10 else history
+        context_text = "\n".join([
+            f"{msg.sender.upper()}: {msg.content[:200]}..." if len(msg.content) > 200 else f"{msg.sender.upper()}: {msg.content}"
+            for msg in recent_history[:-1]  # Exclui a última (que é a pergunta atual)
+        ])
+        
+        # Monta mensagem com contexto
+        if context_text:
+            full_question = f"""HISTÓRICO DA CONVERSA (para referência):
+{context_text}
+
+PERGUNTA ATUAL DO USUÁRIO:
+{user_question}
+
+Responda a pergunta atual considerando o contexto da conversa. Se o usuário se referir a algo mencionado antes, use o histórico para entender."""
+        else:
+            full_question = user_question
+        
+        # Cria o agente conversacional com contexto da sessão
+        agent = get_conversational_agent(session_id=str(session_id))
+        
+        # Executa o agente com contexto (ele decide automaticamente se delega ou não)
+        print(f"🔧 DEBUG - Pergunta completa enviada ao agente:")
+        print(f"   {full_question[:300]}...")
+        
+        response = agent.run(full_question)
+        
+        # DEBUG: Verifica se ferramentas foram usadas
+        if hasattr(response, 'messages'):
+            print(f"🔧 DEBUG - Mensagens do agente: {len(response.messages)}")
+            for idx, msg in enumerate(response.messages):
+                if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                    print(f"   Mensagem {idx}: {len(msg.tool_calls)} tool calls")
+                    for tc in msg.tool_calls:
+                        # tool_calls pode ser dict ou objeto
+                        if isinstance(tc, dict):
+                            tool_name = tc.get('function', {}).get('name', 'unknown')
+                            tool_args = str(tc.get('function', {}).get('arguments', ''))[:100]
+                        else:
+                            tool_name = getattr(tc.function, 'name', 'unknown')
+                            tool_args = str(getattr(tc.function, 'arguments', ''))[:100]
+                        print(f"      - {tool_name}({tool_args}...)")
+        
+        # Extrai conteúdo da resposta
+        if hasattr(response, 'content'):
+            agent_response = response.content
+        else:
+            agent_response = str(response)
+        
+        print(f"✅ Agente respondeu: {agent_response[:100]}...")
+        print(f"🔧 DEBUG - Resposta completa tem {len(agent_response)} chars")
+        
         return (
-            "Desculpe, não consegui encontrar informações sobre isso no catálogo. "
-            "Pode reformular sua pergunta ou ser mais específico?",
+            agent_response,
             {
-                "type": "hybrid_no_answer",
+                "type": "conversational_agent",
                 "query": user_question,
-                "entities": entities
+                "entities": entities,
+                "confidence": "high"
             }
         )
         
     except Exception as e:
-        print(f"❌ Erro no sistema híbrido: {e}")
+        print(f"❌ Erro no agente conversacional: {e}")
         import traceback
         traceback.print_exc()
+        
+        # Fallback: mensagem amigável
         return (
-            "Desculpe, ocorreu um erro ao processar sua pergunta. "
-            "Por favor, tente novamente ou reformule de outra forma.",
+            "Desculpe, tive um problema ao processar sua pergunta. "
+            "Pode tentar reformular ou ser mais específico sobre o produto que procura?",
             {
                 "type": "hybrid_error",
                 "query": user_question,

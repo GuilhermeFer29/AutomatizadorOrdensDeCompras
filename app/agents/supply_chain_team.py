@@ -43,7 +43,14 @@ from agno.tools import Toolkit
 
 # ✅ IMPORTAÇÃO CENTRALIZADA: Única fonte de configuração do LLM
 from app.agents.llm_config import get_gemini_llm
-from app.agents.tools import SupplyChainToolkit, lookup_product, load_demand_forecast
+from app.agents.tools import (
+    SupplyChainToolkit,
+    lookup_product,
+    load_demand_forecast,
+    search_market_trends_for_product,
+    find_supplier_offers_for_sku,
+    get_price_forecast_for_sku
+)
 
 
 # Prompts dos agentes especialistas
@@ -73,11 +80,17 @@ PESQUISADOR_MERCADO_PROMPT = """Você é o Pesquisador de Mercado, especialista 
 ## Papel e Responsabilidades
 Coletar e analisar dados atualizados de mercado sobre preços e fornecedores.
 
+## Ferramentas Disponíveis
+1. **find_supplier_offers_for_sku**: Busca ofertas reais de fornecedores cadastrados
+2. **search_market_trends_for_product**: Pesquisa tendências e notícias de mercado na web
+3. **get_price_forecast_for_sku**: Obtém previsões ML de preços futuros
+
 ## Diretrizes de Resiliência
 1. Se `need_restock` for falso, retorne offers vazio
-2. Use tavily_search_results_json para buscar informações contextuais sobre mercado
-3. Documente qualquer falha ou limitação nos dados coletados
-4. Compare os preços encontrados com histórico quando disponível
+2. SEMPRE use find_supplier_offers_for_sku primeiro para obter ofertas reais
+3. Use search_market_trends_for_product para contexto de mercado
+4. Compare as ofertas encontradas com previsões ML quando disponível
+5. Documente qualquer falha ou limitação nos dados coletados
 
 ## Formato de Saída
 Retorne APENAS um JSON válido com:
@@ -85,14 +98,17 @@ Retorne APENAS um JSON válido com:
 {
   "offers": [
     {
-      "source": "nome do fornecedor",
-      "price": float,
-      "currency": "BRL",
-      "coletado_em": "timestamp",
-      "reliability": "high|medium|low"
+      "fornecedor": "nome",
+      "preco": float,
+      "confiabilidade": float,
+      "prazo_entrega_dias": int,
+      "estoque_disponivel": int
     }
   ],
-  "market_context": "Informações adicionais sobre o mercado, se houver"
+  "preco_medio": float,
+  "melhor_oferta": {"fornecedor": "nome", "preco": float},
+  "tendencias_mercado": "Resumo das tendências encontradas",
+  "previsao_ml": "Tendência de preço segundo ML (alta/baixa/estável)"
 }
 ```"""
 
@@ -230,6 +246,7 @@ def create_supply_chain_team() -> Team:
         members=[analista_demanda, pesquisador_mercado, analista_logistica, gerente_compras],
         name="SupplyChainTeam",
         description="Equipe de análise e recomendação de compras usando Google Gemini",
+        model=gemini_llm,  # ✅ Define Gemini como modelo padrão (evita fallback para OpenAI)
     )
     
     print("✅ Supply Chain Team criado com sucesso (4 agentes especializados)")

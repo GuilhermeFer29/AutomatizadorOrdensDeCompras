@@ -155,8 +155,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Setup do ambiente de desenvolvimento.")
     parser.add_argument(
         "action",
-        choices=["seed", "generate_data"],
-        help="Ação a ser executada: 'seed' para popular o banco, 'generate_data' para dados sintéticos realistas.",
+        choices=["seed", "generate_data", "generate_suppliers"],
+        help="Ação: 'seed' = popular banco, 'generate_data' = dados ML, 'generate_suppliers' = mercado sintético",
     )
     parser.add_argument("--num-products", type=int, default=200, help="Número de produtos a serem gerados.")
     parser.add_argument("--history-days", type=int, default=365, help="Número de dias de histórico de vendas.")
@@ -171,6 +171,10 @@ def main() -> None:
 
     if args.action == "generate_data":
         generate_realistic_data_command()
+        return
+    
+    if args.action == "generate_suppliers":
+        generate_suppliers_command()
         return
 
     if args.action == "seed":
@@ -198,6 +202,25 @@ def generate_realistic_data_command():
         print("=" * 70)
         print("\n💡 Próximo passo: Execute o treinamento dos modelos:")
         print("   docker compose exec api python scripts/train_all_models.py")
+
+
+def generate_suppliers_command():
+    """Gera fornecedores sintéticos e ofertas de mercado."""
+    from generate_synthetic_suppliers import main as generate_suppliers_main
+    
+    print("\n" + "=" * 70)
+    print("GERAÇÃO DE MERCADO SINTÉTICO - Fornecedores e Ofertas")
+    print("=" * 70)
+    print()
+    
+    generate_suppliers_main()
+    
+    print("\n💡 Os agentes agora podem:")
+    print("   - Comparar preços entre fornecedores")
+    print("   - Analisar trade-offs (preço vs confiabilidade vs prazo)")
+    print("   - Pesquisar ofertas competitivas")
+    print("   - Recomendar compras otimizadas")
+    print()
 
 
 if __name__ == "__main__":
