@@ -9,3 +9,4 @@ venv/
 model/
 data/
 docs/
+data/chroma
