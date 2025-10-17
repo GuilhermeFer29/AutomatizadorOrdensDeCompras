@@ -45,7 +45,7 @@ from app.models.models import Produto, ChatContext
 from agno.agent import Agent
 
 # ✅ IMPORTAÇÕES: LLM configs e ferramentas
-from app.agents.llm_config import get_gemini_for_nlu, get_gemini_for_creative
+from app.agents.llm_config import get_gemini_for_nlu, get_gemini_for_decision_making
 from app.agents.tools import (
     ProductCatalogTool,
     SupplyChainToolkit,
@@ -644,11 +644,11 @@ def get_conversational_agent(session_id: str) -> Agent:
         "- `get_product_info`: Busca informações sobre produtos no catálogo",
         "- `get_sales_analysis`: Top produtos por vendas (use para 'qual mais vendeu')",
         "- `get_price_forecast_for_sku`: Obtém previsões ML de preços (7 dias)",
-        "- `find_supplier_offers_for_sku`: Lista ofertas de fornecedores para um SKU",
+        "- `find_supplier_offers` (SupplyChainToolkit): Lista ofertas de fornecedores",
         "  * Use quando perguntar apenas sobre ofertas/fornecedores",
         "  * Retorna: lista de fornecedores com preços e prazos",
-        "- `lookup_product`: Metadados técnicos do banco de dados",
-        "- `load_demand_forecast`: Previsões de demanda (14 dias)",
+        "- `lookup_product` (SupplyChainToolkit): Metadados técnicos do banco",
+        "- `load_demand_forecast` (SupplyChainToolkit): Previsões de demanda (14 dias)",
         "",
         "## USO DE CONTEXTO E REFERÊNCIAS:",
         "- Você recebe o histórico da conversa no início da pergunta",
@@ -670,14 +670,14 @@ def get_conversational_agent(session_id: str) -> Agent:
         "- Sempre explique ao usuário quando estiver delegando: 'Vou consultar meu time de especialistas...'",
     ]
     
-    # Configuração do agente com temperatura balanceada
+    # Configuração do agente com LLM otimizado para decisões
     agent = Agent(
         name="ConversationalAssistant",
         description="Assistente conversacional para gerenciamento de compras e estoque",
         
-        # Modelo balanceado (temp=0.3) - determinístico mas natural
-        # Temperature baixa = mais propenso a usar ferramentas corretamente
-        model=get_gemini_for_nlu(),  # temp=0.1 - mais determinístico
+        # 🎯 Pro temp=0.1 - UX é crítica, precisa de raciocínio profundo
+        # Garante uso correto de ferramentas e respostas precisas
+        model=get_gemini_for_decision_making(),  # Pro para interação com usuário
         
         # Instruções detalhadas para conversação natural
         instructions=instructions,
@@ -686,9 +686,8 @@ def get_conversational_agent(session_id: str) -> Agent:
         tools=[
             ProductCatalogTool(),             # Principal: Busca RAG no catálogo
             get_price_forecast_for_sku,       # Rápido: Previsão ML 7 dias
-            find_supplier_offers_for_sku,     # Busca: Ofertas de fornecedores
             run_full_purchase_analysis,       # DELEGAÇÃO: Time de especialistas (use para análises complexas)
-            SupplyChainToolkit(),             # Avançado: Análises manuais
+            SupplyChainToolkit(),             # Avançado: Análises manuais (inclui find_supplier_offers)
         ],
         
         # Configurações de comportamento

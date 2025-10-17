@@ -8,3 +8,4 @@ data/*.json
 venv/
 model/
 data/
+docs/

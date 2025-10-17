@@ -141,6 +141,61 @@ def get_gemini_for_creative() -> Gemini:
     return get_gemini_llm(temperature=0.7)
 
 
+def get_gemini_for_fast_agents() -> Gemini:
+    """
+    Retorna Gemini 2.5 Flash otimizado para agentes intermediários rápidos.
+    
+    Configuração especializada:
+    - Modelo: gemini-2.5-flash (velocidade máxima)
+    - Temperature: 0.2 (determinístico mas não rígido)
+    - Ideal para: Agentes especialistas que precisam processar dados rapidamente
+    
+    Casos de uso:
+    - AnalistaDemanda: Análise de estoque e previsões
+    - PesquisadorMercado: Busca de ofertas e preços
+    - AnalistaLogistica: Cálculos de distância e prazos
+    
+    Returns:
+        Gemini: Instância Flash otimizada para velocidade.
+    
+    Performance:
+        - ~2-3x mais rápido que Pro
+        - Custo reduzido
+        - Precisão adequada para tarefas estruturadas
+    """
+    return get_gemini_llm(
+        temperature=0.2,
+        model_id="models/gemini-2.5-flash"
+    )
+
+
+def get_gemini_for_decision_making() -> Gemini:
+    """
+    Retorna Gemini 2.5 Pro otimizado para tomada de decisões críticas.
+    
+    Configuração especializada:
+    - Modelo: gemini-2.5-pro (raciocínio profundo)
+    - Temperature: 0.1 (máxima precisão e consistência)
+    - Ideal para: Decisões finais que impactam negócios
+    
+    Casos de uso:
+    - GerenteCompras: Decisão final de aprovar/rejeitar compra
+    - ConversationalAgent: Interação com usuário (UX crítica)
+    
+    Returns:
+        Gemini: Instância Pro otimizada para decisões.
+    
+    Performance:
+        - Mais lento mas muito mais preciso
+        - Melhor raciocínio multi-etapas
+        - Reduz erros em decisões críticas
+    """
+    return get_gemini_llm(
+        temperature=0.1,
+        model_id="models/gemini-2.5-pro"
+    )
+
+
 def get_gemini_for_advanced_tasks() -> Gemini:
     """
     Retorna uma instância do Gemini otimizada para tarefas complexas e avançadas.

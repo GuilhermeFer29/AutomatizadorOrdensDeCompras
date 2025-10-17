@@ -15,7 +15,7 @@ import os
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
-from agno.tools import Toolkit
+from agno.tools import Toolkit, tool  # ✅ Importar decorator @tool para cache nativo
 from sqlmodel import Session, select
 from app.core.database import engine
 from app.ml.prediction import predict_prices_for_product
@@ -66,10 +66,17 @@ class ProductCatalogTool(Toolkit):
     
     def get_product_info(self, user_question: str) -> str:
         """
-        Busca informações detalhadas sobre produtos para responder a pergunta do usuário.
+        FERRAMENTA PRINCIPAL: Busca produtos no catálogo usando RAG semântico.
         
-        Esta ferramenta usa RAG (Retrieval Augmented Generation) para encontrar
-        produtos relevantes no catálogo e gerar uma resposta precisa e contextual.
+        QUANDO USAR (80% das perguntas):
+        "Tem parafusadeira?" → SIM, use esta ferramenta
+        "Qual produto mais vendeu?" → NÃO, use get_sales_analysis
+        "Mostre cabos HDMI" → SIM, use esta ferramenta
+        "Quanto custa martelo?" → SIM, use esta ferramenta
+        "Estoque de SKU_001" → SIM, use esta ferramenta
+        
+        Esta ferramenta é a PRIMEIRA escolha para informações ESTÁTICAS sobre produtos.
+        Para análises de VENDAS ou HISTÓRICO, use get_sales_analysis. resposta precisa e contextual.
         
         Args:
             user_question: A pergunta original e completa do usuário sobre o produto.
@@ -207,6 +214,7 @@ class SupplyChainToolkit(Toolkit):
         super().__init__(name="supply_chain_toolkit")
         self.register(self.lookup_product)
         self.register(self.load_demand_forecast)
+        self.register(self.find_supplier_offers)
         self.register(self.compute_distance)
         
         # Adiciona Tavily (recomendado para buscas contextuais)
@@ -238,14 +246,23 @@ class SupplyChainToolkit(Toolkit):
             return json.dumps({"error": str(e)})
 
     def load_demand_forecast(self, sku: str, horizon_days: int = DEFAULT_FORECAST_HORIZON) -> str:
-        """Carrega previsões futuras usando o modelo global LightGBM.
+        """
+        ⚡ OTIMIZADO COM CACHE: Previsões ML armazenadas para consultas repetidas.
+        
+        📊 IMPORTANTE: Esta ferramenta retorna previsões de PREÇO (não quantidade).
+        Use a tendência de preço como proxy para decisões de compra:
+        - Preço subindo → Comprar agora pode ser vantajoso
+        - Preço caindo → Esperar pode economizar
+        - Preço estável → Decisão baseada em outros fatores
+        
+        Para previsão de QUANTIDADE vendida, combine com get_sales_analysis.
 
         Args:
             sku: O SKU único do produto.
-            horizon_days: Quantidade de dias futuros para a previsão de demanda (padrão: 14).
+            horizon_days: Quantidade de dias futuros (padrão: 14).
         
         Returns:
-            JSON com a previsão de demanda.
+            JSON com previsões ML de preço futuro e métricas do modelo.
         """
         try:
             produto = _load_product_by_sku(sku)
@@ -279,6 +296,63 @@ class SupplyChainToolkit(Toolkit):
             return json.dumps(result, ensure_ascii=False)
         except Exception as e:
             return json.dumps({"error": str(e)})
+    
+    def find_supplier_offers(self, sku: str) -> str:
+        """
+        Busca todas as ofertas de fornecedores para um produto específico.
+        
+        Args:
+            sku: SKU do produto
+        
+        Returns:
+            JSON com lista de ofertas (fornecedor, preço, confiabilidade, prazo)
+        """
+        try:
+            with Session(engine) as session:
+                # Buscar produto
+                produto = session.exec(select(Produto).where(Produto.sku == sku)).first()
+                if not produto:
+                    return json.dumps({
+                        "error": f"Produto com SKU '{sku}' não encontrado"
+                    }, ensure_ascii=False)
+                
+                # Buscar ofertas com join nos fornecedores
+                ofertas = session.exec(
+                    select(OfertaProduto, Fornecedor)
+                    .where(OfertaProduto.produto_id == produto.id)
+                    .join(Fornecedor, OfertaProduto.fornecedor_id == Fornecedor.id)
+                    .order_by(OfertaProduto.preco_ofertado)
+                ).all()
+                
+                if not ofertas:
+                    return json.dumps({
+                        "sku": sku,
+                        "produto": produto.nome,
+                        "ofertas": [],
+                        "mensagem": "Nenhuma oferta encontrada"
+                    }, ensure_ascii=False)
+                
+                # Formatar ofertas
+                ofertas_formatadas = []
+                for oferta, fornecedor in ofertas:
+                    ofertas_formatadas.append({
+                        "fornecedor": fornecedor.nome,
+                        "preco": float(oferta.preco_ofertado),
+                        "confiabilidade": fornecedor.confiabilidade,
+                        "prazo_entrega_dias": fornecedor.prazo_entrega_dias,
+                        "estoque_disponivel": oferta.estoque_disponivel
+                    })
+                
+                return json.dumps({
+                    "sku": sku,
+                    "produto": produto.nome,
+                    "total_ofertas": len(ofertas_formatadas),
+                    "ofertas": ofertas_formatadas,
+                    "preco_medio": round(sum(o["preco"] for o in ofertas_formatadas) / len(ofertas_formatadas), 2)
+                }, ensure_ascii=False)
+                
+        except Exception as e:
+            return json.dumps({"error": str(e)}, ensure_ascii=False)
 
     def tavily_search(self, query: str) -> str:
         """Busca informações atualizadas na web sobre fornecedores, tendências de mercado.
@@ -341,8 +415,17 @@ class SupplyChainToolkit(Toolkit):
 # FERRAMENTAS AVANÇADAS - Fase 2: Capacitação dos Agentes
 # ============================================================================
 
+@tool(
+    name="get_price_forecast_for_sku",
+    description="Obtém previsões ML de preços futuros para um produto específico usando LightGBM",
+    cache_results=True,      # ⚡ Cache nativo do Agno
+    cache_dir="/tmp/agno_cache",  # Diretório de cache
+    cache_ttl=3600           # 1 hora de cache (previsões mudam pouco)
+)
 def get_price_forecast_for_sku(sku: str, days_ahead: int = 7) -> str:
     """
+    ⚡ COM CACHE NATIVO AGNO: Previsões são cacheadas por 1 hora.
+    
     Use esta ferramenta para obter a previsão de preços futuros para um SKU específico.
     
     Args:
@@ -431,8 +514,17 @@ def search_market_trends_for_product(product_name: str) -> str:
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
+@tool(
+    name="find_supplier_offers_for_sku",
+    description="Busca ofertas de fornecedores para um produto, ordenadas por melhor preço",
+    cache_results=True,      # ⚡ Cache nativo do Agno
+    cache_dir="/tmp/agno_cache",
+    cache_ttl=1800           # 30 min de cache (ofertas podem mudar mais)
+)
 def find_supplier_offers_for_sku(sku: str) -> str:
     """
+    ⚡ COM CACHE NATIVO AGNO: Ofertas cacheadas por 30 minutos.
+    
     Use esta ferramenta para encontrar todas as ofertas de fornecedores 
     para um produto específico, ordenadas por melhor preço.
     
@@ -504,8 +596,17 @@ def find_supplier_offers_for_sku(sku: str) -> str:
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
+@tool(
+    name="run_full_purchase_analysis",
+    description="Delega análise completa de compra ao Time de Especialistas (4 agentes)",
+    cache_results=True,      # ⚡ Cache nativo do Agno
+    cache_dir="/tmp/agno_cache",
+    cache_ttl=600            # 10 min (análises precisam ser mais atualizadas)
+)
 def run_full_purchase_analysis(sku: str, reason: str = "reposição de estoque") -> str:
     """
+    ⚡ COM CACHE NATIVO AGNO: Análises cacheadas por 10 minutos.
+    
     Use esta ferramenta para perguntas complexas que exigem uma recomendação 
     de compra completa, como 'Devo comprar o produto X?', 'Analise a necessidade 
     de reposição para o SKU Y', ou 'Faça uma recomendação de compra completa para Z'.
