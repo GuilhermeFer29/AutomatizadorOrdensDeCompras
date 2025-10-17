@@ -173,8 +173,12 @@ def get_gemini_for_decision_making() -> Gemini:
     """
     Retorna Gemini 2.5 Pro otimizado para tomada de decisões críticas.
     
+    ⚠️ MODO DE QUOTA REDUZIDA ATIVO:
+    Temporariamente usando Flash em vez de Pro devido a limites de quota.
+    Para usar Pro: defina GEMINI_USE_PRO=true no .env e tenha plano pago.
+    
     Configuração especializada:
-    - Modelo: gemini-2.5-pro (raciocínio profundo)
+    - Modelo: gemini-2.5-flash (temporário - quota maior)
     - Temperature: 0.1 (máxima precisão e consistência)
     - Ideal para: Decisões finais que impactam negócios
     
@@ -183,17 +187,27 @@ def get_gemini_for_decision_making() -> Gemini:
     - ConversationalAgent: Interação com usuário (UX crítica)
     
     Returns:
-        Gemini: Instância Pro otimizada para decisões.
+        Gemini: Instância Flash otimizada para decisões (temporário).
     
     Performance:
-        - Mais lento mas muito mais preciso
-        - Melhor raciocínio multi-etapas
-        - Reduz erros em decisões críticas
+        - Flash: 1500 req/dia (free tier) vs Pro: 50 req/dia
+        - Para voltar ao Pro: upgrade para plano pago ou defina GEMINI_USE_PRO=true
     """
-    return get_gemini_llm(
-        temperature=0.1,
-        model_id="models/gemini-2.5-pro"
-    )
+    # 🚨 WORKAROUND QUOTA: Usa Flash se quota baixa ou variável não definida
+    use_pro = os.getenv("GEMINI_USE_PRO", "false").lower() == "true"
+    
+    if use_pro:
+        print("⚠️ GEMINI_USE_PRO=true: Usando Pro (certifique-se de ter quota suficiente)")
+        return get_gemini_llm(
+            temperature=0.1,
+            model_id="models/gemini-2.5-pro"
+        )
+    else:
+        print("🔧 GEMINI_USE_PRO=false: Usando Flash para evitar quota exceeded")
+        return get_gemini_llm(
+            temperature=0.1,  # Mesma temperature baixa para precisão
+            model_id="models/gemini-2.5-flash"  # Flash tem quota 30x maior
+        )
 
 
 def get_gemini_for_advanced_tasks() -> Gemini:

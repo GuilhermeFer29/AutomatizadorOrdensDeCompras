@@ -255,7 +255,8 @@ export function PriceChart({ onModelMetricsChange }: PriceChartProps = {}) {
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              Modelo de ML não treinado para este produto. Use o endpoint POST /ml/train/{selectedSku} para treinar.
+              {/* @ts-ignore */}
+              {predictionsError?.response?.data?.detail || 'Erro ao carregar previsões. O produto pode ter histórico insuficiente (mínimo 30 dias) ou modelo não treinado.'}
             </AlertDescription>
           </Alert>
         ) : chartData.length === 0 ? (
