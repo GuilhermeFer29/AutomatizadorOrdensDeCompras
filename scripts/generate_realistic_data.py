@@ -98,36 +98,49 @@ def _generate_price_series(
     
     prices = []
     
+    # Iniciar com preço base (preço do dia 0)
+    current_price = base_price
+    
     for day in range(days):
         current_date = start_date + timedelta(days=day)
         t = day / days  # Tempo normalizado [0, 1]
         
-        # 1. Tendência: +10% ao longo do ano
-        trend = base_price * (1 + 0.10 * t)
+        # 1. Tendência SUAVE: +0.02% por dia (+7.3% ao ano)
+        trend_factor = 1.0002  # Crescimento diário de 0.02%
         
-        # 2. Sazonalidade anual (ciclo senoidal completo)
-        annual_seasonality = 0.08 * np.sin(2 * np.pi * t)  # ±8% variação
+        # 2. Sazonalidade anual (MUITO SUTIL)
+        annual_cycle = 0.015 * np.sin(2 * np.pi * t)  # ±1.5% ao longo do ano
         
-        # 3. Sazonalidade semanal (picos sutis nos finais de semana)
-        week_position = current_date.weekday() / 7.0
-        weekly_seasonality = 0.02 * np.sin(2 * np.pi * week_position)  # ±2%
+        # 3. Variação de fim de semana (MÍNIMA)
+        weekend_variation = 0.0
+        if _is_weekend(current_date):
+            weekend_variation = np.random.uniform(-0.005, 0.01)  # -0.5% a +1%
         
-        # 4. Picos em datas comemorativas
+        # 4. Datas comemorativas (MODERADO)
         commemorative_boost = 0.0
-        if _is_commemorative(current_date):
-            commemorative_boost = np.random.uniform(0.05, 0.15)  # +5% a +15%
+        if _is_commemorative(current_date, tolerance_days=3):
+            commemorative_boost = np.random.uniform(0.02, 0.05)  # +2% a +5%
         
-        # 5. Ruído diário
-        daily_noise = np.random.normal(0, 0.03)  # ±3% desvio padrão
+        # 5. Ruído diário REALISTA (PEQUENO)
+        # Random walk: movimento browniano com drift
+        daily_change = np.random.normal(0, 0.015)  # ±1.5% desvio padrão
         
-        # Preço final
-        multiplier = 1 + annual_seasonality + weekly_seasonality + commemorative_boost + daily_noise
-        price = trend * multiplier
+        # APLICAR MUDANÇAS DE FORMA INCREMENTAL (Random Walk)
+        # Novo preço = preço anterior × (1 + mudanças pequenas)
+        price_multiplier = (
+            trend_factor *  # Tendência suave
+            (1 + annual_cycle) *  # Ciclo anual
+            (1 + weekend_variation) *  # Fim de semana
+            (1 + commemorative_boost) *  # Datas especiais
+            (1 + daily_change)  # Random walk
+        )
         
-        # Garantir preço mínimo
-        price = max(price, base_price * 0.5)
+        current_price = current_price * price_multiplier
         
-        prices.append((current_date, round(price, 2)))
+        # Limites de sanidade (não permite variações absurdas)
+        current_price = np.clip(current_price, base_price * 0.7, base_price * 1.5)
+        
+        prices.append((current_date, round(float(current_price), 2)))
     
     return prices
 

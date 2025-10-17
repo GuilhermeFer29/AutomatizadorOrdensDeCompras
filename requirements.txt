@@ -42,6 +42,7 @@ langchain-chroma
 
 # ML Essencial
 lightgbm
+xgboost  # 🎮 GPU-accelerated gradient boosting
 scikit-learn
 optuna
 holidays

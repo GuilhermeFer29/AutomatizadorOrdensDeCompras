@@ -26,7 +26,14 @@ services:
       - ./app:/app/app
       - ./scripts:/app/scripts
       - ./data:/app/data
-      - ./models:/app/models
+      - ./model:/app/model
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   worker:
     build:
@@ -44,11 +51,17 @@ services:
         condition: service_healthy
     command: celery -A app.core.celery_app.celery_app worker --loglevel=info
     volumes:
-      - ./app:/app/app  # Removido :ro para permitir gravação
-      - ./scripts:/app/scripts  # Removido :ro para permitir gravação
-      - ./data:/app/data  # Removido :ro para permitir gravação
-      - models_data:/models
-      - reports_data:/reports
+      - ./app:/app/app
+      - ./scripts:/app/scripts
+      - ./data:/app/data
+      - ./model:/app/model
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   beat:
     build:
@@ -63,8 +76,9 @@ services:
         condition: service_healthy
     command: celery -A app.core.celery_app.celery_app beat --loglevel=info
     volumes:
-      - ./app:/app/app  # Removido :ro para permitir gravação
-      - ./scripts:/app/scripts  # Removido :ro para permitir gravação
+      - ./app:/app/app
+      - ./scripts:/app/scripts
+      - ./model:/app/model
 
   db:
     image: mysql:8.0
@@ -100,6 +114,4 @@ services:
 
 volumes:
   postgres_data:
-  models_data:
-  reports_data:
 

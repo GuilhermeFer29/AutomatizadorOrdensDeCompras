@@ -311,16 +311,31 @@ def predict_prices_for_product(
             feature_values = [features_dict[col] for col in metadata.features]
             feature_array = np.array(feature_values).reshape(1, -1)
             
-            # Prever
-            predicted_price = model.predict(feature_array)[0]
+            # 🔧 CORREÇÃO CRÍTICA: Normalizar features com o scaler treinado
+            feature_array_scaled = scaler.transform(feature_array)
+            
+            # 🔍 DEBUG: Log das features (apenas primeiros 5 passos)
+            if step <= 5:
+                LOGGER.debug(
+                    f"Step D+{step}",
+                    date=target_date.isoformat(),
+                    price_lag_1=features_dict.get('price_lag_1', 0.0),
+                    price_lag_7=features_dict.get('price_lag_7', 0.0),
+                    price_rolling_mean_7=features_dict.get('price_rolling_mean_7', 0.0),
+                    last_3_prices=list(price_history)[-3:]
+                )
+            
+            # Prever usando features normalizadas
+            predicted_price = model.predict(feature_array_scaled)[0]
             predicted_price = max(predicted_price, 0.0)  # Garantir não-negativo
             
             # Adicionar aos resultados
             forecast_dates.append(target_date.isoformat())
             forecast_prices.append(round(float(predicted_price), 2))
             
-            # Atualizar histórico para próxima iteração (autorregressão)
+            # 🔄 ATUALIZAÇÃO AUTORREGRESSIVA: Usar previsão como input para próximo passo
             price_history.append(predicted_price)
+            
             # Quantidade: usar média recente como estimativa
             avg_quantity = np.mean(list(quantity_history)[-7:])
             quantity_history.append(avg_quantity)
