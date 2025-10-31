@@ -6,12 +6,12 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.services.agent_service import execute_supply_chain_analysis
+from app.services.agent_service import run_purchase_analysis
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
 
-@router.get("/execute-analysis/{sku}")
+@router.post("/execute-analysis/{sku}")
 def execute_analysis(
     sku: str,
     inquiry_reason: Optional[str] = Query(default=None, description="Contexto opcional da requisição"),
@@ -19,7 +19,7 @@ def execute_analysis(
     """Dispara a análise colaborativa dos agentes para o SKU informado."""
 
     try:
-        result = execute_supply_chain_analysis(sku=sku, inquiry_reason=inquiry_reason)
+        result = run_purchase_analysis(sku=sku, inquiry_reason=inquiry_reason)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001 - propagar erro interno com status 500
