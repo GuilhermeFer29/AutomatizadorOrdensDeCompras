@@ -231,13 +231,20 @@ def initialize_rag_on_startup() -> dict:
             time.sleep(retry_delay)
     
     # Se chegou aqui, todas as tentativas falharam
-    logger.error("=" * 80)
-    logger.error("❌ FALHA NA INICIALIZAÇÃO DO RAG")
-    logger.error(f"   • Erro: {result['message']}")
-    logger.error(f"   • Tentativas: {max_retries}")
-    logger.error("=" * 80)
+    logger.warning("=" * 80)
+    logger.warning("⚠️ RAG NÃO INICIALIZADO (Esperado se não há produtos)")
+    logger.warning(f"   • Motivo: {result['message']}")
+    logger.warning(f"   • Tentativas: {max_retries}")
+    logger.warning("   • A API continuará funcionando normalmente")
+    logger.warning("=" * 80)
     
-    return result
+    # Retornar warning em vez de erro para não bloquear a API
+    return {
+        "status": "warning",
+        "message": result['message'],
+        "products_indexed": 0,
+        "duration_seconds": 0
+    }
 
 
 def trigger_rag_sync() -> dict:

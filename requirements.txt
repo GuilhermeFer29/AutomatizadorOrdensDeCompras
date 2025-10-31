@@ -51,4 +51,11 @@ holidays
 email-validator
 reportlab
 faker
-toolkit
+passlib[bcrypt,argon2]
+python-jose[cryptography]
+
+# Testing
+pytest
+pytest-asyncio
+pytest-cov
+httpx

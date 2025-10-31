@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useChat } from '@/hooks/useChat';
+import { useLocation } from 'react-router-dom';
 import api from '@/services/api';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -16,13 +17,19 @@ export default function Agents() {
   const [inputValue, setInputValue] = useState('');
   const { messages, sendMessage, isConnected } = useChat(sessionId);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const location = useLocation();
 
   useEffect(() => {
     // Cria ou obtém uma sessão de chat ao carregar o componente
     api.post('/api/chat/sessions').then(response => {
       setSessionId(response.data.id);
     });
-  }, []);
+
+    // Pré-preencher a mensagem se vindo de um alerta
+    if (location.state?.prefillMessage) {
+      setInputValue(location.state.prefillMessage);
+    }
+  }, [location.state?.prefillMessage]);
 
   useEffect(() => {
     // Rola para a última mensagem

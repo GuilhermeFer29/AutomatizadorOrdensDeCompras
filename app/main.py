@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 from typing import Any, Dict
 
 from dotenv import load_dotenv
@@ -20,6 +21,55 @@ load_dotenv()
 LOGGER = logging.getLogger(__name__)
 
 
+# Lifespan context manager (FastAPI 0.93+)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    create_db_and_tables()
+    
+    # ✅ Sincronização automática do RAG com banco de dados
+    try:
+        from app.services.rag_sync_service import initialize_rag_on_startup
+        
+        LOGGER.info("🔄 Iniciando sincronização automática do RAG...")
+        result = initialize_rag_on_startup()
+        
+        if result["status"] == "success":
+            LOGGER.info(f"✅ RAG sincronizado: {result['products_indexed']} produtos indexados")
+        else:
+            LOGGER.warning(f"⚠️ RAG não sincronizado: {result['message']}")
+    except Exception as e:
+        LOGGER.error(f"❌ Erro ao inicializar RAG: {e}")
+    
+    # ✅ Inicia listener do Redis para notificações em tempo real
+    try:
+        from app.services.redis_events import redis_events
+        from app.services.websocket_manager import websocket_manager
+        
+        await redis_events.connect()
+        
+        async def handle_redis_message(session_id: int, message_data: dict):
+            LOGGER.info(f"📥 Redis → WebSocket: session_id={session_id}")
+            await websocket_manager.send_message(session_id, message_data)
+        
+        await redis_events.start_listening(handle_redis_message)
+        LOGGER.info("✅ Redis listener iniciado com sucesso")
+    except Exception as e:
+        LOGGER.warning(f"⚠️ Redis listener não iniciado: {e}")
+    
+    LOGGER.info("FastAPI application started successfully")
+    
+    yield  # Application runs here
+    
+    # Shutdown
+    try:
+        from app.services.redis_events import redis_events
+        await redis_events.disconnect()
+        LOGGER.info("Redis listener desconectado")
+    except Exception as e:
+        LOGGER.warning(f"Erro ao desconectar Redis: {e}")
+
+
 def create_application() -> FastAPI:
     """Build and configure the FastAPI application instance."""
     application = FastAPI(
@@ -28,11 +78,13 @@ def create_application() -> FastAPI:
             "API para monitoramento de tarefas Celery na plataforma preditiva de cadeia de suprimentos."
         ),
         version="0.1.0",
+        lifespan=lifespan,
     )
 
+    # TODO (Produção): Restringir esta lista de origens para o domínio do frontend.
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=["*"],  # Mantido para desenvolvimento local
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -58,54 +110,23 @@ def create_application() -> FastAPI:
     from app.routers.rag_router import router as rag_router
     application.include_router(rag_router)
 
-    @application.on_event("startup")
-    async def on_startup() -> None:  # noqa: D401 - simple startup hook
-        create_db_and_tables()
-        
-        # ✅ Sincronização automática do RAG com banco de dados
-        try:
-            from app.services.rag_sync_service import initialize_rag_on_startup
-            
-            LOGGER.info("🔄 Iniciando sincronização automática do RAG...")
-            result = initialize_rag_on_startup()
-            
-            if result["status"] == "success":
-                LOGGER.info(f"✅ RAG sincronizado: {result['products_indexed']} produtos indexados")
-            else:
-                LOGGER.warning(f"⚠️ RAG não sincronizado: {result['message']}")
-        except Exception as e:
-            LOGGER.error(f"❌ Erro ao inicializar RAG: {e}")
-            # Não bloqueia a inicialização da API se RAG falhar
-        
-        # ✅ Inicia listener do Redis para notificações em tempo real
-        try:
-            from app.services.redis_events import redis_events
-            from app.services.websocket_manager import websocket_manager
-            
-            await redis_events.connect()
-            
-            # Handler que recebe mensagens do Redis e envia via WebSocket
-            async def handle_redis_message(session_id: int, message_data: dict):
-                LOGGER.info(f"📥 Redis → WebSocket: session_id={session_id}")
-                await websocket_manager.send_message(session_id, message_data)
-            
-            # Inicia escuta em background
-            await redis_events.start_listening(handle_redis_message)
-            LOGGER.info("✅ Redis listener iniciado com sucesso")
-        except Exception as e:
-            LOGGER.warning(f"⚠️ Redis listener não iniciado: {e}")
-        
-        LOGGER.info("FastAPI application started successfully")
-    
-    @application.on_event("shutdown")
-    async def on_shutdown() -> None:
-        """Cleanup ao desligar."""
-        try:
-            from app.services.redis_events import redis_events
-            await redis_events.disconnect()
-            LOGGER.info("Redis listener desconectado")
-        except Exception as e:
-            LOGGER.warning(f"Erro ao desconectar Redis: {e}")
+    # Rota de autenticação
+    from app.routers.auth_router import router as auth_router
+    application.include_router(auth_router)
+
+    # Tratamento centralizado de exceções
+    from fastapi import Request
+    from fastapi.responses import JSONResponse
+    class CustomException(Exception):
+        def __init__(self, name: str):
+            self.name = name
+
+    @application.exception_handler(CustomException)
+    async def custom_exception_handler(request: Request, exc: CustomException):
+        return JSONResponse(
+            status_code=418,
+            content={"message": f"Oops! {exc.name} fez algo."}
+        )
 
     @application.get("/health", tags=["health"])
     async def healthcheck() -> Dict[str, Any]:

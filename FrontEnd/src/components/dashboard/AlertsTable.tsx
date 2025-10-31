@@ -1,7 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Alert } from "@/types/api.types";
+import { useNavigate } from "react-router-dom";
+import { Zap } from "lucide-react";
 
 interface AlertsTableProps {
   alerts: Alert[];
@@ -14,6 +17,17 @@ const severityStyles = {
 };
 
 export function AlertsTable({ alerts }: AlertsTableProps) {
+  const navigate = useNavigate();
+
+  const handleAnalyze = (sku: string, product: string) => {
+    // Navega para a página de agentes e passa o SKU via state
+    navigate("/agents", { 
+      state: { 
+        prefillMessage: `Analise a compra do produto ${product} (SKU: ${sku}). Qual é a melhor estratégia de reposição?` 
+      } 
+    });
+  };
+
   return (
     <Card className="shadow-sm">
       <CardHeader>
@@ -26,6 +40,7 @@ export function AlertsTable({ alerts }: AlertsTableProps) {
               <TableHead>Produto</TableHead>
               <TableHead>Alerta</TableHead>
               <TableHead className="text-right">Estoque Atual</TableHead>
+              <TableHead className="text-right">Ação</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -38,6 +53,17 @@ export function AlertsTable({ alerts }: AlertsTableProps) {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right">{alert.stock} unidades</TableCell>
+                <TableCell className="text-right">
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => handleAnalyze(`SKU_${alert.id}`, alert.product)}
+                    className="gap-2"
+                  >
+                    <Zap className="h-4 w-4" />
+                    Analisar
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

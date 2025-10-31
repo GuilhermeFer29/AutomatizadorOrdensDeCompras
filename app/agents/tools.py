@@ -6,15 +6,25 @@ permitindo que os agentes de IA as utilizem de forma inteligente.
 """
 
 import json
-from typing import Tuple, Dict
+import os
+from typing import Tuple, Dict, Any
 from langchain.tools import tool
 from sqlmodel import Session, select
 from app.core.database import engine
-from app.models.models import Produto, PrecosHistoricos
+from app.models.models import Produto, PrecosHistoricos, OrdemDeCompra
 from app.services.scraping_service import scrape_and_save_price
 from app.services.ml_service import get_forecast
+from decimal import Decimal
 
-from langchain.tools import Toolkit
+# Importações opcionais
+try:
+    from tavily import TavilyClient
+    TAVILY_AVAILABLE = True
+except ImportError:
+    TAVILY_AVAILABLE = False
+
+# Constantes
+DEFAULT_FORECAST_HORIZON = 14
 
 
 @tool
@@ -125,19 +135,21 @@ def _load_product_metadata(sku: str) -> Tuple[Dict[str, float], str | None]:
         return {}, None
 
 
-class SupplyChainToolkit(Toolkit):
+class SupplyChainToolkit:
     """Toolkit com ferramentas para análise de cadeia de suprimentos."""
     
     def __init__(self):
-        super().__init__(name="supply_chain_toolkit")
-        self.register(self.lookup_product)
-        self.register(self.load_demand_forecast)
-        self.register(self.find_supplier_offers)
-        self.register(self.compute_distance)
+        self.name = "supply_chain_toolkit"
+        self.tools = [
+            self.lookup_product,
+            self.load_demand_forecast,
+            self.find_supplier_offers,
+            self.compute_distance,
+        ]
         
         # Adiciona Tavily (recomendado para buscas contextuais)
         if TAVILY_AVAILABLE and os.getenv("TAVILY_API_KEY"):
-            self.register(self.tavily_search)
+            self.tools.append(self.tavily_search)
     
     def lookup_product(self, sku: str) -> str:
         """Recupera metadados cadastrados de um produto específico.
@@ -333,16 +345,9 @@ class SupplyChainToolkit(Toolkit):
 # FERRAMENTAS AVANÇADAS - Fase 2: Capacitação dos Agentes
 # ============================================================================
 
-@tool(
-    name="get_price_forecast_for_sku",
-    description="Obtém previsões ML de preços futuros para um produto específico usando LightGBM",
-    cache_results=True,      # ⚡ Cache nativo do Agno
-    cache_dir="/tmp/agno_cache",  # Diretório de cache
-    cache_ttl=3600           # 1 hora de cache (previsões mudam pouco)
-)
+@tool
 def get_price_forecast_for_sku(sku: str, days_ahead: int = 7) -> str:
-    """
-    ⚡ COM CACHE NATIVO AGNO: Previsões são cacheadas por 1 hora.
+    """Obtém previsões ML de preços futuros para um produto específico usando LightGBM.
     
     Use esta ferramenta para obter a previsão de preços futuros para um SKU específico.
     
@@ -432,16 +437,9 @@ def search_market_trends_for_product(product_name: str) -> str:
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
-@tool(
-    name="find_supplier_offers_for_sku",
-    description="Busca ofertas de fornecedores para um produto, ordenadas por melhor preço",
-    cache_results=True,      # ⚡ Cache nativo do Agno
-    cache_dir="/tmp/agno_cache",
-    cache_ttl=1800           # 30 min de cache (ofertas podem mudar mais)
-)
+@tool
 def find_supplier_offers_for_sku(sku: str) -> str:
-    """
-    ⚡ COM CACHE NATIVO AGNO: Ofertas cacheadas por 30 minutos.
+    """Busca ofertas de fornecedores para um produto, ordenadas por melhor preço.
     
     Use esta ferramenta para encontrar todas as ofertas de fornecedores 
     para um produto específico, ordenadas por melhor preço.
@@ -514,16 +512,9 @@ def find_supplier_offers_for_sku(sku: str) -> str:
         return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
-@tool(
-    name="run_full_purchase_analysis",
-    description="Delega análise completa de compra ao Time de Especialistas (4 agentes)",
-    cache_results=True,      # ⚡ Cache nativo do Agno
-    cache_dir="/tmp/agno_cache",
-    cache_ttl=600            # 10 min (análises precisam ser mais atualizadas)
-)
+@tool
 def run_full_purchase_analysis(sku: str, reason: str = "reposição de estoque") -> str:
-    """
-    ⚡ COM CACHE NATIVO AGNO: Análises cacheadas por 10 minutos.
+    """Delega análise completa de compra ao Time de Especialistas.
     
     Use esta ferramenta para perguntas complexas que exigem uma recomendação 
     de compra completa, como 'Devo comprar o produto X?', 'Analise a necessidade 
@@ -640,6 +631,80 @@ def run_full_purchase_analysis(sku: str, reason: str = "reposição de estoque")
         import traceback
         traceback.print_exc()
         return error_msg
+
+
+@tool
+def create_purchase_order_tool(sku: str, quantity: int, price_per_unit: float, supplier: str = "Agente de IA") -> str:
+    """Cria uma ordem de compra pendente para aprovação humana.
+    
+    Esta ferramenta permite que o agente de IA crie ordens de compra que serão
+    revisadas e aprovadas por um humano antes de serem confirmadas.
+    
+    Args:
+        sku: SKU do produto
+        quantity: Quantidade a comprar (deve ser > 0)
+        price_per_unit: Preço unitário do produto
+        supplier: Nome do fornecedor (padrão: "Agente de IA")
+    
+    Returns:
+        JSON com status da criação da ordem
+    """
+    try:
+        if quantity <= 0:
+            return json.dumps({
+                "error": "A quantidade deve ser maior que zero",
+                "status": "failed"
+            }, ensure_ascii=False)
+        
+        if price_per_unit <= 0:
+            return json.dumps({
+                "error": "O preço deve ser maior que zero",
+                "status": "failed"
+            }, ensure_ascii=False)
+        
+        with Session(engine) as session:
+            # Buscar o produto pelo SKU
+            produto = session.exec(select(Produto).where(Produto.sku == sku)).first()
+            if not produto:
+                return json.dumps({
+                    "error": f"Produto com SKU '{sku}' não encontrado",
+                    "status": "failed"
+                }, ensure_ascii=False)
+            
+            # Calcular valor total
+            valor_total = Decimal(str(price_per_unit * quantity))
+            
+            # Criar nova ordem com status 'pending'
+            new_order = OrdemDeCompra(
+                produto_id=produto.id,
+                quantidade=quantity,
+                valor=valor_total,
+                status="pending",
+                origem=supplier
+            )
+            
+            session.add(new_order)
+            session.commit()
+            session.refresh(new_order)
+            
+            return json.dumps({
+                "status": "success",
+                "order_id": new_order.id,
+                "sku": sku,
+                "produto": produto.nome,
+                "quantidade": quantity,
+                "preco_unitario": price_per_unit,
+                "valor_total": float(valor_total),
+                "status_ordem": "pending",
+                "origem": supplier,
+                "mensagem": f"Ordem #{new_order.id} criada com sucesso e aguardando aprovação"
+            }, ensure_ascii=False)
+    
+    except Exception as e:
+        return json.dumps({
+            "error": f"Erro ao criar ordem de compra: {str(e)}",
+            "status": "failed"
+        }, ensure_ascii=False)
 
 
 # Funções auxiliares mantidas para compatibilidade

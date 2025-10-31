@@ -21,10 +21,10 @@ def create_order(session: Session, order_data: dict):
 
     new_order = OrdemDeCompra(
         produto_id=product.id,
-        quantity=order_data['quantity'],
-        value=order_data['value'],
+        quantidade=order_data['quantity'],
+        valor=order_data['value'],
         status='pending',
-        origin=order_data.get('origin', 'Manual')
+        origem=order_data.get('origin', 'Manual')
     )
     session.add(new_order)
     session.commit()

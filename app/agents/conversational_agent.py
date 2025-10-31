@@ -47,11 +47,11 @@ from agno.agent import Agent
 # ✅ IMPORTAÇÕES: LLM configs e ferramentas
 from app.agents.llm_config import get_gemini_for_nlu, get_gemini_for_decision_making
 from app.agents.tools import (
-    ProductCatalogTool,
     SupplyChainToolkit,
     get_price_forecast_for_sku,
     find_supplier_offers_for_sku,
-    run_full_purchase_analysis
+    run_full_purchase_analysis,
+    create_purchase_order_tool
 )
 
 
