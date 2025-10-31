@@ -198,18 +198,25 @@ def _generate_sales_series(
     return sales
 
 
-def generate_realistic_data(days: int = DAYS_OF_HISTORY, seed: int = RANDOM_SEED) -> dict:
+def generate_realistic_data(
+    days: int = DAYS_OF_HISTORY,
+    seed: int = RANDOM_SEED,
+    only_missing: bool = False
+) -> dict:
     """
     Gera dados sintéticos realistas para todos os produtos no banco.
     
     Args:
         days: Número de dias de histórico a gerar
         seed: Seed para reprodutibilidade
+        only_missing: Se True, gera apenas dias faltantes
     
     Returns:
         Dicionário com estatísticas da geração
     """
     print(f"🚀 Iniciando geração de dados sintéticos ({days} dias)...")
+    if only_missing:
+        print("   Modo: apenas dias faltantes")
     
     with Session(engine) as session:
         # Buscar todos os produtos
@@ -232,14 +239,34 @@ def generate_realistic_data(days: int = DAYS_OF_HISTORY, seed: int = RANDOM_SEED
         for idx, produto in enumerate(produtos, 1):
             print(f"  [{idx}/{len(produtos)}] Gerando dados para {produto.sku} ({produto.nome})...")
             
+            # Se only_missing, buscar datas existentes
+            existing_price_dates = set()
+            existing_sales_dates = set()
+            
+            if only_missing:
+                existing_prices = session.exec(
+                    select(PrecosHistoricos)
+                    .where(PrecosHistoricos.produto_id == produto.id)
+                ).all()
+                existing_price_dates = {p.coletado_em.date() for p in existing_prices}
+                
+                existing_sales = session.exec(
+                    select(VendasHistoricas)
+                    .where(VendasHistoricas.produto_id == produto.id)
+                ).all()
+                existing_sales_dates = {v.data_venda.date() for v in existing_sales}
+            
             # Gerar série de preços
             price_series = _generate_price_series(produto, start_date, days, seed)
             
             # Gerar série de vendas correlacionada
             sales_series = _generate_sales_series(produto, price_series, seed)
             
-            # Inserir preços no banco
+            # Inserir preços no banco (pular se já existe)
             for date, price in price_series:
+                if only_missing and date.date() in existing_price_dates:
+                    continue
+                
                 preco_historico = PrecosHistoricos(
                     produto_id=produto.id,
                     fornecedor="Fornecedor Sintético",
@@ -251,8 +278,11 @@ def generate_realistic_data(days: int = DAYS_OF_HISTORY, seed: int = RANDOM_SEED
                 session.add(preco_historico)
                 total_prices += 1
             
-            # Inserir vendas no banco
+            # Inserir vendas no banco (pular se já existe)
             for date, quantity, revenue in sales_series:
+                if only_missing and date.date() in existing_sales_dates:
+                    continue
+                
                 venda_historica = VendasHistoricas(
                     produto_id=produto.id,
                     data_venda=date,
@@ -286,28 +316,38 @@ def generate_realistic_data(days: int = DAYS_OF_HISTORY, seed: int = RANDOM_SEED
 
 def clear_synthetic_data() -> dict:
     """Remove todos os dados sintéticos do banco."""
+    from sqlalchemy import text
+    
     print("🗑️  Removendo dados sintéticos existentes...")
     
-    with Session(engine) as session:
-        # Remover preços sintéticos
-        precos_result = session.exec(
-            select(PrecosHistoricos).where(PrecosHistoricos.is_synthetic == True)
-        )
-        precos_count = sum(1 for _ in precos_result)
-        
-        session.exec(
-            "DELETE FROM precos_historicos WHERE is_synthetic = TRUE"
-        )
-        
-        # Remover todas as vendas (assumindo que são sintéticas se os preços são)
-        session.exec("DELETE FROM vendas_historicas")
-        
-        session.commit()
-        
-        print(f"✅ Removidos {precos_count:,} registros de preços sintéticos")
-        print(f"✅ Removidos todos os registros de vendas")
-        
-        return {"precos_removed": precos_count}
+    try:
+        with Session(engine) as session:
+            # Contar antes de deletar
+            precos_count = len(session.exec(
+                select(PrecosHistoricos).where(PrecosHistoricos.is_synthetic == True)
+            ).all())
+            
+            vendas_count = len(session.exec(select(VendasHistoricas)).all())
+            
+            # Deletar com retry e timeout maior
+            session.exec(text("SET SESSION innodb_lock_wait_timeout = 300"))
+            
+            # Remover vendas primeiro (foreign key)
+            session.exec(text("DELETE FROM vendas_historicas"))
+            session.commit()
+            
+            # Depois remover preços
+            session.exec(text("DELETE FROM precos_historicos WHERE is_synthetic = TRUE"))
+            session.commit()
+            
+            print(f"✅ Removidos {precos_count:,} registros de preços sintéticos")
+            print(f"✅ Removidos {vendas_count:,} registros de vendas")
+            
+            return {"precos_removed": precos_count, "vendas_removed": vendas_count}
+    except Exception as e:
+        print(f"⚠️  Erro ao limpar dados: {e}")
+        print("   Continuando mesmo assim...")
+        return {"precos_removed": 0, "vendas_removed": 0}
 
 
 if __name__ == "__main__":
@@ -331,6 +371,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Remove dados sintéticos existentes antes de gerar novos",
     )
+    parser.add_argument(
+        "--only-missing",
+        action="store_true",
+        help="Gera apenas dias faltantes (não duplica dados existentes)",
+    )
     
     args = parser.parse_args()
     
@@ -338,7 +383,11 @@ if __name__ == "__main__":
         clear_synthetic_data()
         print()
     
-    result = generate_realistic_data(days=args.days, seed=args.seed)
+    result = generate_realistic_data(
+        days=args.days,
+        seed=args.seed,
+        only_missing=args.only_missing
+    )
     
     if result.get("error"):
         sys.exit(1)

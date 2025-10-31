@@ -1,6 +1,7 @@
-import { LayoutDashboard, Bot, ShoppingCart, Package } from "lucide-react";
-import { NavLink } from "react-router-dom";
+import { LayoutDashboard, Bot, ShoppingCart, Package, LogOut } from "lucide-react";
+import { NavLink, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -10,8 +11,15 @@ const navigation = [
 ];
 
 export function Sidebar() {
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    navigate("/login");
+  };
+
   return (
-    <aside className="w-64 bg-card border-r border-border min-h-screen">
+    <aside className="w-64 bg-card border-r border-border min-h-screen flex flex-col">
       <div className="p-6">
         <h1 className="text-xl font-semibold text-foreground">
           Sistema de Automação
@@ -21,7 +29,7 @@ export function Sidebar() {
         </p>
       </div>
 
-      <nav className="px-3 space-y-1">
+      <nav className="px-3 space-y-1 flex-1">
         {navigation.map((item) => (
           <NavLink
             key={item.name}
@@ -41,6 +49,17 @@ export function Sidebar() {
           </NavLink>
         ))}
       </nav>
+
+      <div className="p-3 border-t border-border">
+        <Button
+          variant="destructive"
+          className="w-full flex items-center gap-2"
+          onClick={handleLogout}
+        >
+          <LogOut className="h-4 w-4" />
+          Sair
+        </Button>
+      </div>
     </aside>
   );
 }

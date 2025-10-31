@@ -18,7 +18,11 @@ export default function Register() {
       const res = await fetch("/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, full_name: fullName }),
+        body: JSON.stringify({ 
+          email, 
+          password, 
+          full_name: fullName 
+        }),
       });
       const data = await res.json();
       if (res.ok) {

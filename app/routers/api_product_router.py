@@ -43,7 +43,38 @@ def sync_rag_background():
 
 @router.get("/")
 def read_products(search: Optional[str] = None, session: Session = Depends(get_session)):
-    return get_products(session, search)
+    """
+    Retorna lista de produtos com preço atual.
+    """
+    from sqlalchemy import func, desc
+    
+    produtos = get_products(session, search)
+    
+    result = []
+    for produto in produtos:
+        # Buscar preço mais recente
+        preco_recente = session.exec(
+            select(PrecosHistoricos)
+            .where(PrecosHistoricos.produto_id == produto.id)
+            .order_by(desc(PrecosHistoricos.coletado_em))
+            .limit(1)
+        ).first()
+        
+        preco_atual = float(preco_recente.preco) if preco_recente else 0.0
+        
+        result.append({
+            "id": produto.id,
+            "sku": produto.sku,
+            "nome": produto.nome,
+            "categoria": produto.categoria,
+            "preco_atual": preco_atual,
+            "estoque_atual": produto.estoque_atual,
+            "estoque_minimo": produto.estoque_minimo,
+            "criado_em": produto.criado_em.isoformat(),
+            "atualizado_em": produto.atualizado_em.isoformat(),
+        })
+    
+    return result
 
 
 @router.get("/{product_id}")

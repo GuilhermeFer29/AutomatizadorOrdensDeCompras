@@ -81,7 +81,7 @@ def test_login_invalid_credentials(client: TestClient):
         }
     )
     assert response.status_code == 401
-    assert "inválidas" in response.json()["detail"]
+    assert "inválidos" in response.json()["detail"]
 
 
 def test_login_wrong_password(client: TestClient):
@@ -105,4 +105,4 @@ def test_login_wrong_password(client: TestClient):
         }
     )
     assert response.status_code == 401
-    assert "inválidas" in response.json()["detail"]
+    assert "inválidos" in response.json()["detail"]
