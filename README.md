@@ -1,131 +1,437 @@
-# Automação Inteligente de Ordens de Compra
+# 🏗️ ARQUITETURA MULTI-AGENTE INTEGRADA
 
-Este projeto implementa um sistema end-to-end para a automação inteligente de ordens de compra, utilizando um modelo de Machine Learning para prever a flutuação de preços de produtos e otimizar o momento da aquisição.
+## 📋 Visão Geral
 
-## Core Features
+Sistema completo de IA multi-agente para análise e recomendação inteligente de compras, integrando:
 
-- **Previsão de Preços**: Utiliza um modelo **LightGBM** global para prever a tendência de preços de todo o catálogo de produtos.
-- **Dashboard Interativo**: Uma interface web construída com **FastAPI** que exibe o histórico de preços, as previsões do modelo e métricas de performance.
-- **Geração de Dados Sintéticos**: Inclui um script robusto para popular o banco de dados com produtos, histórico de vendas e flutuações de preços, permitindo o desenvolvimento e teste do sistema sem dados reais.
-- **Arquitetura Escalável**: Baseado em contêineres **Docker** e uma arquitetura de microsserviços com fila de tarefas (**Celery** e **Redis**), garantindo escalabilidade e resiliência.
-- **Ambiente de Desenvolvimento Automatizado**: Com um único comando, é possível configurar todo o ambiente, popular o banco de dados e treinar o modelo de previsão.
-
----
-
-## Arquitetura do Sistema
-
-
-- **API (FastAPI)**: O coração da aplicação. Serve o dashboard, processa as requisições do usuário e chama o modelo de ML para obter previsões.
-- **Banco de Dados (MySQL)**: Armazena todas as informações persistentes, como produtos, histórico de preços e vendas, e metadados dos modelos treinados.
-- **Modelo ML (LightGBM)**: O arquivo `.pkl` do modelo treinado. É carregado pela API para gerar previsões sob demanda.
-- **Broker (Redis)**: Fila de mensagens que desacopla a API de tarefas pesadas. Futuramente, o retreinamento do modelo pode ser disparado como uma tarefa em background.
-- **Worker (Celery)**: Processo que consome tarefas da fila do Redis e as executa. Atualmente configurado, mas sem tarefas implementadas.
+- **Agente Conversacional** (Gerente): Interface natural com delegação inteligente
+- **Time de Especialistas** (4 agentes): Análise aprofundada da cadeia de suprimentos
+- **Fontes de Dados**: SQL, RAG, ML, Mercado (Web Search)
+- **Ferramentas Avançadas**: Previsões, pesquisa de mercado, comparação de fornecedores
 
 ---
 
-## Tecnologias Utilizadas
+## 🎯 Fluxo de Trabalho Completo
 
-- **Backend**: Python 3.11, FastAPI
-- **Machine Learning**: LightGBM, Pandas, Scikit-learn
-- **Banco de Dados**: MySQL
-- **Fila de Tarefas**: Celery, Redis
-- **Infraestrutura**: Docker, Docker Compose
-- **ORM**: SQLModel
+```
+USUÁRIO
+   ↓
+📱 "Devo comprar o produto X?"
+   ↓
+🤖 AGENTE CONVERSACIONAL (Gerente)
+   │
+   ├─ Pergunta Simples? → Responde diretamente
+   │  • "Qual o estoque?" → ProductCatalogTool
+   │  • "Previsão de preço?" → get_price_forecast_for_sku
+   │
+   └─ Pergunta Complexa? → DELEGA ao Time de Especialistas
+      ↓
+   🏢 TIME DE ESPECIALISTAS (4 agentes)
+      │
+      ├─ 1️⃣ ANALISTA DE DEMANDA
+      │   └─ Determina: "Precisamos comprar?"
+      │       • Analisa estoque atual vs mínimo
+      │       • Avalia previsões ML de demanda
+      │       • Saída: need_restock (true/false)
+      │
+      ├─ 2️⃣ PESQUISADOR DE MERCADO
+      │   └─ Encontra: "Onde e por quanto?"
+      │       • find_supplier_offers_for_sku() → Ofertas reais
+      │       • search_market_trends_for_product() → Tendências web
+      │       • get_price_forecast_for_sku() → Previsões ML
+      │       • Saída: Lista de ofertas + contexto de mercado
+      │
+      ├─ 3️⃣ ANALISTA DE LOGÍSTICA
+      │   └─ Otimiza: "Qual fornecedor é melhor?"
+      │       • Avalia preço vs confiabilidade vs prazo
+      │       • Calcula custo total de aquisição
+      │       • compute_distance() → Custos logísticos
+      │       • Saída: Fornecedor recomendado
+      │
+      └─ 4️⃣ GERENTE DE COMPRAS
+          └─ Decide: "Aprovar, rejeitar ou revisar?"
+              • Consolida todas as análises
+              • Avalia riscos (fornecedor único, etc.)
+              • Saída: Decisão final + justificativa
+      ↓
+   💬 RESPOSTA NATURAL ao usuário
+      "Recomendo aprovar a compra de 100 unidades 
+       com Fornecedor X por R$ 1.500,00..."
+```
 
 ---
 
-## Configuração e Instalação
+## 🛠️ Componentes Implementados
 
-Siga os passos abaixo para configurar o ambiente de desenvolvimento local.
+### FASE 1: Pilares (Modelos + Dados)
 
-### 1. Pré-requisitos
+#### ✅ 1.1. Modelo de Previsão ML
+- **Arquivo**: `app/ml/prediction.py`
+- **Status**: Corrigido (normalização de features)
+- **Funcionalidade**: Previsão autorregressiva multi-step
 
-- **Docker** e **Docker Compose** instalados.
-- **Git** para clonar o repositório.
+#### ✅ 1.2. Fornecedores Sintéticos
+- **Arquivo**: `scripts/generate_synthetic_suppliers.py`
+- **Novos Modelos**:
+  ```python
+  # app/models/models.py
+  class Fornecedor:
+      confiabilidade: float  # 0.0 a 1.0
+      prazo_entrega_dias: int  # Dias úteis
+  
+  class OfertaProduto:
+      produto_id: int
+      fornecedor_id: int
+      preco_ofertado: Decimal
+      estoque_disponivel: int
+      validade_oferta: datetime
+  ```
 
-### 2. Clone o Repositório
+- **Execução**:
+  ```bash
+  python scripts/setup_development.py generate_suppliers
+  ```
+
+### FASE 2: Ferramentas Avançadas
+
+#### ✅ 2.1. Ferramenta de Previsão ML
+```python
+# app/agents/tools.py
+def get_price_forecast_for_sku(sku: str, days_ahead: int = 7) -> str:
+    """
+    Obtém previsão de preços futuros para um SKU.
+    
+    Returns:
+        JSON com previsões, tendência (alta/baixa/estável) e métricas
+    """
+```
+
+**Uso pelos agentes**:
+- Agente Conversacional: Respostas rápidas sobre preços futuros
+- Pesquisador de Mercado: Contexto para avaliação de ofertas
+
+#### ✅ 2.2. Ferramenta de Pesquisa de Mercado (Tavily)
+```python
+def search_market_trends_for_product(product_name: str) -> str:
+    """
+    Pesquisa notícias e análises de mercado que influenciam preços.
+    
+    Uses:
+        Tavily API com search_depth="advanced"
+    
+    Returns:
+        JSON com insights ranqueados por relevância
+    """
+```
+
+**Configuração**:
+```bash
+# .env
+TAVILY_API_KEY=your_tavily_api_key_here
+```
+
+#### ✅ 2.3. Ferramenta de Análise de Fornecedores
+```python
+def find_supplier_offers_for_sku(sku: str) -> str:
+    """
+    Busca todas as ofertas de fornecedores para um produto.
+    
+    Returns:
+        JSON com:
+        - Lista de ofertas (preço, confiabilidade, prazo)
+        - Melhor oferta (balanceada)
+        - Preço médio do mercado
+    """
+```
+
+**Algoritmo de seleção**:
+```python
+# Penaliza baixa confiabilidade
+score = preco * (2 - confiabilidade)
+melhor_oferta = min(ofertas, key=lambda x: score)
+```
+
+#### ✅ 2.4. Super Ferramenta de Delegação
+```python
+def run_full_purchase_analysis(sku: str, reason: str) -> str:
+    """
+    DELEGA ao Time de Especialistas para análise completa.
+    
+    Quando usar:
+    - "Devo comprar o produto X?"
+    - "Análise completa para SKU Y"
+    - "Recomendação de compra para Z"
+    
+    Returns:
+        Análise consolidada dos 4 especialistas
+    """
+```
+
+### FASE 3: Hierarquia e Delegação
+
+#### ✅ 3.1. Time de Especialistas Atualizado
+- **Arquivo**: `app/agents/supply_chain_team.py`
+- **Mudanças**:
+  - Pesquisador de Mercado usa novas ferramentas:
+    - `find_supplier_offers_for_sku`
+    - `search_market_trends_for_product`
+    - `get_price_forecast_for_sku`
+  - Prompt atualizado com instruções claras
+
+#### ✅ 3.2. Agente Conversacional Promovido
+- **Arquivo**: `app/agents/conversational_agent.py`
+- **Novo Papel**: Gerente com delegação inteligente
+- **Ferramentas**:
+  ```python
+  tools=[
+      ProductCatalogTool(),         # Busca RAG
+      get_price_forecast_for_sku,   # Previsão rápida
+      run_full_purchase_analysis,   # DELEGAÇÃO
+      SupplyChainToolkit(),         # Análises manuais
+  ]
+  ```
+
+- **Prompt Atualizado**:
+  ```
+  "Você é um GERENTE experiente com um time de especialistas"
+  
+  QUANDO DELEGAR:
+  - Perguntas complexas: "Devo comprar X?"
+  - Recomendações de fornecedor
+  - Análises de trade-off
+  
+  QUANDO RESPONDER DIRETAMENTE:
+  - Perguntas simples: "Qual o estoque?"
+  - Consultas rápidas de previsão
+  - Busca de produtos
+  ```
+
+---
+
+## 🚀 Como Usar
+
+### 1. Setup Inicial (uma vez)
 
 ```bash
-git clone https://github.com/GuilhermeFer29/AutomatizadorOrdensDeCompras.git
-cd AutomadorOrdensDeCompras
+# 1. Criar tabelas no banco
+docker compose exec api alembic upgrade head
+
+# Ou executar migration manual:
+docker compose exec db psql -U user -d supply_chain -f /migrations/add_supplier_market_features.sql
+
+# 2. Gerar fornecedores e ofertas
+docker compose exec api python scripts/setup_development.py generate_suppliers
 ```
 
-### 3. Crie o Arquivo de Ambiente
-
-Crie um arquivo chamado `.env` na raiz do projeto, copiando o conteúdo de `.env.example` (se existir) ou usando o template abaixo. Preencha com suas credenciais.
-
-```env
-# Credenciais do Banco de Dados
-MYSQL_ROOT_PASSWORD=your_root_password
-MYSQL_DATABASE=purchase_orders
-MYSQL_USER=user
-MYSQL_PASSWORD=password
-
-# Configuração do Broker
-CELERY_BROKER_URL=redis://broker:6379/0
-CELERY_RESULT_BACKEND=redis://broker:6379/0
-```
-
-### 4. Construa e Inicie os Contêineres
-
-Este comando irá construir as imagens Docker e iniciar todos os serviços em background.
+### 2. Conversar com o Sistema
 
 ```bash
-docker compose up --build -d
+# Iniciar a API
+docker compose up -d
+
+# Acessar chat
+http://localhost:3000/agents
 ```
 
-### 5. Popule o Banco e Treine o Modelo
+### 3. Exemplos de Perguntas
 
-Execute o script de setup para popular o banco de dados com dados sintéticos e treinar o modelo de previsão. O modelo treinado (`.pkl`) e seus metadados (`.json`) serão salvos na pasta `models/`.
-
-```bash
-docker compose exec api python -m scripts.setup_development all
+#### Perguntas Simples (Resposta Direta)
+```
+"Qual o estoque do SKU_001?"
+"Me mostre produtos da categoria ferramentas"
+"Previsão de preço para SKU_001 nos próximos 7 dias?"
 ```
 
-O argumento `all` executa tanto o *seed* do banco quanto o treinamento. Você também pode usar `seed` ou `train` separadamente.
-
----
-
-## Como Usar
-
-### Acessando o Dashboard
-
-Após a conclusão de todos os passos de instalação, o dashboard estará disponível no seu navegador em:
-
-**[http://localhost:8000/dashboard](http://localhost:8000/dashboard)**
-
-O dashboard exibirá o histórico de preços de um produto e a previsão gerada pelo modelo LightGBM para os próximos 14 dias.
-
-### Reiniciando a Aplicação
-
-Como o modelo treinado agora é persistente graças ao volume mapeado no `docker-compose.yml`, você pode reiniciar os serviços a qualquer momento sem perder o treinamento.
-
-```bash
-# Para reiniciar todos os serviços
-docker compose restart
-
-# Para reiniciar apenas a API
-docker compose restart api
+#### Perguntas Complexas (Delegação ao Time)
+```
+"Devo comprar o produto SKU_001?"
+"Analise a necessidade de reposição para SKU_001"
+"Qual fornecedor é melhor para SKU_001?"
+"Me dê uma recomendação de compra para SKU_001"
 ```
 
 ---
 
-## Fluxo de Dados e Machine Learning
+## 📊 Fluxo de Dados
 
-O processo de ponta a ponta, desde a geração de dados até a previsão, segue os seguintes passos:
+```
+┌──────────────────────────────────────────────────────┐
+│           FONTES DE DADOS INTEGRADAS                 │
+├──────────────────────────────────────────────────────┤
+│                                                      │
+│  1. 📦 BANCO DE DADOS (PostgreSQL)                  │
+│     • Produtos, estoque, vendas                     │
+│     • Fornecedores, ofertas                         │
+│     • Histórico de preços                           │
+│                                                      │
+│  2. 🎯 VETORIAL (ChromaDB)                          │
+│     • Embeddings de produtos                        │
+│     • Busca semântica (RAG)                         │
+│                                                      │
+│  3. 🤖 MACHINE LEARNING (LightGBM)                  │
+│     • Previsões de preços (7-14 dias)              │
+│     • Tendências (alta/baixa/estável)               │
+│                                                      │
+│  4. 🌐 WEB (Tavily API)                             │
+│     • Notícias de mercado                           │
+│     • Tendências de preço                           │
+│     • Análises competitivas                         │
+│                                                      │
+└──────────────────────────────────────────────────────┘
+                         ↓
+┌──────────────────────────────────────────────────────┐
+│              CAMADA DE FERRAMENTAS                   │
+├──────────────────────────────────────────────────────┤
+│  • get_product_info           (RAG)                  │
+│  • get_price_forecast_for_sku (ML)                   │
+│  • find_supplier_offers       (SQL + JOIN)           │
+│  • search_market_trends       (Tavily)               │
+│  • run_full_purchase_analysis (Delegação)            │
+└──────────────────────────────────────────────────────┘
+                         ↓
+┌──────────────────────────────────────────────────────┐
+│                  CAMADA DE AGENTES                   │
+├──────────────────────────────────────────────────────┤
+│                                                      │
+│  GERENTE (Conversacional)                           │
+│     ↓                                                │
+│     ├─ Perguntas Simples → Ferramentas diretas      │
+│     └─ Perguntas Complexas → Delega ao Time         │
+│                              ↓                       │
+│                       TIME DE ESPECIALISTAS         │
+│                       (4 agentes colaborativos)     │
+│                                                      │
+└──────────────────────────────────────────────────────┘
+                         ↓
+                   💬 USUÁRIO
+```
 
-1.  **Geração de Dados (`scripts/setup_development.py`)**: Dados sintéticos de produtos, preços e vendas são criados e inseridos no MySQL.
+---
 
-2.  **Treinamento (`app/ml/training.py`)**: 
-    - Os dados históricos são carregados do banco.
-    - **Feature Engineering**: Novas features são criadas a partir das datas (dia da semana, mês) e de valores passados (lags, médias móveis).
-    - **Divisão Temporal**: O dataset é dividido em conjuntos de treino e validação com base no tempo, para simular um cenário real.
-    - **Treinamento do LightGBM**: O modelo é treinado com os dados de treino, usando o conjunto de validação para *early stopping* (parar o treino quando a performance para de melhorar).
-    - **Persistência**: O modelo treinado e os metadados (como métricas de RMSE) são salvos na pasta `models/`.
+## 🧪 Testes
 
-3.  **Previsão (`app/routers/dashboard_router.py` -> `app/ml/training.py`)**:
-    - Quando o dashboard é carregado, a API solicita uma previsão.
-    - O modelo salvo em `models/global_lgbm_model.pkl` é carregado na memória.
-    - Para cada produto, o histórico de preços recente é usado para criar as mesmas features do treinamento.
-    - O modelo gera previsões de forma autorregressiva: a previsão de hoje é usada como um dado de entrada para prever amanhã, e assim por diante, até completar o horizonte de 14 dias.
-    - As previsões são retornadas para a API e exibidas no gráfico do dashboard.
+### Teste 1: Consulta Simples
+```
+USUÁRIO: "Qual o estoque de parafusos?"
+
+AGENTE CONVERSACIONAL:
+  → Usa ProductCatalogTool (RAG)
+  → Resposta direta em 2-3 segundos
+
+ESPERADO: Lista de parafusos com estoque
+```
+
+### Teste 2: Previsão Rápida
+```
+USUÁRIO: "Qual a tendência de preço do SKU_001?"
+
+AGENTE CONVERSACIONAL:
+  → Usa get_price_forecast_for_sku
+  → Resposta com gráfico de tendência
+
+ESPERADO: "Tendência de ALTA (+5%) nos próximos 7 dias"
+```
+
+### Teste 3: Análise Completa (Delegação)
+```
+USUÁRIO: "Devo comprar 100 unidades do SKU_001?"
+
+AGENTE CONVERSACIONAL:
+  1. Detecta pergunta complexa
+  2. Informa: "Consultando meu time de especialistas..."
+  3. Usa run_full_purchase_analysis(sku="SKU_001", reason="reposição")
+     ↓
+  TIME DE ESPECIALISTAS executa:
+     a) Analista de Demanda → need_restock = true
+     b) Pesquisador de Mercado → 5 ofertas encontradas
+     c) Analista de Logística → melhor_fornecedor = "X"
+     d) Gerente de Compras → decision = "approve"
+  4. Retorna resposta consolidada
+
+ESPERADO:
+"Recomendo aprovar a compra de 100 unidades.
+
+Fornecedor Recomendado: Distribuidora Nacional
+Preço: R$ 1.450,00 (R$ 14,50/un)
+Prazo: 5 dias úteis
+Confiabilidade: 95%
+
+Justificativa:
+- Estoque atual (45 un) abaixo do mínimo (80 un)
+- Previsão ML indica tendência de alta (+3%)
+- Melhor custo-benefício entre 5 fornecedores
+
+Próximos passos:
+- Emitir ordem de compra
+- Agendar entrega para +5 dias"
+```
+
+---
+
+## 📁 Arquivos Modificados/Criados
+
+### Novos Arquivos
+```
+scripts/generate_synthetic_suppliers.py    # Gerador de mercado
+migrations/add_supplier_market_features.sql  # Migration DB
+docs/MULTI_AGENT_ARCHITECTURE.md           # Esta documentação
+```
+
+### Arquivos Modificados
+```
+app/models/models.py                     # +Fornecedor, +OfertaProduto
+app/agents/tools.py                      # +4 novas ferramentas
+app/agents/supply_chain_team.py          # Prompt atualizado
+app/agents/conversational_agent.py       # Delegação implementada
+scripts/setup_development.py             # +comando suppliers
+```
+
+---
+
+## ⚙️ Configuração Necessária
+
+### 1. Variáveis de Ambiente (.env)
+```bash
+# Google AI (obrigatório)
+GOOGLE_API_KEY=your_google_api_key
+
+# Tavily (opcional, mas recomendado)
+TAVILY_API_KEY=your_tavily_api_key
+
+# Database
+DATABASE_URL=postgresql://user:password@db:5432/supply_chain
+```
+
+### 2. Dependências Python
+```bash
+# Já no requirements.txt
+tavily-python>=0.3.0    # Pesquisa web para agentes
+agno>=2.1.3             # Framework de agentes
+langchain>=0.2.1        # RAG
+lightgbm>=4.0.0         # ML predictions
+```
+
+---
+
+## 🎯 Próximos Passos
+
+1. ✅ **CONCLUÍDO**: Implementação completa da arquitetura
+2. 🧪 **TESTAR**: Fluxo end-to-end com diferentes cenários
+3. 📊 **OTIMIZAR**: Performance das queries de ofertas
+4. 🌐 **PRODUÇÃO**: Deploy com rate limiting da Tavily API
+5. 📈 **MONITORAR**: Métricas de uso das ferramentas
+6. 🔒 **SEGURANÇA**: Validação de inputs dos agentes
+
+---
+
+## 🎓 Referências
+
+- **Agno Framework**: https://docs.agno.com/
+- **Tavily API**: https://docs.tavily.com/
+- **SQLModel**: https://sqlmodel.tiangolo.com/
+- **LightGBM**: https://lightgbm.readthedocs.io/
+
+---
+
+**Status**: ✅ Arquitetura Multi-Agente Implementada e Pronta para Testes  
+**Versão**: 1.0.0
