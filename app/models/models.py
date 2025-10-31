@@ -59,6 +59,16 @@ class PrecosHistoricos(SQLModel, table=True):
     produto: "Produto" = Relationship(back_populates="precos")
 
 
+# Modelo de Usuário para autenticação
+class User(SQLModel, table=True):
+    __tablename__ = "users"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    email: str = Field(unique=True, index=True)
+    hashed_password: str
+    is_active: bool = Field(default=True)
+    full_name: Optional[str] = Field(default=None)
+
+
 class ModeloPredicao(SQLModel, table=True):
     """Metadata describing trained forecasting models for a product."""
 

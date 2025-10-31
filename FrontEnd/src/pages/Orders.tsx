@@ -7,9 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Check, X } from "lucide-react";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { ErrorMessage } from "@/components/ui/error-message";
+import api from "@/services/api";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 const statusConfig = {
   approved: {
@@ -29,10 +31,33 @@ const statusConfig = {
 export default function Orders() {
   const [statusFilter, setStatusFilter] = useState<OrderStatus | undefined>();
   const [searchTerm, setSearchTerm] = useState("");
+  const queryClient = useQueryClient();
 
   const { data: orders, isLoading, error, refetch } = useOrders({
     status: statusFilter,
     search: searchTerm,
+  });
+
+  // Mutation para aprovar ordem
+  const approveMutation = useMutation({
+    mutationFn: (orderId: number) => api.post(`/api/orders/${orderId}/approve`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+    },
+    onError: (error: any) => {
+      console.error('Erro ao aprovar ordem:', error);
+    }
+  });
+
+  // Mutation para rejeitar ordem
+  const rejectMutation = useMutation({
+    mutationFn: (orderId: number) => api.post(`/api/orders/${orderId}/reject`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+    },
+    onError: (error: any) => {
+      console.error('Erro ao rejeitar ordem:', error);
+    }
   });
 
   if (isLoading) {
@@ -101,6 +126,7 @@ export default function Orders() {
                 <TableHead>Status</TableHead>
                 <TableHead>Origem</TableHead>
                 <TableHead>Data</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -125,6 +151,32 @@ export default function Orders() {
                   </TableCell>
                   <TableCell>{order.origin}</TableCell>
                   <TableCell>{order.date}</TableCell>
+                  <TableCell className="text-right">
+                    {order.status === 'pending' && (
+                      <div className="flex gap-2 justify-end">
+                        <Button 
+                          size="sm" 
+                          variant="default"
+                          onClick={() => approveMutation.mutate(Number(order.id))}
+                          disabled={approveMutation.isPending}
+                          className="gap-1"
+                        >
+                          <Check className="h-4 w-4" />
+                          Aprovar
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="destructive"
+                          onClick={() => rejectMutation.mutate(Number(order.id))}
+                          disabled={rejectMutation.isPending}
+                          className="gap-1"
+                        >
+                          <X className="h-4 w-4" />
+                          Rejeitar
+                        </Button>
+                      </div>
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

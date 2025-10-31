@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  # Serviço de teste
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: app_test
+    environment:
+      - DATABASE_URL=mysql+pymysql://root:root@db:3306/app_test
+      - REDIS_URL=redis://broker:6379/0
+      - SECRET_KEY=test_secret_key_for_testing
+      - ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+    depends_on:
+      - db
+      - broker
+    volumes:
+      - .:/app
+      - /app/__pycache__
+    working_dir: /app
+    command: >
+      bash -c "
+        echo '🧪 Aguardando banco de dados...' &&
+        sleep 5 &&
+        echo '📦 Instalando dependências de teste...' &&
+        pip install -q pytest pytest-asyncio pytest-cov httpx &&
+        echo '🧪 Executando testes...' &&
+        pytest app/tests/ -v --tb=short --cov=app --cov-report=term-missing --cov-report=html &&
+        echo '✅ Testes concluídos!'
+      "
+    networks:
+      - app-network
+
+  # Banco de dados para testes
+  db:
+    image: mysql:8.0
+    container_name: app_test_db
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: app_test
+    ports:
+      - "3307:3306"
+    volumes:
+      - test_db_data:/var/lib/mysql
+    networks:
+      - app-network
+
+  # Redis para testes
+  broker:
+    image: redis:7-alpine
+    container_name: app_test_broker
+    ports:
+      - "6380:6379"
+    networks:
+      - app-network
+
+volumes:
+  test_db_data:
+
+networks:
+  app-network:
+    driver: bridge

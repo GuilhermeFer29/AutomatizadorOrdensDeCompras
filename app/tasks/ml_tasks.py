@@ -10,6 +10,7 @@ ARQUITETURA NOVA (2025-10-16):
 from __future__ import annotations
 
 from typing import Any, Dict, List
+from datetime import datetime, timezone
 
 import structlog
 from celery import shared_task
@@ -17,7 +18,7 @@ from sqlmodel import Session, select
 
 from app.core.database import engine
 from app.ml.training import train_model_for_product, InsufficientDataError
-from app.models.models import Produto
+from app.models.models import Produto, ModeloGlobal
 
 
 LOGGER = structlog.get_logger(__name__)
@@ -127,3 +128,74 @@ def train_all_products_task(self, optimize: bool = False, limit: int = None) -> 
     
     LOGGER.info("ml.tasks.train_all.completed", **payload)
     return payload
+
+
+@shared_task(
+    bind=True,
+    name="app.tasks.ml_tasks.retrain_global_model_task",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_kwargs={"max_retries": 1},
+)
+def retrain_global_model_task(self) -> Dict[str, Any]:
+    """
+    Task Celery para retreinar o modelo global agregado diariamente.
+    
+    Executada automaticamente via Celery Beat (1h da manhã UTC).
+    
+    Returns:
+        Dicionário com status do retreinamento
+    """
+    LOGGER.info("ml.tasks.retrain_global.start")
+    
+    try:
+        # Treinar todos os produtos para gerar dados para o modelo global
+        with Session(engine) as session:
+            query = select(Produto)
+            produtos = list(session.exec(query).all())
+        
+        total = len(produtos)
+        success_count = 0
+        
+        for idx, produto in enumerate(produtos, 1):
+            LOGGER.info(f"ml.tasks.retrain_global.progress", current=idx, total=total, sku=produto.sku)
+            
+            try:
+                train_model_for_product(sku=produto.sku, optimize=False, n_trials=0)
+                success_count += 1
+            except InsufficientDataError:
+                LOGGER.warning(f"ml.tasks.retrain_global.insufficient_data", sku=produto.sku)
+            except Exception as e:
+                LOGGER.error(f"ml.tasks.retrain_global.product_failed", sku=produto.sku, error=str(e))
+        
+        # Registrar retreinamento no banco de dados
+        with Session(engine) as session:
+            global_model = ModeloGlobal(
+                modelo_tipo="LightGBM_Global",
+                versao="1.0",
+                holdout_dias=7,
+                caminho_modelo="models/global_model.pkl",
+                caminho_relatorio="reports/global_model_report.html",
+                metricas={
+                    "produtos_treinados": success_count,
+                    "total_produtos": total,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+                treinado_em=datetime.now(timezone.utc),
+            )
+            session.add(global_model)
+            session.commit()
+        
+        payload = {
+            "status": "success",
+            "total_produtos": total,
+            "produtos_treinados": success_count,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        
+        LOGGER.info("ml.tasks.retrain_global.completed", **payload)
+        return payload
+    
+    except Exception as e:
+        LOGGER.error("ml.tasks.retrain_global.failed", error=str(e), exc_info=True)
+        raise

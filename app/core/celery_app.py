@@ -6,6 +6,7 @@ import os
 from functools import lru_cache
 
 from celery import Celery
+from celery.schedules import crontab
 
 DEFAULT_BROKER_URL = "redis://broker:6379/0"
 
@@ -32,8 +33,13 @@ def create_celery_app() -> Celery:
         worker_disable_rate_limits=True,
     )
 
-    # Beat schedule vazio (sem tarefas agendadas)
-    celery_app.conf.beat_schedule = {}
+    # Configurar Celery Beat para retreinamento automático do modelo global
+    celery_app.conf.beat_schedule = {
+        'retrain-global-model-daily': {
+            'task': 'app.tasks.ml_tasks.retrain_global_model_task',
+            'schedule': crontab(hour=1, minute=0),  # Todo dia à 1h da manhã (UTC)
+        },
+    }
 
     celery_app.set_default()
 
