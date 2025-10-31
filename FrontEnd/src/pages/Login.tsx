@@ -14,10 +14,13 @@ export default function Login() {
     e.preventDefault();
     setError("");
     try {
+      const formData = new FormData();
+      formData.append("username", email);
+      formData.append("password", password);
+      
       const res = await fetch("/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: formData,
       });
       const data = await res.json();
       if (res.ok) {

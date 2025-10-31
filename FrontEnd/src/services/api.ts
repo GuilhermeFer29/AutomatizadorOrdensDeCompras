@@ -9,13 +9,13 @@ headers: {
 },
 });
 
-// Interceptor para adicionar token de autenticação (se necessário no futuro)
+// Interceptor para adicionar token de autenticação
 api.interceptors.request.use(
 (config) => {
-// const token = localStorage.getItem('authToken');
-// if (token) {
-// config.headers.Authorization = `Bearer ${token}`;
-// }
+const token = localStorage.getItem('token');
+if (token) {
+config.headers.Authorization = `Bearer ${token}`;
+}
 return config;
 },
 (error) => Promise.reject(error)
@@ -27,8 +27,9 @@ api.interceptors.response.use(
 (error: AxiosError) => {
 // Tratamento de erros comuns
 if (error.response?.status === 401) {
-// Token expirado ou inválido
-console.error('Erro de autenticação');
+// Token expirado ou inválido - fazer logout
+localStorage.removeItem('token');
+window.location.href = '/login';
 } else if (error.response?.status === 500) {
 console.error('Erro interno do servidor');
 }
