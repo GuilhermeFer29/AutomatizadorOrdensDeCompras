@@ -8,6 +8,7 @@ from app.models.models import Agente
 from datetime import datetime, timezone
 
 from app.agents.supply_chain_team import execute_supply_chain_team
+from app.agents.supply_chain_graph import supply_chain_graph
 
 LOGGER = structlog.get_logger(__name__)
 
@@ -103,4 +104,18 @@ def execute_supply_chain_analysis(
 
     return result
 
-__all__ = ["execute_supply_chain_analysis", "get_agents", "toggle_agent_status", "run_agent_now"]
+def run_purchase_analysis(sku: str):
+    """
+    Executa o gráfico da cadeia de suprimentos para um determinado SKU de produto.
+
+    Args:
+        sku (str): O SKU do produto a ser analisado.
+
+    Returns:
+        dict: O estado final do gráfico após a execução.
+    """
+    initial_state = {"product_sku": sku, "forecast": None, "market_prices": None, "recommendation": None}
+    final_state = supply_chain_graph.run(initial_state)
+    return final_state
+
+__all__ = ["execute_supply_chain_analysis", "get_agents", "toggle_agent_status", "run_agent_now", "run_purchase_analysis"]

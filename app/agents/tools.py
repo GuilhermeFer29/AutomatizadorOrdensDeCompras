@@ -1,183 +1,101 @@
 """
-Definição das ferramentas Agno para orquestrar os serviços existentes.
+Definição das ferramentas LangChain para orquestrar os serviços existentes.
 
-ARQUITETURA HÍBRIDA (2025-10-14):
-===================================
-✅ ProductCatalogTool: Ferramenta RAG para consultas naturais ao catálogo
-✅ SupplyChainToolkit: Ferramentas especializadas para análise de supply chain
-✅ Integração: Agno (orquestração) + LangChain (RAG) + Google AI (LLM/embeddings)
+Este arquivo encapsula as funções dos serviços existentes como Tools do LangChain,
+permitindo que os agentes de IA as utilizem de forma inteligente.
 """
 
-from __future__ import annotations
-
 import json
-import os
-from datetime import date, timedelta
-from pathlib import Path
-from typing import Any, Dict, List, Tuple
-from agno.tools import Toolkit, tool  # ✅ Importar decorator @tool para cache nativo
+from typing import Tuple, Dict
+from langchain.tools import tool
 from sqlmodel import Session, select
 from app.core.database import engine
-from app.ml.prediction import predict_prices_for_product
-from app.ml.model_manager import list_trained_models, get_model_info
-from app.models.models import Produto, OfertaProduto, Fornecedor, VendasHistoricas
-from app.services.rag_service import query_product_catalog_with_google_rag
+from app.models.models import Produto, PrecosHistoricos
+from app.services.scraping_service import scrape_and_save_price
+from app.services.ml_service import get_forecast
 
-# Importação condicional do Tavily
-try:
-    from tavily import TavilyClient
-    TAVILY_AVAILABLE = True
-except ImportError:
-    TAVILY_AVAILABLE = False
-
-ROOT_DIR = Path(__file__).resolve().parents[2]
-DEFAULT_FORECAST_HORIZON = 14
+from langchain.tools import Toolkit
 
 
-# ============================================================================
-# PRODUCT CATALOG TOOL - Ponte entre Agno e LangChain RAG
-# ============================================================================
-
-class ProductCatalogTool(Toolkit):
+@tool
+def get_product_info(product_sku: str) -> str:
     """
-    Ferramenta especialista em buscar informações sobre produtos no estoque.
-    
-    Esta ferramenta é a ponte entre o Agno Agent e o serviço RAG baseado em LangChain.
-    Use-a sempre que a conversa mencionar produtos, seja por nome, SKU ou características,
-    para verificar estoque, detalhes ou categorias.
-    
-    QUANDO USAR:
-    - Perguntas sobre produtos específicos (por nome ou SKU)
-    - Consultas de estoque e disponibilidade
-    - Informações sobre categorias de produtos
-    - Verificação de detalhes técnicos
-    - VENDAS HISTÓRICAS E ANÁLISES
-    
-    ARQUITETURA:
-    - Input: Pergunta do usuário em linguagem natural
-    - Processamento: LangChain RAG com embeddings Google AI + SQL para vendas
-    - Output: Resposta contextualizada baseada no catálogo
+    Busca informações básicas de um produto no banco de dados, incluindo estoque atual e mínimo.
+
+    Args:
+        product_sku (str): O SKU do produto a ser consultado.
+
+    Returns:
+        str: Informações do produto em formato JSON, incluindo estoque_atual, estoque_minimo, nome, etc.
     """
-    
-    def __init__(self):
-        super().__init__(name="product_catalog")
-        self.register(self.get_product_info)
-        self.register(self.get_sales_analysis)
-    
-    def get_product_info(self, user_question: str) -> str:
-        """
-        FERRAMENTA PRINCIPAL: Busca produtos no catálogo usando RAG semântico.
-        
-        QUANDO USAR (80% das perguntas):
-        "Tem parafusadeira?" → SIM, use esta ferramenta
-        "Qual produto mais vendeu?" → NÃO, use get_sales_analysis
-        "Mostre cabos HDMI" → SIM, use esta ferramenta
-        "Quanto custa martelo?" → SIM, use esta ferramenta
-        "Estoque de SKU_001" → SIM, use esta ferramenta
-        
-        Esta ferramenta é a PRIMEIRA escolha para informações ESTÁTICAS sobre produtos.
-        Para análises de VENDAS ou HISTÓRICO, use get_sales_analysis. resposta precisa e contextual.
-        
-        Args:
-            user_question: A pergunta original e completa do usuário sobre o produto.
-                          Exemplos:
-                          - "Tem a parafusadeira Makita no estoque?"
-                          - "Qual o SKU da serra circular?"
-                          - "Quantas furadeiras temos disponíveis?"
-                          - "Me fale sobre os produtos da categoria ferramentas elétricas"
-        
-        Returns:
-            str: Resposta detalhada e contextualizada sobre o produto, incluindo
-                 informações de estoque, SKU, categoria e outras características
-                 encontradas no catálogo.
-        
-        Example:
-            >>> tool = ProductCatalogTool()
-            >>> tool.get_product_info("Qual o estoque da parafusadeira Bosch?")
-            "A Parafusadeira Bosch GSR 12V (SKU_003) possui atualmente 28 unidades..."
-        """
-        try:
-            print(f"🔧 [Product Catalog Tool] Buscando informações para: '{user_question}'")
-            
-            # Chama o serviço RAG que usa LangChain + Google AI
-            response = query_product_catalog_with_google_rag(user_question)
-            
-            print(f"✅ [Product Catalog Tool] Resposta obtida ({len(response)} chars)")
-            return response
-            
-        except Exception as e:
-            error_msg = f"Desculpe, encontrei um erro ao buscar informações: {str(e)}"
-            print(f"❌ [Product Catalog Tool] Erro: {e}")
-            return error_msg
-    
-    def get_sales_analysis(self, user_question: str) -> str:
-        """
-        Analisa dados de vendas históricas para responder perguntas sobre performance.
-        
-        Use esta ferramenta quando o usuário perguntar sobre:
-        - Produtos mais vendidos (geral ou por período)
-        - Performance de vendas
-        - Histórico de saídas
-        - Análises de receita
-        
-        Args:
-            user_question: Pergunta sobre vendas históricas
-                          Exemplos:
-                          - "Qual produto mais vendeu?"
-                          - "Top 5 produtos por receita"
-                          - "Produtos que mais saíram na Black Friday"
-        
-        Returns:
-            str: Análise detalhada das vendas com produtos ranqueados
-        """
-        try:
-            print(f"📊 [Sales Analysis Tool] Analisando vendas: '{user_question}'")
-            
-            with Session(engine) as session:
-                # Query SQL para produtos mais vendidos (all time)
-                from sqlalchemy import func, desc
-                
-                query = (
-                    select(
-                        Produto.sku,
-                        Produto.nome,
-                        Produto.categoria,
-                        Produto.estoque_atual,
-                        func.sum(VendasHistoricas.quantidade).label('total_vendido'),
-                        func.sum(VendasHistoricas.receita).label('receita_total')
-                    )
-                    .join(VendasHistoricas, Produto.id == VendasHistoricas.produto_id)
-                    .group_by(Produto.id)
-                    .order_by(desc('total_vendido'))
-                    .limit(10)
-                )
-                
-                results = session.exec(query).all()
-                
-                if not results:
-                    return "Não encontrei dados de vendas no sistema."
-                
-                # Formata resposta
-                response = "## 📈 Top Produtos por Volume de Vendas\n\n"
-                
-                for idx, row in enumerate(results, 1):
-                    response += f"### {idx}. {row.nome}\n"
-                    response += f"- **SKU**: {row.sku}\n"
-                    response += f"- **Categoria**: {row.categoria}\n"
-                    response += f"- **Total Vendido**: {row.total_vendido:,} unidades\n"
-                    response += f"- **Receita Total**: R$ {row.receita_total:,.2f}\n"
-                    response += f"- **Estoque Atual**: {row.estoque_atual} unidades\n"
-                    response += "\n"
-                
-                print(f"✅ [Sales Analysis Tool] {len(results)} produtos analisados")
-                return response
-                
-        except Exception as e:
-            error_msg = f"Erro ao analisar vendas: {str(e)}"
-            print(f"❌ [Sales Analysis Tool] Erro: {e}")
-            import traceback
-            traceback.print_exc()
-            return error_msg
+    with Session(engine) as session:
+        produto = session.exec(select(Produto).where(Produto.sku == product_sku)).first()
+        if not produto:
+            return f"Produto com SKU {product_sku} não encontrado."
+
+        info = {
+            "sku": produto.sku,
+            "nome": produto.nome,
+            "estoque_atual": produto.estoque_atual,
+            "estoque_minimo": produto.estoque_minimo,
+            "categoria": produto.categoria,
+            "preco_atual": produto.preco_atual
+        }
+        return json.dumps(info, ensure_ascii=False)
+
+
+@tool
+def search_market_price(product_sku: str) -> str:
+    """
+    Busca o preço atual do produto no mercado usando scraping.
+
+    Args:
+        product_sku (str): O SKU do produto para buscar o preço.
+
+    Returns:
+        str: Preço encontrado ou mensagem de erro.
+    """
+    try:
+        # Primeiro, obter o nome do produto
+        with Session(engine) as session:
+            produto = session.exec(select(Produto).where(Produto.sku == product_sku)).first()
+            if not produto:
+                return f"Produto com SKU {product_sku} não encontrado."
+
+        # Executar scraping
+        preco = scrape_and_save_price(produto.id)
+        if preco:
+            return f"Preço encontrado: R$ {preco:.2f}"
+        else:
+            return "Não foi possível encontrar o preço no mercado."
+    except Exception as e:
+        return f"Erro ao buscar preço: {str(e)}"
+
+
+@tool
+def get_forecast_tool(product_sku: str) -> str:
+    """
+    Obtém a previsão de demanda para um produto específico.
+
+    Args:
+        product_sku (str): O SKU do produto para o qual a previsão será gerada.
+
+    Returns:
+        str: Previsão de demanda em formato JSON ou mensagem de erro.
+    """
+    try:
+        forecast = get_forecast(product_sku)
+        return json.dumps({"sku": product_sku, "forecast": forecast}, ensure_ascii=False)
+    except Exception as e:
+        return f"Erro ao obter previsão: {str(e)}"
+
+
+# Lista de ferramentas disponíveis para os agentes
+TOOLS = [
+    get_product_info,
+    search_market_price,
+    get_forecast_tool
+]
 
 
 # ============================================================================
