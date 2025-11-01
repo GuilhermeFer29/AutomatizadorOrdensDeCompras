@@ -12,6 +12,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: app:latest
     env_file:
       - .env
     ports:
@@ -26,7 +27,7 @@ services:
       - ./app:/app/app
       - ./scripts:/app/scripts
       - ./data:/app/data
-      - ./model:/app/model
+      - ./models:/app/models
     deploy:
       resources:
         reservations:
@@ -36,9 +37,7 @@ services:
               capabilities: [gpu]
 
   worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: app:latest
     env_file:
       - .env
     environment:
@@ -49,12 +48,14 @@ services:
         condition: service_healthy
       broker:
         condition: service_healthy
+      api:
+        condition: service_started
     command: celery -A app.core.celery_app.celery_app worker --loglevel=info
     volumes:
       - ./app:/app/app
       - ./scripts:/app/scripts
       - ./data:/app/data
-      - ./model:/app/model
+      - ./models:/app/models
     deploy:
       resources:
         reservations:
@@ -64,9 +65,7 @@ services:
               capabilities: [gpu]
 
   beat:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: app:latest
     env_file:
       - .env
     depends_on:
@@ -74,11 +73,21 @@ services:
         condition: service_healthy
       db:
         condition: service_healthy
+      api:
+        condition: service_started
     command: celery -A app.core.celery_app.celery_app beat --loglevel=info
     volumes:
       - ./app:/app/app
       - ./scripts:/app/scripts
-      - ./model:/app/model
+      - ./data:/app/data
+      - ./models:/app/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   db:
     image: mysql:8.0

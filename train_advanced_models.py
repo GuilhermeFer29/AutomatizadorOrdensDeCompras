@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
 """
-Treinamento Avançado de Modelos por Produto (v2.2)
+Treinamento Avançado de Modelos com Melhores Práticas (v2.1)
 
-Melhorias desta versão:
-- Calendário diário forçado antes do feature engineering
-- Guard-rails para Optuna (não afinar série curta)
-- Stacking com OOF usando TimeSeriesSplit (mais estável)
-- Silêncio de logs de LGB/XGB usando callbacks oficiais
-- Modo --bulk para popular rápido
-- Salvamento do dataset de treino por SKU
-- Métricas de qualidade de dado no metadata
+Objetivo:
+- Ter métricas comparáveis entre estágios (search vs holdout vs backtest)
+- Reduzir otimismo do stacking
+- Facilitar debug de cada SKU
+- Permitir rodar com/sem Optuna via CLI
 
-Requer:
-- lightgbm >= 4.6  (early_stopping com callback)
-- xgboost >= 3.1   (early_stopping_rounds como parâmetro)
-- optuna >= 4.5    (study.optimize padrão)
-- scikit-learn >= 1.7 (TimeSeriesSplit com n_splits)
+Principais blocos:
+1. Extração e feature engineering
+2. Preparação (target deslocado)
+3. Split temporal + scaler só no train
+4. (Opcional) Optuna para LGB e XGB em cima do TRAIN
+5. Treino dos 4 modelos base
+6. Stacking com OOF simples
+7. Avaliação: holdout + (opcional) backtest
+8. Persistência (modelos, scaler, metadata)
 """
 
 import sys
@@ -24,13 +25,14 @@ import json
 import pickle
 import warnings
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Tuple, Optional, Any
+from datetime import datetime, timezone
+from typing import Dict, List, Tuple, Optional
 
 import numpy as np
 import pandas as pd
 from sqlmodel import Session, select
 
+# ML
 from sklearn.preprocessing import RobustScaler
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
@@ -41,6 +43,13 @@ from sklearn.metrics import (
 )
 from sklearn.linear_model import Ridge
 
+# Compatibilidade sklearn 1.4+: root_mean_squared_error
+try:
+    from sklearn.metrics import root_mean_squared_error
+    HAS_RMSE = True
+except ImportError:
+    HAS_RMSE = False
+
 import lightgbm as lgb
 import xgboost as xgb
 import optuna
@@ -49,9 +58,9 @@ from optuna.pruners import MedianPruner
 
 warnings.filterwarnings("ignore")
 
-# --------------------------------------------------------
-# DETECÇÃO DE GPU
-# --------------------------------------------------------
+# =====================================================================
+# DETECÇÃO DE GPU (sem torch - mais leve)
+# =====================================================================
 import subprocess
 
 def check_gpu_available():
@@ -74,9 +83,9 @@ if HAS_GPU:
 else:
     print(f"🎮 GPU Disponível: False (usando CPU)")
 
-# --------------------------------------------------------
+# =====================================================================
 # IMPORTS DO PROJETO
-# --------------------------------------------------------
+# =====================================================================
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -84,127 +93,87 @@ if str(PROJECT_ROOT) not in sys.path:
 from app.core.database import engine
 from app.models.models import Produto, VendasHistoricas, PrecosHistoricos, ModeloPredicao
 
-# --------------------------------------------------------
-# CONSTANTES
-# --------------------------------------------------------
-MIN_SAMPLES = 90
-FORECAST_HORIZON = 7
-HOLDOUT_RATIO = 0.2
-BACKTEST_SPLITS = 3
+# =====================================================================
+# CONFIGURAÇÕES GERAIS
+# =====================================================================
+MIN_SAMPLES = 90            # Mínimo de registros para considerar o produto
+LOOKBACK_WINDOW = 30        # Janela de lags
+FORECAST_HORIZON = 7        # Quantos dias à frente vamos prever
+HOLDOUT_RATIO = 0.2         # 20% final para validação
+BACKTEST_SPLITS = 3         # Quantos cortes de backtest fazer no histórico
+
 RANDOM_SEED = 42
 
+# =====================================================================
+# MÉTRICAS CONSISTENTES
+# =====================================================================
 
-# --------------------------------------------------------
-# MÉTRICAS
-# --------------------------------------------------------
 def eval_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float]:
-    mse = mean_squared_error(y_true, y_pred)
-    rmse = np.sqrt(mse)
+    """Métrica única para todo o pipeline. MAPE sempre em %."""
+    # sklearn 1.4+: usar root_mean_squared_error (squared foi deprecado em 1.4)
+    # Fallback para versões antigas: np.sqrt(mse)
+    if HAS_RMSE:
+        rmse = root_mean_squared_error(y_true, y_pred)
+    else:
+        mse = mean_squared_error(y_true, y_pred)
+        rmse = np.sqrt(mse)
+    
     mae = mean_absolute_error(y_true, y_pred)
-    mape = mean_absolute_percentage_error(y_true, y_pred) * 100
+    mape = mean_absolute_percentage_error(y_true, y_pred) * 100  # %
     return {"rmse": float(rmse), "mae": float(mae), "mape": float(mape)}
 
 
-# --------------------------------------------------------
-# DATAFRAME BASE (CALENDÁRIO DIÁRIO)
-# --------------------------------------------------------
-def build_base_dataframe(
-    vendas: List[VendasHistoricas],
-    precos: List[PrecosHistoricos],
-) -> pd.DataFrame:
-    """Normaliza vendas e preços para calendário diário antes das features."""
-    if not vendas:
-        raise ValueError("Sem vendas")
-    
-    # Agregar vendas por data (soma quantidade e receita)
-    df_v = (
-        pd.DataFrame(
-            {
-                "data_venda": [v.data_venda for v in vendas],
-                "quantidade": [v.quantidade for v in vendas],
-                "receita": [float(v.receita) for v in vendas],
-            }
-        )
-        .groupby("data_venda")
-        .agg({"quantidade": "sum", "receita": "sum"})
-        .sort_index()
-    )
+# =====================================================================
+# FEATURE ENGINEERING
+# =====================================================================
 
-    # força diário
-    df_v = df_v.asfreq("D")
-
-    if precos:
-        # Agregar preços por data (média)
-        df_p = (
-            pd.DataFrame(
-                {
-                    "data_venda": [p.coletado_em for p in precos],
-                    "preco": [float(p.preco) for p in precos],
-                }
-            )
-            .groupby("data_venda")
-            .agg({"preco": "mean"})
-            .sort_index()
-            .asfreq("D")
-        )
-        df = df_v.join(df_p, how="left")
-    else:
-        df = df_v
-        df["preco"] = np.nan
-
-    # preencher
-    df["preco"] = df["preco"].ffill().bfill()
-    df["quantidade"] = df["quantidade"].fillna(0)
-    df["receita"] = df["receita"].fillna(0)
-
-    df = df.reset_index()
-    return df
-
-
-# --------------------------------------------------------
-# FEATURES
-# --------------------------------------------------------
-def create_time_series_features(df: pd.DataFrame) -> pd.DataFrame:
+def create_time_series_features(df: pd.DataFrame, lookback: int = LOOKBACK_WINDOW) -> pd.DataFrame:
     df = df.copy()
 
-    # lags
+    # Lags principais
     for lag in [1, 7, 14, 30]:
         df[f"lag_{lag}"] = df["quantidade"].shift(lag)
 
-    # rolling
+    # Rolling
     for window in [7, 14, 30]:
         df[f"rolling_mean_{window}"] = df["quantidade"].rolling(window=window).mean()
         df[f"rolling_std_{window}"] = df["quantidade"].rolling(window=window).std()
 
-    # ewm
+    # EWM
     df["ewm_mean"] = df["quantidade"].ewm(span=14).mean()
 
-    # calendário
+    # Calendário
     df["day_of_week"] = df["data_venda"].dt.dayofweek
     df["day_of_month"] = df["data_venda"].dt.day
     df["month"] = df["data_venda"].dt.month
     df["quarter"] = df["data_venda"].dt.quarter
     df["is_weekend"] = (df["day_of_week"] >= 5).astype(int)
 
-    # tendência
+    # Tendência
     df["trend"] = np.arange(len(df))
 
-    # preço
+    # Preço e estatísticas
     df["preco_lag_1"] = df["preco"].shift(1)
     df["preco_mean_7"] = df["preco"].rolling(window=7).mean()
     df["preco_volatility"] = df["preco"].rolling(window=7).std()
 
+    # Limpa NaNs gerados por lags/rollings
     df = df.dropna()
+
     return df
 
 
 def prepare_training_data(
     df: pd.DataFrame, forecast_horizon: int = FORECAST_HORIZON
 ) -> Tuple[np.ndarray, np.ndarray, List[str]]:
-    features_df = df.drop(columns=["quantidade", "data_venda", "preco", "receita"], errors="ignore")
+    """
+    Prepara X, y e mantém nomes de colunas (útil pra debug).
+    """
+    feature_df = df.drop(columns=["quantidade", "data_venda", "preco", "receita"], errors="ignore")
 
+    # Target deslocado
     y = df["quantidade"].shift(-forecast_horizon).dropna()
-    X = features_df.iloc[:-forecast_horizon]
+    X = feature_df.iloc[:-forecast_horizon]
 
     min_len = min(len(X), len(y))
     X = X.iloc[:min_len]
@@ -213,9 +182,10 @@ def prepare_training_data(
     return X.values, y.values, list(X.columns)
 
 
-# --------------------------------------------------------
-# OPTUNA OBJECTIVES
-# --------------------------------------------------------
+# =====================================================================
+# OBJETIVOS OPTUNA
+# =====================================================================
+
 def objective_lgb(trial: optuna.Trial, X_train: np.ndarray, y_train: np.ndarray) -> float:
     params = {
         "num_leaves": trial.suggest_int("num_leaves", 20, 150),
@@ -224,9 +194,9 @@ def objective_lgb(trial: optuna.Trial, X_train: np.ndarray, y_train: np.ndarray)
         "feature_fraction": trial.suggest_float("feature_fraction", 0.5, 1.0),
         "bagging_fraction": trial.suggest_float("bagging_fraction", 0.5, 1.0),
         "bagging_freq": trial.suggest_int("bagging_freq", 1, 10),
-        "lambda_l1": trial.suggest_float("lambda_l1", 0.0, 10.0),
-        "lambda_l2": trial.suggest_float("lambda_l2", 0.0, 10.0),
-        "min_data_in_leaf": trial.suggest_int("min_data_in_leaf", 5, 60),
+        "lambda_l1": trial.suggest_float("lambda_l1", 0, 10),
+        "lambda_l2": trial.suggest_float("lambda_l2", 0, 10),
+        "min_data_in_leaf": trial.suggest_int("min_data_in_leaf", 5, 50),
     }
 
     tscv = TimeSeriesSplit(n_splits=3)
@@ -246,10 +216,8 @@ def objective_lgb(trial: optuna.Trial, X_train: np.ndarray, y_train: np.ndarray)
             X_tr,
             y_tr,
             eval_set=[(X_val, y_val)],
-            eval_metric="rmse",
-            callbacks=[lgb.early_stopping(stopping_rounds=50, verbose=False)],
+            callbacks=[lgb.early_stopping(stopping_rounds=50)],
         )
-
         y_pred = model.predict(X_val)
         metrics = eval_metrics(y_val, y_pred)
         scores.append(metrics["rmse"])
@@ -263,8 +231,8 @@ def objective_xgb(trial: optuna.Trial, X_train: np.ndarray, y_train: np.ndarray)
         "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
         "subsample": trial.suggest_float("subsample", 0.5, 1.0),
         "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
-        "reg_alpha": trial.suggest_float("reg_alpha", 0.0, 10.0),
-        "reg_lambda": trial.suggest_float("reg_lambda", 0.0, 10.0),
+        "reg_alpha": trial.suggest_float("reg_alpha", 0, 10),
+        "reg_lambda": trial.suggest_float("reg_lambda", 0, 10),
         "min_child_weight": trial.suggest_int("min_child_weight", 1, 10),
     }
 
@@ -280,9 +248,9 @@ def objective_xgb(trial: optuna.Trial, X_train: np.ndarray, y_train: np.ndarray)
             n_estimators=200,
             random_state=RANDOM_SEED,
             verbosity=0,
-            early_stopping_rounds=50,
-            tree_method="hist",
+            early_stopping_rounds=50,  # XGBoost 2.0+: usar parâmetro direto
         )
+        # XGBoost 2.0+: early_stopping_rounds é parâmetro do modelo, não callback
         model.fit(
             X_tr,
             y_tr,
@@ -296,17 +264,25 @@ def objective_xgb(trial: optuna.Trial, X_train: np.ndarray, y_train: np.ndarray)
     return float(np.mean(scores))
 
 
-# --------------------------------------------------------
-# STACKING COM OOF (TimeSeriesSplit)
-# --------------------------------------------------------
+# =====================================================================
+# STACKING (com OOF simples)
+# =====================================================================
+
 def build_stacking_with_oof(
     X_train: np.ndarray,
     y_train: np.ndarray,
     X_val: np.ndarray,
     y_val: np.ndarray,
-    best_params_lgb: Dict[str, Any],
-    best_params_xgb: Dict[str, Any],
-) -> Dict[str, Any]:
+    best_params_lgb: Dict,
+    best_params_xgb: Dict,
+) -> Dict:
+    """
+    Faz o stacking em 2 níveis:
+    - nível 1: 4 modelos (lgb, xgb, rf, gb)
+    - nível 2: ridge
+    Com geração de OOF para o treino (1 split simples).
+    """
+    # Modelos base
     base_models = {
         "lgb": lgb.LGBMRegressor(
             **best_params_lgb,
@@ -319,7 +295,6 @@ def build_stacking_with_oof(
             n_estimators=300,
             random_state=RANDOM_SEED,
             verbosity=0,
-            tree_method="hist",
         ),
         "rf": RandomForestRegressor(
             n_estimators=200,
@@ -335,30 +310,24 @@ def build_stacking_with_oof(
         ),
     }
 
-    # OOF com 3 splits
-    tscv = TimeSeriesSplit(n_splits=3)
-    oof_preds = []
-    oof_y = []
+    # OOF: vamos fazer 1 split temporal dentro do train
+    inner_split = int(len(X_train) * 0.8)
+    X_tr_inner, X_oof = X_train[:inner_split], X_train[inner_split:]
+    y_tr_inner, y_oof = y_train[:inner_split], y_train[inner_split:]
 
-    for tr_idx, oof_idx in tscv.split(X_train):
-        X_tr, X_oof = X_train[tr_idx], X_train[oof_idx]
-        y_tr, y_oof = y_train[tr_idx], y_train[oof_idx]
+    # Treina modelos base no pedaço maior
+    for m in base_models.values():
+        m.fit(X_tr_inner, y_tr_inner)
 
-        fold_preds = []
-        for m in base_models.values():
-            m.fit(X_tr, y_tr)
-            fold_preds.append(m.predict(X_oof))
-        oof_preds.append(np.column_stack(fold_preds))
-        oof_y.append(y_oof)
-
-    meta_train = np.vstack(oof_preds)
-    meta_y = np.concatenate(oof_y)
-
-    # predição no holdout real
+    # Gera OOF pro pedaço menor
+    meta_train = np.column_stack([m.predict(X_oof) for m in base_models.values()])
     meta_val = np.column_stack([m.predict(X_val) for m in base_models.values()])
 
+    # Meta-learner
     meta_learner = Ridge(alpha=1.0)
-    meta_learner.fit(meta_train, meta_y)
+    meta_learner.fit(meta_train, y_oof)
+
+    # Avaliação no holdout real
     y_pred_val = meta_learner.predict(meta_val)
     holdout_metrics = eval_metrics(y_val, y_pred_val)
 
@@ -369,27 +338,34 @@ def build_stacking_with_oof(
     }
 
 
-# --------------------------------------------------------
-# BACKTEST
-# --------------------------------------------------------
+# =====================================================================
+# BACKTEST DESLIZANTE (opcional)
+# =====================================================================
+
 def sliding_backtest(
     X: np.ndarray,
     y: np.ndarray,
     scaler: RobustScaler,
-    best_params_lgb: Dict[str, Any],
+    best_params_lgb: Dict,
+    best_params_xgb: Dict,
     n_splits: int = BACKTEST_SPLITS,
 ) -> List[Dict[str, float]]:
-    if len(X) < 60:
+    """
+    Faz um backtest rápido: em cada split treina LGB com os melhores params
+    e avalia no trecho seguinte. Não faz stacking aqui pra ficar rápido.
+    """
+    if len(X) < 60:  # muito curto
         return []
 
     tscv = TimeSeriesSplit(n_splits=n_splits)
     results = []
     for tr_idx, val_idx in tscv.split(X):
-        X_tr, X_t = X[tr_idx], X[val_idx]
-        y_tr, y_t = y[tr_idx], y[val_idx]
+        X_tr, X_val = X[tr_idx], X[val_idx]
+        y_tr, y_val = y[tr_idx], y[val_idx]
 
+        # reescala dentro do split usando o scaler já fitado na pipeline principal
         X_tr = scaler.transform(X_tr)
-        X_t = scaler.transform(X_t)
+        X_val = scaler.transform(X_val)
 
         model = lgb.LGBMRegressor(
             **best_params_lgb,
@@ -398,15 +374,17 @@ def sliding_backtest(
             verbose=-1,
         )
         model.fit(X_tr, y_tr)
-        y_pred = model.predict(X_t)
-        results.append(eval_metrics(y_t, y_pred))
+        y_pred = model.predict(X_val)
+        metrics = eval_metrics(y_val, y_pred)
+        results.append(metrics)
 
     return results
 
 
-# --------------------------------------------------------
+# =====================================================================
 # TREINO POR PRODUTO
-# --------------------------------------------------------
+# =====================================================================
+
 def train_product_model(
     produto: Produto,
     optimize: bool = True,
@@ -415,55 +393,75 @@ def train_product_model(
 ) -> bool:
     try:
         with Session(engine) as session:
-            vendas = (
-                session.exec(
-                    select(VendasHistoricas)
-                    .where(VendasHistoricas.produto_id == produto.id)
-                    .order_by(VendasHistoricas.data_venda)
-                )
-                .all()
-            )
+            # -----------------------------------------------------------------
+            # 1) Carregar dados
+            # -----------------------------------------------------------------
+            vendas = session.exec(
+                select(VendasHistoricas)
+                .where(VendasHistoricas.produto_id == produto.id)
+                .order_by(VendasHistoricas.data_venda)
+            ).all()
+
             if len(vendas) < MIN_SAMPLES:
-                print(f"    ⚠️ {produto.sku} - dados insuficientes ({len(vendas)}/{MIN_SAMPLES})")
+                print(f"    ⚠️  {produto.sku} - Dados insuficientes ({len(vendas)}/{MIN_SAMPLES})")
                 return False
 
-            precos = (
-                session.exec(
-                    select(PrecosHistoricos)
-                    .where(PrecosHistoricos.produto_id == produto.id)
-                    .order_by(PrecosHistoricos.coletado_em)
-                )
-                .all()
+            precos = session.exec(
+                select(PrecosHistoricos)
+                .where(PrecosHistoricos.produto_id == produto.id)
+                .order_by(PrecosHistoricos.coletado_em)
+            ).all()
+
+            df = pd.DataFrame(
+                {
+                    "data_venda": [v.data_venda for v in vendas],
+                    "quantidade": [v.quantidade for v in vendas],
+                    "receita": [float(v.receita) for v in vendas],
+                }
             )
 
-            # base diária
-            df = build_base_dataframe(vendas, precos)
+            df_precos = pd.DataFrame(
+                {
+                    "data_venda": [p.coletado_em for p in precos],
+                    "preco": [float(p.preco) for p in precos],
+                }
+            )
+
+            df = df.merge(df_precos, on="data_venda", how="left")
+            df["preco"] = df["preco"].fillna(method="ffill").fillna(method="bfill")
+
+            # -----------------------------------------------------------------
+            # 2) Features
+            # -----------------------------------------------------------------
             df = create_time_series_features(df)
             if len(df) < MIN_SAMPLES:
-                print(f"    ⚠️ {produto.sku} - features insuficientes ({len(df)}/{MIN_SAMPLES})")
+                print(f"    ⚠️  {produto.sku} - Features insuficientes após engenharia")
                 return False
 
-            # qualidade de dado
-            zero_days = int((df["quantidade"] == 0).sum())
-            zero_days_pct = zero_days / len(df)
-            missing_price = int(df["preco"].isna().sum())
-
-            # prepara X, y
+            # -----------------------------------------------------------------
+            # 3) Preparar X, y
+            # -----------------------------------------------------------------
             X, y, feature_names = prepare_training_data(df)
 
-            # split temporal holdout
+            # -----------------------------------------------------------------
+            # 4) Split temporal (holdout real = últimos 20%)
+            # -----------------------------------------------------------------
             split_idx = int(len(X) * (1 - HOLDOUT_RATIO))
             X_train, X_val = X[:split_idx], X[split_idx:]
             y_train, y_val = y[:split_idx], y[split_idx:]
 
+            # -----------------------------------------------------------------
+            # 5) Scaler fitado só no train
+            # -----------------------------------------------------------------
             scaler = RobustScaler()
             X_train_scaled = scaler.fit_transform(X_train)
             X_val_scaled = scaler.transform(X_val)
 
-            # guard-rails optuna
-            small_data = len(X_train_scaled) < 120
-            if optimize and not small_data:
-                print(f"    🔧 {produto.sku} - Otimizando hiperparâmetros (n_trials={n_trials})...")
+            # -----------------------------------------------------------------
+            # 6) (Opcional) Optuna
+            # -----------------------------------------------------------------
+            if optimize:
+                print(f"    🔧 {produto.sku} - Otimizando hiperparâmetros (n_trials={n_trials}) ...")
                 # LGB
                 study_lgb = optuna.create_study(
                     sampler=TPESampler(seed=RANDOM_SEED),
@@ -492,7 +490,8 @@ def train_product_model(
                 best_params_xgb = study_xgb.best_params
                 best_rmse_xgb = study_xgb.best_value
             else:
-                print(f"    ℹ️ {produto.sku} - pouco dado ou optimize off, usando defaults.")
+                # defaults razoáveis
+                print(f"    ℹ️  {produto.sku} - Otimização desativada, usando hyperparams padrão.")
                 best_params_lgb = {
                     "num_leaves": 64,
                     "max_depth": 8,
@@ -514,11 +513,12 @@ def train_product_model(
                     "reg_alpha": 0.0,
                     "reg_lambda": 1.0,
                     "min_child_weight": 1,
-                    "tree_method": "hist",
                 }
                 best_rmse_xgb = None
 
-            # stacking
+            # -----------------------------------------------------------------
+            # 7) Stacking (com OOF) + métrica de holdout
+            # -----------------------------------------------------------------
             stacking_result = build_stacking_with_oof(
                 X_train_scaled,
                 y_train,
@@ -529,7 +529,9 @@ def train_product_model(
             )
             holdout_metrics = stacking_result["holdout_metrics"]
 
-            # backtest
+            # -----------------------------------------------------------------
+            # 8) (Opcional) Backtest
+            # -----------------------------------------------------------------
             backtest_metrics = []
             if backtest:
                 backtest_metrics = sliding_backtest(
@@ -537,29 +539,34 @@ def train_product_model(
                     y,
                     scaler,
                     best_params_lgb=best_params_lgb,
+                    best_params_xgb=best_params_xgb,
                     n_splits=BACKTEST_SPLITS,
                 )
 
-            # persistência
+            # -----------------------------------------------------------------
+            # 9) Persistência
+            # -----------------------------------------------------------------
             model_dir = PROJECT_ROOT / "model" / produto.sku
             model_dir.mkdir(parents=True, exist_ok=True)
 
-            # salva modelos
+            # salva modelos base
             with open(model_dir / "ensemble_base.pkl", "wb") as f:
                 pickle.dump(stacking_result["base_models"], f)
+
+            # salva meta-learner
             with open(model_dir / "meta_learner.pkl", "wb") as f:
                 pickle.dump(stacking_result["meta_learner"], f)
+
+            # salva scaler
             with open(model_dir / "scaler.pkl", "wb") as f:
                 pickle.dump(scaler, f)
 
-            # salva dataset usado
-            df.to_parquet(model_dir / "training_data.parquet", index=False)
-
+            # metadata rica
             metadata = {
                 "produto_id": produto.id,
                 "sku": produto.sku,
                 "modelo_tipo": "ensemble_stacking",
-                "versao": "2.2_advanced",
+                "versao": "2.1_advanced",
                 "treinado_em": datetime.now(timezone.utc).isoformat(),
                 "amostras_totais": int(len(X)),
                 "amostras_treino": int(len(X_train)),
@@ -581,21 +588,16 @@ def train_product_model(
                     },
                     "backtest": backtest_metrics,
                 },
-                "data_quality": {
-                    "zero_days": zero_days,
-                    "zero_days_pct": float(zero_days_pct),
-                    "missing_price": missing_price,
-                },
             }
 
             with open(model_dir / "metadata.json", "w") as f:
                 json.dump(metadata, f, indent=2)
 
-            # registra no banco
+            # registrar no banco
             modelo = ModeloPredicao(
                 produto_id=produto.id,
                 modelo_tipo="ensemble_stacking",
-                versao="2.2_advanced",
+                versao="2.1_advanced",
                 caminho_modelo=str(model_dir / "ensemble_base.pkl"),
                 metricas=holdout_metrics,
                 treinado_em=datetime.now(timezone.utc),
@@ -607,7 +609,7 @@ def train_product_model(
                 f"    ✅ {produto.sku} - HOLDOUT: RMSE={holdout_metrics['rmse']:.4f} "
                 f"MAE={holdout_metrics['mae']:.4f} MAPE={holdout_metrics['mape']:.2f}%"
             )
-            if optimize and not small_data:
+            if optimize:
                 print(
                     f"       (search) lgb_rmse_cv={best_rmse_lgb:.4f} | "
                     f"(search) xgb_rmse_cv={best_rmse_xgb:.4f}"
@@ -620,60 +622,67 @@ def train_product_model(
         return False
 
 
-# --------------------------------------------------------
-# MAIN / CLI
-# --------------------------------------------------------
-def main() -> bool:
-    parser = argparse.ArgumentParser("Treina modelos avançados por produto.")
+# =====================================================================
+# CLI / MAIN
+# =====================================================================
+
+def main():
+    parser = argparse.ArgumentParser(description="Treina modelos avançados por produto.")
     parser.add_argument("--no-optuna", action="store_true", help="Desativa tuning com Optuna.")
-    parser.add_argument("--trials", type=int, default=20, help="Trials por modelo.")
+    parser.add_argument("--trials", type=int, default=20, help="Qtd. de trials do Optuna.")
     parser.add_argument("--no-backtest", action="store_true", help="Desativa backtest deslizante.")
-    parser.add_argument("--sku", type=str, help="Treinar só 1 SKU.")
-    parser.add_argument("--limit", type=int, help="Limitar quantidade de SKUs.")
-    parser.add_argument("--bulk", action="store_true", help="Modo rápido: sem backtest, poucos trials, sem Optuna em série curta.")
+    parser.add_argument("--sku", type=str, help="Treina apenas um SKU.")
+    parser.add_argument("--limit", type=int, help="Limita número de produtos a treinar.")
     args = parser.parse_args()
+
+    print(
+        """
+╔════════════════════════════════════════════════════════════════════════╗
+║     🚀 TREINAMENTO AVANÇADO DE MODELOS (v2.1)                          ║
+║     • Feature Engineering Avançado                                     ║
+║     • Ensemble Stacking (OOF)                                          ║
+║     • Validação Temporal / Holdout                                     ║
+║     • Hyperparameter Tuning com Optuna (opcional)                      ║
+║     • Backtest deslizante (opcional)                                   ║
+╚════════════════════════════════════════════════════════════════════════╝
+"""
+    )
 
     optimize = not args.no_optuna
     do_backtest = not args.no_backtest
-
-    if args.bulk:
-        optimize = False  # modo popular
-        do_backtest = False
 
     with Session(engine) as session:
         if args.sku:
             produtos = list(session.exec(select(Produto).where(Produto.sku == args.sku)))
         else:
             produtos = list(session.exec(select(Produto)).all())
+    
+    # Aplicar limite se especificado
+    if args.limit:
+        produtos = produtos[:args.limit]
 
     if not produtos:
         print("❌ Nenhum produto encontrado.")
         return False
 
-    if args.limit:
-        produtos = produtos[: args.limit]
+    print(f"📦 Treinando {len(produtos)} modelos...\n")
 
-    print(
-        f"🚀 Treinando {len(produtos)} produtos | "
-        f"optuna={'on' if optimize else 'off'} | backtest={'on' if do_backtest else 'off'}"
-    )
-
-    success = 0
-    for idx, prod in enumerate(produtos, 1):
-        print(f"[{idx}/{len(produtos)}] {prod.sku}")
+    success_count = 0
+    for idx, produto in enumerate(produtos, 1):
+        print(f"[{idx}/{len(produtos)}] {produto.sku}")
         ok = train_product_model(
-            prod,
+            produto,
             optimize=optimize,
             n_trials=args.trials,
             backtest=do_backtest,
         )
         if ok:
-            success += 1
+            success_count += 1
 
-    print(f"\n✅ Concluído: {success}/{len(produtos)}")
-    return success > 0
+    print(f"\n✅ Treinamento concluído: {success_count}/{len(produtos)} modelos")
+    return True
 
 
 if __name__ == "__main__":
-    ok = main()
-    sys.exit(0 if ok else 1)
+    success = main()
+    sys.exit(0 if success else 1)
