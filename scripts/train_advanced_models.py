@@ -37,7 +37,6 @@ from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.metrics import (
     mean_squared_error,
     mean_absolute_error,
-    mean_absolute_percentage_error,
 )
 from sklearn.linear_model import Ridge
 
@@ -95,14 +94,57 @@ RANDOM_SEED = 42
 
 
 # --------------------------------------------------------
-# MÉTRICAS
+# MÉTRICAS (com tratamento de zeros)
 # --------------------------------------------------------
+def mape_safe(y_true: np.ndarray, y_pred: np.ndarray, eps: float = 1.0) -> float:
+    """
+    MAPE seguro que ignora alvos muito pequenos (0, 1, 2...).
+    Se todos os pontos são < eps, devolve NaN.
+    
+    Referência: https://otexts.com/fpp3/accuracy.html
+    """
+    y_true = np.asarray(y_true)
+    y_pred = np.asarray(y_pred)
+    
+    mask = np.abs(y_true) >= eps
+    if not np.any(mask):
+        return float("nan")
+    
+    y_true_f = y_true[mask]
+    y_pred_f = y_pred[mask]
+    
+    return float(np.mean(np.abs((y_true_f - y_pred_f) / y_true_f)) * 100.0)
+
+
+def wmape(y_true: np.ndarray, y_pred: np.ndarray, eps: float = 1e-6) -> float:
+    """
+    Weighted MAPE (WAPE) - não explode com zeros espalhados.
+    Usado em supply chain e demand forecasting.
+    
+    Referência: https://en.wikipedia.org/wiki/Mean_absolute_percentage_error
+    """
+    y_true = np.asarray(y_true)
+    y_pred = np.asarray(y_pred)
+    
+    num = np.sum(np.abs(y_true - y_pred))
+    den = np.sum(np.abs(y_true)) + eps
+    return float(num / den * 100.0)
+
+
 def eval_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float]:
+    """Calcula métricas robustas para séries temporais com possíveis zeros."""
     mse = mean_squared_error(y_true, y_pred)
     rmse = np.sqrt(mse)
     mae = mean_absolute_error(y_true, y_pred)
-    mape = mean_absolute_percentage_error(y_true, y_pred) * 100
-    return {"rmse": float(rmse), "mae": float(mae), "mape": float(mape)}
+    mape = mape_safe(y_true, y_pred, eps=1.0)
+    wmape_val = wmape(y_true, y_pred)
+    
+    return {
+        "rmse": float(rmse),
+        "mae": float(mae),
+        "mape": float(mape),
+        "wmape": float(wmape_val),
+    }
 
 
 # --------------------------------------------------------
@@ -236,8 +278,15 @@ def objective_lgb(trial: optuna.Trial, X_train: np.ndarray, y_train: np.ndarray)
         X_tr, X_val = X_train[tr_idx], X_train[val_idx]
         y_tr, y_val = y_train[tr_idx], y_train[val_idx]
 
+        # LightGBM com GPU se disponível (CUDA 13.0 + RTX 2060)
+        lgb_params = params.copy()
+        if HAS_GPU:
+            lgb_params["device_type"] = "cuda"
+            lgb_params["gpu_device_id"] = GPU_DEVICE
+            lgb_params["max_bin"] = 63  # Recomendado para GPU
+        
         model = lgb.LGBMRegressor(
-            **params,
+            **lgb_params,
             n_estimators=200,
             random_state=RANDOM_SEED,
             verbose=-1,
@@ -275,13 +324,20 @@ def objective_xgb(trial: optuna.Trial, X_train: np.ndarray, y_train: np.ndarray)
         X_tr, X_val = X_train[tr_idx], X_train[val_idx]
         y_tr, y_val = y_train[tr_idx], y_train[val_idx]
 
+        # XGBoost com GPU se disponível (conforme doc oficial)
+        # device: "cuda" ou "cuda:0" para GPU NVIDIA
+        # tree_method: "hist" é obrigatório com GPU
+        xgb_params = params.copy()
+        xgb_params["tree_method"] = "hist"
+        if HAS_GPU:
+            xgb_params["device"] = "cuda"
+        
         model = xgb.XGBRegressor(
-            **params,
+            **xgb_params,
             n_estimators=200,
             random_state=RANDOM_SEED,
             verbosity=0,
             early_stopping_rounds=50,
-            tree_method="hist",
         )
         model.fit(
             X_tr,
@@ -307,19 +363,33 @@ def build_stacking_with_oof(
     best_params_lgb: Dict[str, Any],
     best_params_xgb: Dict[str, Any],
 ) -> Dict[str, Any]:
+    # Preparar parâmetros com GPU se disponível
+    lgb_params_final = best_params_lgb.copy()
+    xgb_params_final = best_params_xgb.copy()
+    
+    # LightGBM com GPU (CUDA 13.0)
+    if HAS_GPU:
+        lgb_params_final["device_type"] = "cuda"
+        lgb_params_final["gpu_device_id"] = GPU_DEVICE
+        lgb_params_final["max_bin"] = 63
+    
+    # XGBoost com GPU
+    xgb_params_final["tree_method"] = "hist"
+    if HAS_GPU:
+        xgb_params_final["device"] = "cuda"
+    
     base_models = {
         "lgb": lgb.LGBMRegressor(
-            **best_params_lgb,
+            **lgb_params_final,
             n_estimators=300,
             random_state=RANDOM_SEED,
             verbose=-1,
         ),
         "xgb": xgb.XGBRegressor(
-            **best_params_xgb,
+            **xgb_params_final,
             n_estimators=300,
             random_state=RANDOM_SEED,
             verbosity=0,
-            tree_method="hist",
         ),
         "rf": RandomForestRegressor(
             n_estimators=200,
@@ -455,6 +525,9 @@ def train_product_model(
             split_idx = int(len(X) * (1 - HOLDOUT_RATIO))
             X_train, X_val = X[:split_idx], X[split_idx:]
             y_train, y_val = y[:split_idx], y[split_idx:]
+            
+            # marca se holdout tem zeros
+            has_zero_in_holdout = bool((y_val == 0).any())
 
             scaler = RobustScaler()
             X_train_scaled = scaler.fit_transform(X_train)
@@ -585,6 +658,7 @@ def train_product_model(
                     "zero_days": zero_days,
                     "zero_days_pct": float(zero_days_pct),
                     "missing_price": missing_price,
+                    "has_zero_in_holdout": has_zero_in_holdout,
                 },
             }
 
@@ -603,10 +677,15 @@ def train_product_model(
             session.add(modelo)
             session.commit()
 
-            print(
-                f"    ✅ {produto.sku} - HOLDOUT: RMSE={holdout_metrics['rmse']:.4f} "
-                f"MAE={holdout_metrics['mae']:.4f} MAPE={holdout_metrics['mape']:.2f}%"
-            )
+            # Print com tratamento de MAPE NaN
+            msg = f"    ✅ {produto.sku} - HOLDOUT: RMSE={holdout_metrics['rmse']:.4f} MAE={holdout_metrics['mae']:.4f}"
+            mape_val = holdout_metrics.get("mape")
+            if mape_val is not None and not np.isnan(mape_val):
+                msg += f" MAPE={mape_val:.2f}%"
+            else:
+                msg += " MAPE=IGNORADO(ZEROS)"
+            msg += f" WMAPE={holdout_metrics['wmape']:.2f}%"
+            print(msg)
             if optimize and not small_data:
                 print(
                     f"       (search) lgb_rmse_cv={best_rmse_lgb:.4f} | "
