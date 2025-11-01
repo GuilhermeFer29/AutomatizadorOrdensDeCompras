@@ -41,7 +41,7 @@ langchain-google-genai
 langchain-chroma
 
 # ML Essencial
-# lightgbm - Compilado com CUDA no Dockerfile (não instalar via pip)
+lightgbm
 xgboost
 scikit-learn
 optuna

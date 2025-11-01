@@ -28,6 +28,7 @@ services:
       - ./scripts:/app/scripts
       - ./data:/app/data
       - ./models:/app/models
+    # GPU support
     deploy:
       resources:
         reservations:
@@ -35,7 +36,7 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-
+    
   worker:
     image: app:latest
     env_file:
@@ -56,6 +57,7 @@ services:
       - ./scripts:/app/scripts
       - ./data:/app/data
       - ./models:/app/models
+    # GPU support
     deploy:
       resources:
         reservations:
@@ -81,13 +83,6 @@ services:
       - ./scripts:/app/scripts
       - ./data:/app/data
       - ./models:/app/models
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
 
   db:
     image: mysql:8.0
