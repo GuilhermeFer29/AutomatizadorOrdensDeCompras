@@ -42,10 +42,11 @@ langchain-chroma
 
 # ML Essencial
 lightgbm
-xgboost  # 🎮 GPU-accelerated gradient boosting
+xgboost
 scikit-learn
 optuna
 holidays
+pyarrow
 
 # Utils
 email-validator

@@ -35,6 +35,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from app.core.database import engine
 from app.models.models import PrecosHistoricos, Produto, VendasHistoricas
+from scripts.data_profiles import get_profile_for_category, estimate_daily_base_demand
 
 # Configurações
 DAYS_OF_HISTORY = 365
@@ -154,16 +155,20 @@ def _generate_sales_series(
     Gera série temporal de vendas correlacionada com preços.
     
     Componentes:
-    - Demanda base: Derivada do estoque mínimo
-    - Correlação negativa com preço: Vendas caem quando preço sobe
-    - Padrão semanal: Mais vendas nos fins de semana
+    - Demanda base: Derivada do estoque mínimo * perfil da categoria
+    - Correlação negativa com preço: Elasticidade do perfil
+    - Padrão semanal: Fator fim de semana do perfil
     - Picos em datas comemorativas: Aumento de 30-80%
     - Ruído: Variação diária aleatória
     """
     np.random.seed(seed + produto.id + 1000)
     
-    # Demanda base diária (baseada no estoque mínimo)
-    base_demand = max(produto.estoque_minimo / 30, 5)  # Mínimo 5 unidades/dia
+    # Demanda base diária usando perfil da categoria
+    profile = get_profile_for_category(produto.categoria)
+    base_demand = estimate_daily_base_demand(
+        estoque_minimo=produto.estoque_minimo or 100,
+        category=produto.categoria
+    )
     
     # Calcular preço médio da série
     avg_price = np.mean([price for _, price in price_series])
@@ -171,23 +176,32 @@ def _generate_sales_series(
     sales = []
     
     for date, price in price_series:
-        # 1. Correlação negativa com preço (elasticidade-preço da demanda)
-        price_ratio = price / avg_price
-        price_effect = 1 / (price_ratio ** 0.5)  # Elasticidade de -0.5
+        # Verificar se é dia com zero vendas (probabilidade do perfil)
+        if np.random.random() < profile.zero_day_probability:
+            sales.append((date, 0, 0.0))
+            continue
         
-        # 2. Padrão semanal (mais vendas nos fins de semana)
-        weekend_boost = 1.4 if _is_weekend(date) else 1.0
+        # 1. Correlação negativa com preço (elasticidade do perfil)
+        price_ratio = price / avg_price
+        price_effect = 1 / (price_ratio ** abs(profile.price_elasticity))
+        
+        # 2. Padrão semanal (fator do perfil)
+        weekend_boost = profile.weekend_factor if _is_weekend(date) else 1.0
         
         # 3. Picos em datas comemorativas
         commemorative_boost = 1.0
         if _is_commemorative(date):
             commemorative_boost = np.random.uniform(1.3, 1.8)  # +30% a +80%
         
-        # 4. Ruído diário
+        # 4. Sazonalidade anual (amplitude do perfil)
+        day_of_year = date.timetuple().tm_yday
+        seasonality = 1 + profile.seasonality_amplitude * np.sin(2 * np.pi * day_of_year / 365)
+        
+        # 5. Ruído diário
         daily_noise = np.random.uniform(0.7, 1.3)
         
         # Quantidade de vendas
-        quantity = base_demand * price_effect * weekend_boost * commemorative_boost * daily_noise
+        quantity = base_demand * price_effect * weekend_boost * commemorative_boost * seasonality * daily_noise
         quantity = max(int(round(quantity)), 0)  # Garantir não-negativo
         
         # Receita
