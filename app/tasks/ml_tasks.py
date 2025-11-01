@@ -45,7 +45,7 @@ def train_product_model_task(self, sku: str, optimize: bool = False) -> Dict[str
     LOGGER.info(f"ml.tasks.train_product.start", sku=sku, optimize=optimize)
     
     try:
-        result = train_model_for_product(sku=sku, optimize=optimize, n_trials=30)
+        result = train_model_for_product(sku=sku, optimize=optimize, n_trials=30, backtest=False)
         
         payload = {
             "status": "success",
@@ -108,6 +108,7 @@ def train_all_products_task(self, optimize: bool = False, limit: int = None) -> 
                 sku=produto.sku,
                 optimize=optimize,
                 n_trials=20 if optimize else 0,
+                backtest=False,
             )
             results["success"].append(produto.sku)
         
@@ -161,7 +162,7 @@ def retrain_global_model_task(self) -> Dict[str, Any]:
             LOGGER.info(f"ml.tasks.retrain_global.progress", current=idx, total=total, sku=produto.sku)
             
             try:
-                train_model_for_product(sku=produto.sku, optimize=False, n_trials=0)
+                train_model_for_product(sku=produto.sku, optimize=False, n_trials=0, backtest=False)
                 success_count += 1
             except InsufficientDataError:
                 LOGGER.warning(f"ml.tasks.retrain_global.insufficient_data", sku=produto.sku)

@@ -145,13 +145,36 @@ class OrdemDeCompra(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     produto_id: int = Field(foreign_key="produtos.id")
+    fornecedor_id: int = Field(foreign_key="fornecedores.id")
     quantidade: int
     valor: Decimal = Field(default=Decimal("0.00"))
-    status: str = Field(index=True)  # pending, approved, cancelled
+    status: str = Field(index=True)  # pending, approved, cancelled, rejected
     origem: str  # Automática, Manual
+    autoridade_nivel: int = Field(default=1)  # 1=Operacional, 2=Gerencial, 3=Diretoria
+    aprovado_por: Optional[str] = Field(default=None)  # Nome do aprovador
     data_criacao: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    data_aprovacao: Optional[datetime] = Field(default=None)
+    justificativa: Optional[str] = Field(default=None)  # Justificativa da decisão
 
     produto: Produto = Relationship()
+    fornecedor: Fornecedor = Relationship()
+
+
+class AuditoriaDecisao(SQLModel, table=True):
+    """Trilha de auditoria para decisões dos agentes."""
+    
+    __tablename__ = "auditoria_decisoes"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    agente_nome: str = Field(index=True)
+    sku: str = Field(index=True)
+    acao: str = Field(index=True)  # recommend_supplier, reject_purchase, approve_order
+    decisao: str  # JSON com detalhes da decisão
+    raciocinio: str  # Raciocínio completo do agente
+    contexto: str  # Contexto da solicitação
+    usuario_id: Optional[str] = Field(default=None, index=True)
+    data_decisao: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), index=True)
+    ip_origem: Optional[str] = Field(default=None)
 
 
 class Agente(SQLModel, table=True):

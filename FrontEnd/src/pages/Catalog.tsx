@@ -64,15 +64,15 @@ export default function Catalog() {
               {products?.map((product) => (
                 <TableRow key={product.id}>
                   <TableCell className="font-medium">{product.sku}</TableCell>
-                  <TableCell>{product.name}</TableCell>
-                  <TableCell className="text-muted-foreground">{product.supplier}</TableCell>
+                  <TableCell>{product.nome}</TableCell>
+                  <TableCell className="text-muted-foreground">{product.fornecedor_padrao || '-'}</TableCell>
                   <TableCell className="text-right">
                     {new Intl.NumberFormat('pt-BR', {
                       style: 'currency',
                       currency: 'BRL'
-                    }).format(product.price)}
+                    }).format(product.preco_medio || 0)}
                   </TableCell>
-                  <TableCell className="text-right">{product.stock} unidades</TableCell>
+                  <TableCell className="text-right">{product.estoque_atual} unidades</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
                       <Button 

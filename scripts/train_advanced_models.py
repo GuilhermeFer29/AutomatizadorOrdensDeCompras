@@ -120,6 +120,7 @@ from app.models.models import (
     PrecosHistoricos,
     ModeloPredicao,
 )
+from app.ml.model_manager import get_model_dir  # ← Novo import
 
 # ======================================================================================
 # 3) CONSTANTES
@@ -410,12 +411,39 @@ def create_time_series_features(df: pd.DataFrame) -> pd.DataFrame:
 def prepare_training_data(
     df: pd.DataFrame,
     forecast_horizon: int = FORECAST_HORIZON,
+    target: str = "quantidade",
 ) -> Tuple[np.ndarray, np.ndarray, List[str]]:
+    """Prepara dados de treino (suporta múltiplos targets)."""
     features_df = df.drop(
         columns=["quantidade", "data_venda", "preco", "receita"],
         errors="ignore",
     )
-    y = df["quantidade"].shift(-forecast_horizon).dropna()
+    
+    # ✅ Suporte para múltiplos targets
+    if target == "receita" and "receita" not in df.columns:
+        df["receita"] = df["preco"] * df["quantidade"]
+    elif target == "lucro":
+        custo_unitario = df["preco"] * 0.6
+        df["lucro"] = (df["preco"] - custo_unitario) * df["quantidade"]
+    elif target == "margem":
+        custo_unitario = df["preco"] * 0.6
+        df["margem"] = ((df["preco"] - custo_unitario) / df["preco"]) * 100
+    elif target == "custo":
+        custo_unitario = df["preco"] * 0.6
+        df["custo"] = custo_unitario * df["quantidade"]
+    elif target == "rotatividade":
+        estoque_medio = df["quantidade"].rolling(window=30, min_periods=1).mean()
+        df["rotatividade"] = df["quantidade"] / (estoque_medio + 1)
+    elif target == "dias_estoque":
+        estoque_medio = df["quantidade"].rolling(window=30, min_periods=1).mean()
+        rotatividade = df["quantidade"] / (estoque_medio + 1)
+        df["dias_estoque"] = 30 / (rotatividade + 0.01)
+    
+    # Validar target
+    if target not in df.columns:
+        raise ValueError(f"Target '{target}' não encontrado no DataFrame")
+    
+    y = df[target].shift(-forecast_horizon).dropna()
     X = features_df.iloc[:-forecast_horizon]
 
     min_len = min(len(X), len(y))
@@ -644,13 +672,20 @@ def build_stacking_with_oof(
     meta_train = np.vstack(oof_preds)
     meta_y = np.concatenate(oof_y)
 
-    # predição no holdout real
-    meta_val = np.column_stack([m.predict(X_val) for m in base_models.values()])
-
+    # Meta learner
     meta_learner = Ridge(alpha=1.0)
-    meta_learner.fit(meta_train, meta_y)
-    y_pred_val = meta_learner.predict(meta_val)
-    holdout_metrics = eval_metrics(y_val, y_pred_val)
+
+    # predição no holdout real (verificar se X_val não está vazio)
+    if len(X_val) > 0:
+        meta_val = np.column_stack([m.predict(X_val) for m in base_models.values()])
+        meta_learner.fit(meta_train, meta_y)
+        y_pred_val = meta_learner.predict(meta_val)
+        holdout_metrics = eval_metrics(y_val, y_pred_val)
+    else:
+        # Se não há validação, usar OOF para métricas
+        meta_learner.fit(meta_train, meta_y)
+        y_pred_val = meta_learner.predict(meta_train)
+        holdout_metrics = eval_metrics(meta_y, y_pred_val)
 
     return {
         "base_models": base_models,
@@ -720,7 +755,15 @@ def train_product_model(
     optimize: bool = True,
     n_trials: int = 20,
     backtest: bool = True,
+    use_all_data: bool = False,
+    target: str = "quantidade",  # ← Novo parâmetro
 ) -> bool:
+    # ✅ NOVO: Validar target
+    VALID_TARGETS = {"quantidade", "preco", "receita", "lucro", "margem", "custo", "rotatividade", "dias_estoque"}
+    if target not in VALID_TARGETS:
+        print(f"    ❌ {produto.sku} - Target inválido: {target}")
+        return False
+    
     try:
         with Session(engine) as session:
             vendas = (
@@ -754,16 +797,25 @@ def train_product_model(
             zero_days_pct = float(zero_days / len(df))
             missing_price = int(df["preco"].isna().sum())
 
-            X, y, feature_names = prepare_training_data(df)
+            X, y, feature_names = prepare_training_data(df, target=target)
 
-            split_idx = int(len(X) * (1 - HOLDOUT_RATIO))
-            X_train, X_val = X[:split_idx], X[split_idx:]
-            y_train, y_val = y[:split_idx], y[split_idx:]
-            has_zero_in_holdout = bool((y_val == 0).any())
+            # ✅ NOVO: Suporte para usar TODOS os dados
+            if use_all_data:
+                # Usar 100% dos dados para treino
+                X_train, X_val = X, X[:0]  # val vazio
+                y_train, y_val = y, y[:0]  # val vazio
+                print(f"    📊 {produto.sku} - Usando 100% dos dados ({len(X)} amostras)")
+            else:
+                # Split tradicional 80/20
+                split_idx = int(len(X) * (1 - HOLDOUT_RATIO))
+                X_train, X_val = X[:split_idx], X[split_idx:]
+                y_train, y_val = y[:split_idx], y[split_idx:]
+            
+            has_zero_in_holdout = bool((y_val == 0).any()) if len(y_val) > 0 else False
 
             scaler = RobustScaler()
             X_train_scaled = scaler.fit_transform(X_train)
-            X_val_scaled = scaler.transform(X_val)
+            X_val_scaled = scaler.transform(X_val) if len(X_val) > 0 else X_val  # ← Verificar se X_val não está vazio
 
             small_data = len(X_train_scaled) < 120
 
@@ -846,7 +898,7 @@ def train_product_model(
                 )
 
             # ----------------- Persistência -----------------
-            model_dir = PROJECT_ROOT / "model" / produto.sku
+            model_dir = get_model_dir(produto.sku) / target
             model_dir.mkdir(parents=True, exist_ok=True)
 
             # salva modelos
@@ -957,7 +1009,7 @@ def train_product_model(
 # 12) MAIN / CLI
 # ======================================================================================
 def main() -> bool:
-    parser = argparse.ArgumentParser("Treina modelos avançados por produto.")
+    parser = argparse.ArgumentParser("Treina modelos avançados por produto (Multi-Target).")
     parser.add_argument("--no-optuna", action="store_true", help="Desativa tuning com Optuna.")
     parser.add_argument("--trials", type=int, default=50, help="Trials por modelo (padrão: 50).")
     parser.add_argument("--no-backtest", action="store_true", help="Desativa backtest deslizante.")
@@ -968,10 +1020,31 @@ def main() -> bool:
         action="store_true",
         help="Modo rápido: sem backtest, sem Optuna em série curta, ideal para popular.",
     )
+    parser.add_argument(
+        "--use-all-data",
+        action="store_true",
+        help="Usar 100% dos dados para treino (sem split de validação). Maximiza dados disponíveis.",
+    )
+    parser.add_argument(
+        "--targets",
+        type=str,
+        default="quantidade,preco",
+        help="Targets para treinar (separados por vírgula). "
+             "Opções: quantidade, preco, receita, lucro, margem, custo, rotatividade, dias_estoque",
+    )
     args = parser.parse_args()
 
     optimize = not args.no_optuna
     do_backtest = not args.no_backtest
+    targets_list = [t.strip() for t in args.targets.split(",")]
+
+    # ✅ NOVO: Validar targets
+    VALID_TARGETS = {"quantidade", "preco", "receita", "lucro", "margem", "custo", "rotatividade", "dias_estoque"}
+    invalid_targets = set(targets_list) - VALID_TARGETS
+    if invalid_targets:
+        print(f"❌ Targets inválidos: {invalid_targets}")
+        print(f"   Válidos: {', '.join(sorted(VALID_TARGETS))}")
+        return False
 
     if args.bulk:
         optimize = False
@@ -991,28 +1064,36 @@ def main() -> bool:
         produtos = produtos[: args.limit]
 
     print(
-        f"🚀 Treinando {len(produtos)} produtos | "
+        f"🚀 Treinando {len(produtos)} produtos × {len(targets_list)} targets | "
         f"optuna={'on' if optimize else 'off'} (trials={args.trials}) | "
         f"backtest={'on' if do_backtest else 'off'} | "
+        f"use_all_data={'on' if args.use_all_data else 'off'} | "
         f"gpu={'on' if USE_GPU else 'off'}"
     )
     print(
-        f"📊 Melhorias v3.0: Feature engineering expandido | "
-        f"Tratamento de zeros | Detecção de outliers | CV 5-fold"
+        f"📊 Targets: {', '.join(targets_list)} | "
+        f"Feature engineering expandido | Tratamento de zeros | CV 5-fold"
     )
     print()
 
     success = 0
-    for idx, prod in enumerate(produtos, 1):
-        print(f"[{idx}/{len(produtos)}] {prod.sku}")
-        ok = train_product_model(
-            prod,
-            optimize=optimize,
-            n_trials=args.trials,
-            backtest=do_backtest,
-        )
-        if ok:
-            success += 1
+    total = len(produtos) * len(targets_list)
+    current = 0
+    
+    for prod in produtos:
+        for tgt in targets_list:
+            current += 1
+            print(f"[{current}/{total}] {prod.sku} → {tgt}")
+            ok = train_product_model(
+                prod,
+                optimize=optimize,
+                n_trials=args.trials,
+                backtest=do_backtest,
+                use_all_data=args.use_all_data,
+                target=tgt,  # ← Passar target
+            )
+            if ok:
+                success += 1
 
     print(f"\n✅ Concluído: {success}/{len(produtos)}")
     return success > 0

@@ -44,9 +44,10 @@ def sync_rag_background():
 @router.get("/")
 def read_products(search: Optional[str] = None, session: Session = Depends(get_session)):
     """
-    Retorna lista de produtos com preço atual.
+    Retorna lista de produtos com preço atual e fornecedor padrão.
     """
     from sqlalchemy import func, desc
+    from collections import Counter
     
     produtos = get_products(session, search)
     
@@ -62,12 +63,37 @@ def read_products(search: Optional[str] = None, session: Session = Depends(get_s
         
         preco_atual = float(preco_recente.preco) if preco_recente else 0.0
         
+        # Calcular preço médio dos últimos 30 dias
+        from datetime import datetime, timedelta, timezone
+        data_limite = datetime.now(timezone.utc) - timedelta(days=30)
+        precos_recentes = list(session.exec(
+            select(PrecosHistoricos)
+            .where(PrecosHistoricos.produto_id == produto.id)
+            .where(PrecosHistoricos.coletado_em >= data_limite)
+        ))
+        
+        if precos_recentes:
+            preco_medio = sum(float(p.preco) for p in precos_recentes) / len(precos_recentes)
+            
+            # Determinar fornecedor mais comum
+            fornecedores = [p.fornecedor for p in precos_recentes if p.fornecedor]
+            if fornecedores:
+                fornecedor_counter = Counter(fornecedores)
+                fornecedor_padrao = fornecedor_counter.most_common(1)[0][0]
+            else:
+                fornecedor_padrao = None
+        else:
+            preco_medio = preco_atual
+            fornecedor_padrao = None
+        
         result.append({
             "id": produto.id,
             "sku": produto.sku,
             "nome": produto.nome,
             "categoria": produto.categoria,
             "preco_atual": preco_atual,
+            "preco_medio": preco_medio,
+            "fornecedor_padrao": fornecedor_padrao,
             "estoque_atual": produto.estoque_atual,
             "estoque_minimo": produto.estoque_minimo,
             "criado_em": produto.criado_em.isoformat(),
