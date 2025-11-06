@@ -5,13 +5,15 @@ Este arquivo encapsula as funções dos serviços existentes como Tools do LangC
 permitindo que os agentes de IA as utilizem de forma inteligente.
 """
 
-import json
 import os
-from typing import Tuple, Dict, Any
+from typing import Tuple, Dict, Any, List
 from langchain.tools import tool
 from sqlmodel import Session, select
 from app.core.database import engine
-from app.models.models import Produto, PrecosHistoricos, OrdemDeCompra
+from app.models.models import Produto, OfertaProduto, Fornecedor, OrdemDeCompra, AuditoriaDecisao
+import json
+from datetime import datetime, timezone
+import numpy as np
 from app.services.scraping_service import scrape_and_save_price
 from app.services.ml_service import get_forecast
 from decimal import Decimal
@@ -490,14 +492,20 @@ def find_supplier_offers_for_sku(sku: str) -> str:
                     "custo_por_dia": round(float(oferta.preco_ofertado) / fornecedor.prazo_entrega_dias, 2)
                 })
             
-            # Calcular melhor oferta (balance preço vs confiabilidade)
+            # Calcular melhor oferta (algoritmo multi-critério B2B)
             if ofertas_formatadas:
-                melhor_oferta = min(
-                    ofertas_formatadas,
-                    key=lambda x: x["preco"] * (2 - x["confiabilidade"])  # Penaliza baixa confiabilidade
-                )
+                melhor_oferta = _select_best_supplier_b2b(ofertas_formatadas, sku)
             else:
                 melhor_oferta = None
+            
+            # Registrar auditoria da decisão
+            _log_supplier_decision(
+                agente_nome="SupplyChainAgent",
+                sku=sku,
+                ofertas=ofertas_formatadas,
+                melhor_oferta=melhor_oferta,
+                contexto=f"Busca de fornecedores para SKU {sku}"
+            )
             
             return json.dumps({
                 "sku": sku,
@@ -505,7 +513,8 @@ def find_supplier_offers_for_sku(sku: str) -> str:
                 "total_ofertas": len(ofertas_formatadas),
                 "ofertas": ofertas_formatadas,
                 "melhor_oferta": melhor_oferta,
-                "preco_medio": round(sum(o["preco"] for o in ofertas_formatadas) / len(ofertas_formatadas), 2) if ofertas_formatadas else 0
+                "preco_medio": round(sum(o["preco"] for o in ofertas_formatadas) / len(ofertas_formatadas), 2) if ofertas_formatadas else 0,
+                "metodo_selecao": "multi_criterio_b2b_v1"
             }, ensure_ascii=False)
             
     except Exception as e:
@@ -705,6 +714,197 @@ def create_purchase_order_tool(sku: str, quantity: int, price_per_unit: float, s
             "error": f"Erro ao criar ordem de compra: {str(e)}",
             "status": "failed"
         }, ensure_ascii=False)
+
+
+# ======================================================================================
+# FUNÇÕES AUXILIARES B2B
+# ======================================================================================
+
+def _normalize_criteria(values: List[float], reverse: bool = False) -> List[float]:
+    """
+    Normaliza valores para escala 0-1 usando min-max.
+    
+    Args:
+        values: Lista de valores
+        reverse: Se True, inverte (1 - normalized) para critérios onde menor é melhor
+    
+    Returns:
+        Lista de valores normalizados
+    """
+    if not values or len(set(values)) == 1:
+        return [1.0] * len(values) if values else []
+    
+    min_val, max_val = min(values), max(values)
+    if max_val == min_val:
+        return [1.0] * len(values)
+    
+    normalized = [(v - min_val) / (max_val - min_val) for v in values]
+    return [1.0 - n for n in normalized] if reverse else normalized
+
+
+def _select_best_supplier_b2b(ofertas: List[Dict[str, Any]], sku: str) -> Dict[str, Any]:
+    """
+    Algoritmo multi-critério B2B para seleção de fornecedores.
+    
+    Critérios e pesos:
+    - Preço: 30% (menor é melhor)
+    - Confiabilidade: 25% (maior é melhor)
+    - Prazo de entrega: 20% (menor é melhor)
+    - Estoque disponível: 15% (maior é melhor)
+    - Custo por dia: 10% (menor é melhor)
+    
+    Args:
+        ofertas: Lista de ofertas formatadas
+        sku: SKU do produto
+    
+    Returns:
+        Melhor oferta selecionada
+    """
+    if not ofertas:
+        return None
+    
+    # Extrair critérios
+    precos = [o["preco"] for o in ofertas]
+    conf = [o["confiabilidade"] for o in ofertas]
+    prazos = [o["prazo_entrega_dias"] for o in ofertas]
+    estoques = [o["estoque_disponivel"] for o in ofertas]
+    custos_dia = [o["custo_por_dia"] for o in ofertas]
+    
+    # Normalizar critérios
+    preco_norm = _normalize_criteria(precos, reverse=True)  # Menor preço é melhor
+    conf_norm = _normalize_criteria(conf)  # Maior conf é melhor
+    prazo_norm = _normalize_criteria(prazos, reverse=True)  # Menor prazo é melhor
+    estoque_norm = _normalize_criteria(estoques)  # Maior estoque é melhor
+    custo_dia_norm = _normalize_criteria(custos_dia, reverse=True)  # Menor custo/dia é melhor
+    
+    # Calcular score final (pesos normalizados somam 1.0)
+    scores = []
+    for i in range(len(ofertas)):
+        score = (
+            preco_norm[i] * 0.30 +      # Preço: 30%
+            conf_norm[i] * 0.25 +        # Confiabilidade: 25%
+            prazo_norm[i] * 0.20 +       # Prazo: 20%
+            estoque_norm[i] * 0.15 +     # Estoque: 15%
+            custo_dia_norm[i] * 0.10     # Custo/dia: 10%
+        )
+        scores.append(score)
+    
+    # Adicionar score às ofertas
+    for i, oferta in enumerate(ofertas):
+        oferta["score_b2b"] = round(scores[i], 4)
+    
+    # Selecionar melhor oferta (maior score)
+    melhor_idx = scores.index(max(scores))
+    melhor_oferta = ofertas[melhor_idx].copy()
+    melhor_oferta["selecao_racional"] = {
+        "metodo": "multi_criterio_b2b_v1",
+        "score_final": round(scores[melhor_idx], 4),
+        "pesos": {"preco": 0.30, "confiabilidade": 0.25, "prazo": 0.20, "estoque": 0.15, "custo_dia": 0.10},
+        "criterios_normalizados": {
+            "preco": round(preco_norm[melhor_idx], 4),
+            "confiabilidade": round(conf_norm[melhor_idx], 4),
+            "prazo": round(prazo_norm[melhor_idx], 4),
+            "estoque": round(estoque_norm[melhor_idx], 4),
+            "custo_dia": round(custo_dia_norm[melhor_idx], 4)
+        }
+    }
+    
+    return melhor_oferta
+
+
+def _log_supplier_decision(
+    agente_nome: str,
+    sku: str,
+    ofertas: List[Dict[str, Any]],
+    melhor_oferta: Dict[str, Any],
+    contexto: str,
+    usuario_id: str = None
+) -> None:
+    """
+    Registra decisão de seleção de fornecedor na trilha de auditoria.
+    
+    Args:
+        agente_nome: Nome do agente que tomou a decisão
+        sku: SKU do produto
+        ofertas: Lista de todas as ofertas analisadas
+        melhor_oferta: Oferta selecionada
+        contexto: Contexto da decisão
+        usuario_id: ID do usuário (opcional)
+    """
+    try:
+        with Session(engine) as session:
+            auditoria = AuditoriaDecisao(
+                agente_nome=agente_nome,
+                sku=sku,
+                acao="recommend_supplier",
+                decisao=json.dumps({
+                    "fornecedor_selecionado": melhor_oferta["fornecedor"] if melhor_oferta else None,
+                    "preco_selecionado": melhor_oferta["preco"] if melhor_oferta else None,
+                    "score_selecao": melhor_oferta.get("score_b2b") if melhor_oferta else None,
+                    "total_ofertas_analisadas": len(ofertas),
+                    "metodo_selecao": "multi_criterio_b2b_v1"
+                }, ensure_ascii=False),
+                raciocinio=f"Seleção multi-critério B2B aplicada. Melhor score: {melhor_oferta.get('score_b2b', 'N/A') if melhor_oferta else 'N/A'}",
+                contexto=contexto,
+                usuario_id=usuario_id,
+                data_decisao=datetime.now(timezone.utc)
+            )
+            session.add(auditoria)
+            session.commit()
+    except Exception as e:
+        # Log de erro mas não interrompe fluxo principal
+        print(f"⚠️ Erro ao registrar auditoria: {e}")
+
+
+def _check_authority_limit(valor_total: float, usuario_nivel: int = 1) -> Dict[str, Any]:
+    """
+    Verifica limites de autoridade B2B para aprovação de ordens.
+    
+    Limites (configuráveis):
+    - Nível 1 (Operacional): até R$ 1.000
+    - Nível 2 (Gerencial): até R$ 10.000
+    - Nível 3 (Diretoria): acima de R$ 10.000
+    
+    Args:
+        valor_total: Valor total da ordem
+        usuario_nivel: Nível de autoridade do usuário (1-3)
+    
+    Returns:
+        Dicionário com status e informações
+    """
+    LIMITES = {
+        1: 1000.0,   # Operacional
+        2: 10000.0,  # Gerencial
+        3: float('inf')  # Diretoria (sem limite)
+    }
+    
+    limite_usuario = LIMITES.get(usuario_nivel, 0)
+    
+    if valor_total <= limite_usuario:
+        return {
+            "aprovado": True,
+            "nivel_necessario": usuario_nivel,
+            "limite_usuario": limite_usuario,
+            "mensagem": "Aprovado automaticamente dentro do limite de autoridade"
+        }
+    else:
+        # Determina nível necessário
+        nivel_necessario = 1
+        for nivel, limite in sorted(LIMITES.items()):
+            if valor_total <= limite:
+                nivel_necessario = nivel
+                break
+        else:
+            nivel_necessario = 3
+        
+        return {
+            "aprovado": False,
+            "nivel_necessario": nivel_necessario,
+            "nivel_atual": usuario_nivel,
+            "limite_usuario": limite_usuario,
+            "valor_solicitado": valor_total,
+            "mensagem": f"Necessita aprovação do nível {nivel_necessario} (valor: R$ {valor_total:,.2f})"
+        }
 
 
 # Funções auxiliares mantidas para compatibilidade

@@ -120,6 +120,7 @@ from app.models.models import (
     PrecosHistoricos,
     ModeloPredicao,
 )
+from app.ml.model_manager import get_model_dir  # ← Novo import
 
 # ======================================================================================
 # 3) CONSTANTES
@@ -407,15 +408,162 @@ def create_time_series_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+# ✅ NOVO: Transformações específicas por target
+def apply_target_transforms(df: pd.DataFrame, target: str) -> pd.DataFrame:
+    """
+    Aplica transformações específicas por target para melhorar previsibilidade.
+    
+    Estratégias:
+    - quantidade: log1p (muitos zeros)
+    - preco: sem transform (suave)
+    - receita: sem transform (estável)
+    - lucro: winsorization (outliers extremos)
+    - margem: log transform (distribuição assimétrica)
+    - custo: sem transform (herda de quantidade)
+    - rotatividade: log transform (muito assimétrica)
+    - dias_estoque: clipping + log (valores extremos)
+    """
+    df = df.copy()
+    
+    if target == "quantidade" and "quantidade" in df.columns:
+        # Log1p para quantidade (muitos zeros)
+        df["quantidade"] = np.log1p(df["quantidade"])
+        
+    elif target == "lucro" and "lucro" in df.columns:
+        # Winsorization para lucro (outliers extremos)
+        q01 = df["lucro"].quantile(0.01)
+        q99 = df["lucro"].quantile(0.99)
+        df["lucro"] = df["lucro"].clip(lower=q01, upper=q99)
+        
+    elif target == "margem" and "margem" in df.columns:
+        # Log transform para margem (distribuição assimétrica)
+        df["margem"] = np.log1p(df["margem"].clip(lower=0))
+        
+    elif target == "rotatividade" and "rotatividade" in df.columns:
+        # Log transform para rotatividade (muito assimétrica)
+        df["rotatividade"] = np.log1p(df["rotatividade"].clip(lower=0.001))
+        
+    elif target == "dias_estoque" and "dias_estoque" in df.columns:
+        # Clipping + log para dias_estoque (valores extremos)
+        df["dias_estoque"] = df["dias_estoque"].clip(upper=365)
+        df["dias_estoque"] = np.log1p(df["dias_estoque"])
+    
+    return df
+
+
+# ✅ NOVO: Hiperparâmetros otimizados por target
+def get_optimized_params(target: str) -> Dict[str, Any]:
+    """Retorna hiperparâmetros otimizados específicos para cada target."""
+    
+    params = {
+        "quantidade": {
+            "num_leaves": 31,
+            "max_depth": 5,
+            "learning_rate": 0.05,
+            "lambda_l1": 5.0,
+            "lambda_l2": 5.0,
+            "min_data_in_leaf": 20,
+        },
+        "preco": {
+            "num_leaves": 63,
+            "max_depth": 7,
+            "learning_rate": 0.02,
+            "lambda_l1": 1.0,
+            "lambda_l2": 1.0,
+            "min_data_in_leaf": 10,
+        },
+        "receita": {
+            "num_leaves": 47,
+            "max_depth": 6,
+            "learning_rate": 0.03,
+            "lambda_l1": 3.0,
+            "lambda_l2": 3.0,
+            "min_data_in_leaf": 15,
+        },
+        "lucro": {
+            "num_leaves": 31,
+            "max_depth": 5,
+            "learning_rate": 0.05,
+            "lambda_l1": 8.0,
+            "lambda_l2": 8.0,
+            "min_data_in_leaf": 30,
+        },
+        "margem": {
+            "num_leaves": 47,
+            "max_depth": 6,
+            "learning_rate": 0.03,
+            "lambda_l1": 2.0,
+            "lambda_l2": 2.0,
+            "min_data_in_leaf": 10,
+        },
+        "custo": {
+            "num_leaves": 31,
+            "max_depth": 5,
+            "learning_rate": 0.05,
+            "lambda_l1": 4.0,
+            "lambda_l2": 4.0,
+            "min_data_in_leaf": 15,
+        },
+        "rotatividade": {
+            "num_leaves": 31,
+            "max_depth": 5,
+            "learning_rate": 0.05,
+            "lambda_l1": 6.0,
+            "lambda_l2": 6.0,
+            "min_data_in_leaf": 20,
+        },
+        "dias_estoque": {
+            "num_leaves": 31,
+            "max_depth": 5,
+            "learning_rate": 0.05,
+            "lambda_l1": 6.0,
+            "lambda_l2": 6.0,
+            "min_data_in_leaf": 20,
+        },
+    }
+    
+    return params.get(target, params["quantidade"])
+
+
 def prepare_training_data(
     df: pd.DataFrame,
     forecast_horizon: int = FORECAST_HORIZON,
+    target: str = "quantidade",
 ) -> Tuple[np.ndarray, np.ndarray, List[str]]:
+    """Prepara dados de treino (suporta múltiplos targets)."""
+    
+    # ✅ NOVO: Aplicar transformações específicas por target
+    df = apply_target_transforms(df, target)
     features_df = df.drop(
         columns=["quantidade", "data_venda", "preco", "receita"],
         errors="ignore",
     )
-    y = df["quantidade"].shift(-forecast_horizon).dropna()
+    
+    # ✅ Suporte para múltiplos targets
+    if target == "receita" and "receita" not in df.columns:
+        df["receita"] = df["preco"] * df["quantidade"]
+    elif target == "lucro":
+        custo_unitario = df["preco"] * 0.6
+        df["lucro"] = (df["preco"] - custo_unitario) * df["quantidade"]
+    elif target == "margem":
+        custo_unitario = df["preco"] * 0.6
+        df["margem"] = ((df["preco"] - custo_unitario) / df["preco"]) * 100
+    elif target == "custo":
+        custo_unitario = df["preco"] * 0.6
+        df["custo"] = custo_unitario * df["quantidade"]
+    elif target == "rotatividade":
+        estoque_medio = df["quantidade"].rolling(window=30, min_periods=1).mean()
+        df["rotatividade"] = df["quantidade"] / (estoque_medio + 1)
+    elif target == "dias_estoque":
+        estoque_medio = df["quantidade"].rolling(window=30, min_periods=1).mean()
+        rotatividade = df["quantidade"] / (estoque_medio + 1)
+        df["dias_estoque"] = 30 / (rotatividade + 0.01)
+    
+    # Validar target
+    if target not in df.columns:
+        raise ValueError(f"Target '{target}' não encontrado no DataFrame")
+    
+    y = df[target].shift(-forecast_horizon).dropna()
     X = features_df.iloc[:-forecast_horizon]
 
     min_len = min(len(X), len(y))
@@ -466,10 +614,12 @@ if not XGB_SKLEARN_HAS_ES:
 # ======================================================================================
 # 8) OBJETIVOS DO OPTUNA - OTIMIZADOS COM MAIS PARÂMETROS
 # ======================================================================================
-def objective_lgb(trial: optuna.Trial, X_train: np.ndarray, y_train: np.ndarray) -> float:
-    """
-    Objetivo otimizado para LightGBM com hiperparâmetros expandidos e mais exploração.
-    """
+def objective_lgb(
+    trial: optuna.Trial,
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+) -> float:
+    """Otimização LightGBM com Optuna (10 CV splits)."""
     params = {
         "num_leaves": trial.suggest_int("num_leaves", 31, 255),  # Ampliado o range
         "max_depth": trial.suggest_int("max_depth", 4, 20),  # Aumentado para 20
@@ -493,19 +643,43 @@ def objective_lgb(trial: optuna.Trial, X_train: np.ndarray, y_train: np.ndarray)
         X_tr, X_val = X_train[tr_idx], X_train[val_idx]
         y_tr, y_val = y_train[tr_idx], y_train[val_idx]
 
-        model = lgb.LGBMRegressor(
-            **params,
-            n_estimators=500,  # Aumentado de 300
-            random_state=RANDOM_SEED,
-            verbose=-1,
-        )
-        model.fit(
-            X_tr,
-            y_tr,
-            eval_set=[(X_val, y_val)],
-            eval_metric="rmse",
-            callbacks=[lgb.early_stopping(stopping_rounds=50, verbose=False)],
-        )
+        # ✅ NOVO: Tentar GPU, fallback para CPU se não compilado com CUDA
+        device = "cuda" if HAS_GPU else "cpu"
+        try:
+            model = lgb.LGBMRegressor(
+                **params,
+                n_estimators=500,
+                random_state=RANDOM_SEED,
+                verbose=-1,
+                device_type=device,
+            )
+            model.fit(
+                X_tr,
+                y_tr,
+                eval_set=[(X_val, y_val)],
+                eval_metric="rmse",
+                callbacks=[lgb.early_stopping(stopping_rounds=50, verbose=False)],
+            )
+        except Exception as e:
+            # Se GPU falhar, usar CPU
+            if "CUDA" in str(e) or "GPU" in str(e) or "not enabled" in str(e):
+                model = lgb.LGBMRegressor(
+                    **params,
+                    n_estimators=500,
+                    random_state=RANDOM_SEED,
+                    verbose=-1,
+                    device_type="cpu",  # Fallback para CPU
+                )
+                model.fit(
+                    X_tr,
+                    y_tr,
+                    eval_set=[(X_val, y_val)],
+                    eval_metric="rmse",
+                    callbacks=[lgb.early_stopping(stopping_rounds=50, verbose=False)],
+                )
+            else:
+                raise
+        
         y_pred = model.predict(X_val)
         m = eval_metrics(y_val, y_pred)
         scores.append(m["rmse"])
@@ -644,13 +818,20 @@ def build_stacking_with_oof(
     meta_train = np.vstack(oof_preds)
     meta_y = np.concatenate(oof_y)
 
-    # predição no holdout real
-    meta_val = np.column_stack([m.predict(X_val) for m in base_models.values()])
-
+    # Meta learner
     meta_learner = Ridge(alpha=1.0)
-    meta_learner.fit(meta_train, meta_y)
-    y_pred_val = meta_learner.predict(meta_val)
-    holdout_metrics = eval_metrics(y_val, y_pred_val)
+
+    # predição no holdout real (verificar se X_val não está vazio)
+    if len(X_val) > 0:
+        meta_val = np.column_stack([m.predict(X_val) for m in base_models.values()])
+        meta_learner.fit(meta_train, meta_y)
+        y_pred_val = meta_learner.predict(meta_val)
+        holdout_metrics = eval_metrics(y_val, y_pred_val)
+    else:
+        # Se não há validação, usar OOF para métricas
+        meta_learner.fit(meta_train, meta_y)
+        y_pred_val = meta_learner.predict(meta_train)
+        holdout_metrics = eval_metrics(meta_y, y_pred_val)
 
     return {
         "base_models": base_models,
@@ -720,7 +901,15 @@ def train_product_model(
     optimize: bool = True,
     n_trials: int = 20,
     backtest: bool = True,
+    use_all_data: bool = False,
+    target: str = "quantidade",  # ← Novo parâmetro
 ) -> bool:
+    # ✅ NOVO: Validar target
+    VALID_TARGETS = {"quantidade", "preco", "receita", "lucro", "margem", "custo", "rotatividade", "dias_estoque"}
+    if target not in VALID_TARGETS:
+        print(f"    ❌ {produto.sku} - Target inválido: {target}")
+        return False
+    
     try:
         with Session(engine) as session:
             vendas = (
@@ -754,16 +943,25 @@ def train_product_model(
             zero_days_pct = float(zero_days / len(df))
             missing_price = int(df["preco"].isna().sum())
 
-            X, y, feature_names = prepare_training_data(df)
+            X, y, feature_names = prepare_training_data(df, target=target)
 
-            split_idx = int(len(X) * (1 - HOLDOUT_RATIO))
-            X_train, X_val = X[:split_idx], X[split_idx:]
-            y_train, y_val = y[:split_idx], y[split_idx:]
-            has_zero_in_holdout = bool((y_val == 0).any())
+            # ✅ NOVO: Suporte para usar TODOS os dados
+            if use_all_data:
+                # Usar 100% dos dados para treino
+                X_train, X_val = X, X[:0]  # val vazio
+                y_train, y_val = y, y[:0]  # val vazio
+                print(f"    📊 {produto.sku} - Usando 100% dos dados ({len(X)} amostras)")
+            else:
+                # Split tradicional 80/20
+                split_idx = int(len(X) * (1 - HOLDOUT_RATIO))
+                X_train, X_val = X[:split_idx], X[split_idx:]
+                y_train, y_val = y[:split_idx], y[split_idx:]
+            
+            has_zero_in_holdout = bool((y_val == 0).any()) if len(y_val) > 0 else False
 
             scaler = RobustScaler()
             X_train_scaled = scaler.fit_transform(X_train)
-            X_val_scaled = scaler.transform(X_val)
+            X_val_scaled = scaler.transform(X_val) if len(X_val) > 0 else X_val  # ← Verificar se X_val não está vazio
 
             small_data = len(X_train_scaled) < 120
 
@@ -846,7 +1044,7 @@ def train_product_model(
                 )
 
             # ----------------- Persistência -----------------
-            model_dir = PROJECT_ROOT / "model" / produto.sku
+            model_dir = get_model_dir(produto.sku) / target
             model_dir.mkdir(parents=True, exist_ok=True)
 
             # salva modelos
@@ -957,9 +1155,9 @@ def train_product_model(
 # 12) MAIN / CLI
 # ======================================================================================
 def main() -> bool:
-    parser = argparse.ArgumentParser("Treina modelos avançados por produto.")
+    parser = argparse.ArgumentParser("Treina modelos avançados por produto (Multi-Target).")
     parser.add_argument("--no-optuna", action="store_true", help="Desativa tuning com Optuna.")
-    parser.add_argument("--trials", type=int, default=50, help="Trials por modelo (padrão: 50).")
+    parser.add_argument("--trials", type=int, default=15, help="Trials por modelo (padrão: 15, reduzido para velocidade).")
     parser.add_argument("--no-backtest", action="store_true", help="Desativa backtest deslizante.")
     parser.add_argument("--sku", type=str, help="Treinar só 1 SKU.")
     parser.add_argument("--limit", type=int, help="Limitar quantidade de SKUs.")
@@ -968,10 +1166,41 @@ def main() -> bool:
         action="store_true",
         help="Modo rápido: sem backtest, sem Optuna em série curta, ideal para popular.",
     )
+    parser.add_argument(
+        "--use-all-data",
+        action="store_true",
+        help="Usar 100% dos dados para treino (sem split de validação). Maximiza dados disponíveis.",
+    )
+    parser.add_argument(
+        "--targets",
+        type=str,
+        default="quantidade,preco",
+        help="Targets para treinar (padrão: quantidade,preco). "
+             "Opções: quantidade, preco, receita, lucro, margem, custo, rotatividade, dias_estoque",
+    )
     args = parser.parse_args()
 
     optimize = not args.no_optuna
     do_backtest = not args.no_backtest
+    targets_list = [t.strip() for t in args.targets.split(",")]
+
+    # ✅ NOVO: Validar targets
+    VALID_TARGETS = {"quantidade", "preco", "receita", "lucro", "margem", "custo", "rotatividade", "dias_estoque"}
+    invalid_targets = set(targets_list) - VALID_TARGETS
+    if invalid_targets:
+        print(f"❌ Targets inválidos: {invalid_targets}")
+        print(f"   Válidos: {', '.join(sorted(VALID_TARGETS))}")
+        return False
+    
+    # ✅ NOVO: Mostrar configuração de otimização + GPU
+    print(f"\n{'='*80}")
+    print(f"🚀 CONFIGURAÇÃO DE TREINO")
+    print(f"{'='*80}")
+    print(f"📊 Targets: {', '.join(targets_list)}")
+    print(f"🔧 Trials: {args.trials}")
+    print(f"🎮 GPU: {'✅ ATIVADA' if HAS_GPU else '❌ NÃO DETECTADA'} {f'({GPU_NAME})' if GPU_NAME else ''}")
+    print(f"📈 Feature Engineering: Lags até 90 dias")
+    print(f"{'='*80}\n")
 
     if args.bulk:
         optimize = False
@@ -991,28 +1220,36 @@ def main() -> bool:
         produtos = produtos[: args.limit]
 
     print(
-        f"🚀 Treinando {len(produtos)} produtos | "
+        f"🚀 Treinando {len(produtos)} produtos × {len(targets_list)} targets | "
         f"optuna={'on' if optimize else 'off'} (trials={args.trials}) | "
         f"backtest={'on' if do_backtest else 'off'} | "
+        f"use_all_data={'on' if args.use_all_data else 'off'} | "
         f"gpu={'on' if USE_GPU else 'off'}"
     )
     print(
-        f"📊 Melhorias v3.0: Feature engineering expandido | "
-        f"Tratamento de zeros | Detecção de outliers | CV 5-fold"
+        f"📊 Targets: {', '.join(targets_list)} | "
+        f"Feature engineering expandido | Tratamento de zeros | CV 5-fold"
     )
     print()
 
     success = 0
-    for idx, prod in enumerate(produtos, 1):
-        print(f"[{idx}/{len(produtos)}] {prod.sku}")
-        ok = train_product_model(
-            prod,
-            optimize=optimize,
-            n_trials=args.trials,
-            backtest=do_backtest,
-        )
-        if ok:
-            success += 1
+    total = len(produtos) * len(targets_list)
+    current = 0
+    
+    for prod in produtos:
+        for tgt in targets_list:
+            current += 1
+            print(f"[{current}/{total}] {prod.sku} → {tgt}")
+            ok = train_product_model(
+                prod,
+                optimize=optimize,
+                n_trials=args.trials,
+                backtest=do_backtest,
+                use_all_data=args.use_all_data,
+                target=tgt,  # ← Passar target
+            )
+            if ok:
+                success += 1
 
     print(f"\n✅ Concluído: {success}/{len(produtos)}")
     return success > 0

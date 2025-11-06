@@ -254,6 +254,7 @@ def _build_features_for_date(
 def predict_prices_for_product(
     sku: str,
     days_ahead: int = DEFAULT_FORECAST_HORIZON,
+    target: str = "quantidade",  # ← Novo parâmetro
 ) -> Dict[str, List]:
     """
     Gera previsões autorregressivas para um produto.
@@ -271,33 +272,58 @@ def predict_prices_for_product(
     LOGGER.info(f"Iniciando previsão para {sku}: {days_ahead} dias à frente")
     
     try:
-        # Carregar modelo
-        model, scaler, metadata = load_model(sku)
-        LOGGER.info(f"Modelo carregado: {metadata.model_type} v{metadata.version}")
+        # Carregar modelo com target específico
+        model, scaler, metadata = load_model(sku, target=target)  # ← Passar target
+        LOGGER.info(f"Modelo carregado: {metadata.model_type} v{metadata.version}, target: {target}")
+        
+        # Usar modelo direto para fazer previsão
+        result = _predict_with_model(sku, model, scaler, metadata, days_ahead)
+        
+        return result
         
     except ModelNotFoundError:
         LOGGER.warning(f"Modelo não encontrado para {sku}, usando fallback")
         return _fallback_prediction(sku, days_ahead)
+
+
+def _predict_with_model(
+    sku: str,
+    model: Any,
+    scaler: Any,
+    metadata: Any,
+    days_ahead: int = DEFAULT_FORECAST_HORIZON,
+) -> Dict[str, List]:
+    """
+    Faz previsão usando o modelo carregado (preço ou quantidade).
     
+    Args:
+        sku: SKU do produto
+        model: Modelo carregado (stacking ensemble ou modelo único)
+        scaler: Scaler para normalização
+        metadata: Metadados do modelo
+        days_ahead: Dias à frente para prever
+    
+    Returns:
+        Dicionário com previsões
+    """
     with Session(engine) as session:
-        # Carregar histórico recente (60 dias para features de lag/rolling adequadas)
+        # Carregar histórico recente
         produto, df_history = _load_recent_history(session, sku, days=60)
         
         # Inicializar deques com histórico
         price_history = deque(df_history["price"].tolist(), maxlen=60)
         quantity_history = deque(df_history["quantity"].tolist(), maxlen=60)
         
-        # Data inicial para previsão (dia seguinte ao último histórico)
+        # Data inicial para previsão
         last_date = df_history["date"].max()
         if isinstance(last_date, pd.Timestamp):
             last_date = last_date.date()
         
         # Gerar previsões autorregressivas
         forecast_dates = []
-        forecast_prices = []
+        forecast_values = []
         
         for step in range(1, days_ahead + 1):
-            # Data alvo
             target_date = last_date + timedelta(days=step)
             
             # Construir features
@@ -311,43 +337,49 @@ def predict_prices_for_product(
             feature_values = [features_dict[col] for col in metadata.features]
             feature_array = np.array(feature_values).reshape(1, -1)
             
-            # 🔧 CORREÇÃO CRÍTICA: Normalizar features com o scaler treinado
+            # Normalizar features
             feature_array_scaled = scaler.transform(feature_array)
             
-            # 🔍 DEBUG: Log das features (apenas primeiros 5 passos)
-            if step <= 5:
-                LOGGER.debug(
-                    f"Step D+{step}",
-                    date=target_date.isoformat(),
-                    price_lag_1=features_dict.get('price_lag_1', 0.0),
-                    price_lag_7=features_dict.get('price_lag_7', 0.0),
-                    price_rolling_mean_7=features_dict.get('price_rolling_mean_7', 0.0),
-                    last_3_prices=list(price_history)[-3:]
-                )
+            # Prever usando o modelo
+            if isinstance(model, dict) and model.get("type") == "stacking":
+                base_models = model["base_models"]
+                meta_learner = model["meta_learner"]
+                base_predictions = np.column_stack([
+                    m.predict(feature_array_scaled) for m in base_models
+                ])
+                predicted_value = meta_learner.predict(base_predictions)[0]
+            else:
+                predicted_value = model.predict(feature_array_scaled)[0]
             
-            # Prever usando features normalizadas
-            predicted_price = model.predict(feature_array_scaled)[0]
-            predicted_price = max(predicted_price, 0.0)  # Garantir não-negativo
+            predicted_value = max(predicted_value, 0.0)
             
             # Adicionar aos resultados
             forecast_dates.append(target_date.isoformat())
-            forecast_prices.append(round(float(predicted_price), 2))
+            forecast_values.append(round(float(predicted_value), 2))
             
-            # 🔄 ATUALIZAÇÃO AUTORREGRESSIVA: Usar previsão como input para próximo passo
-            price_history.append(predicted_price)
-            
-            # Quantidade: usar média recente como estimativa
+            # Atualizar histórico para próxima previsão
+            price_history.append(predicted_value)
             avg_quantity = np.mean(list(quantity_history)[-7:])
             quantity_history.append(avg_quantity)
         
-        LOGGER.info(f"✅ Previsão concluída para {sku}: {len(forecast_prices)} dias")
+        LOGGER.info(f"✅ Previsão concluída para {sku}: {len(forecast_values)} valores")
+        
+        # Extrair métricas
+        metrics_for_frontend = {}
+        if hasattr(metadata, 'metrics') and metadata.metrics:
+            if isinstance(metadata.metrics, dict):
+                if 'holdout' in metadata.metrics:
+                    metrics_for_frontend = metadata.metrics['holdout']
+                else:
+                    metrics_for_frontend = metadata.metrics
         
         return {
             "sku": sku,
             "dates": forecast_dates,
-            "prices": forecast_prices,
+            "prices": forecast_values,  # Pode ser preço ou quantidade dependendo do modelo
             "model_used": f"{metadata.model_type}_v{metadata.version}",
-            "metrics": metadata.metrics,
+            "metrics": metrics_for_frontend,
+            "method": metadata.model_type,
         }
 
 

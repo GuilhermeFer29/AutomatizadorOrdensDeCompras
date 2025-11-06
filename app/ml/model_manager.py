@@ -83,15 +83,16 @@ class ModelMetadata:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> ModelMetadata:
         """Cria instância a partir de dicionário."""
+        # Suporta tanto português quanto inglês nos nomes dos campos
         return cls(
-            sku=data["sku"],
-            model_type=data["model_type"],
-            version=data["version"],
-            hyperparameters=data["hyperparameters"],
-            metrics=data["metrics"],
-            features=data["features"],
-            trained_at=data["trained_at"],
-            training_samples=data["training_samples"],
+            sku=data.get("sku"),
+            model_type=data.get("model_type") or data.get("modelo_tipo"),
+            version=data.get("version") or data.get("versao"),
+            hyperparameters=data.get("hyperparameters") or data.get("hiperparametros", {}),
+            metrics=data.get("metrics") or data.get("metricas", {}),
+            features=data.get("features") or data.get("feature_names", []),
+            trained_at=data.get("trained_at") or data.get("treinado_em"),
+            training_samples=data.get("training_samples") or data.get("amostras_treino", 0),
         )
 
 
@@ -145,12 +146,13 @@ def save_model(
     return model_dir
 
 
-def load_model(sku: str) -> tuple[Any, Optional[Any], ModelMetadata]:
+def load_model(sku: str, target: str = "quantidade") -> tuple[Any, Optional[Any], ModelMetadata]:
     """
     Carrega modelo, scaler e metadados de um produto.
     
     Args:
         sku: SKU do produto
+        target: Target específico (quantidade, preco, receita, lucro, margem, custo, etc)
     
     Returns:
         Tupla (model, scaler, metadata)
@@ -158,17 +160,32 @@ def load_model(sku: str) -> tuple[Any, Optional[Any], ModelMetadata]:
     Raises:
         ModelNotFoundError: Se o modelo não for encontrado
     """
-    model_dir = get_model_dir(sku)
+    model_dir = get_model_dir(sku) / target  # ← Novo: diretório por target
     
     # Verificar se o diretório existe
     if not model_dir.exists():
-        raise ModelNotFoundError(f"Diretório do modelo não encontrado para SKU: {sku}")
+        raise ModelNotFoundError(f"Diretório do modelo não encontrado para SKU: {sku}, target: {target}")
     
-    # Carregar modelo
+    # Carregar modelo (suporta tanto stacking quanto modelo único)
+    ensemble_base_path = model_dir / "ensemble_base.pkl"
+    meta_learner_path = model_dir / "meta_learner.pkl"
     model_path = model_dir / "model.pkl"
-    if not model_path.exists():
-        raise ModelNotFoundError(f"Arquivo do modelo não encontrado: {model_path}")
-    model = joblib.load(model_path)
+    
+    if ensemble_base_path.exists() and meta_learner_path.exists():
+        # Stacking ensemble
+        LOGGER.info(f"Carregando stacking ensemble para SKU: {sku}, target: {target}")
+        import pickle
+        with open(ensemble_base_path, "rb") as f:
+            base_models = pickle.load(f)
+        with open(meta_learner_path, "rb") as f:
+            meta_learner = pickle.load(f)
+        model = {"base_models": base_models, "meta_learner": meta_learner, "type": "stacking"}
+    elif model_path.exists():
+        # Modelo único
+        LOGGER.info(f"Carregando modelo único para SKU: {sku}, target: {target}")
+        model = joblib.load(model_path)
+    else:
+        raise ModelNotFoundError(f"Arquivos do modelo não encontrados: {model_dir}")
     
     # Carregar scaler (opcional)
     scaler_path = model_dir / "scaler.pkl"
@@ -183,17 +200,44 @@ def load_model(sku: str) -> tuple[Any, Optional[Any], ModelMetadata]:
         metadata_dict = json.load(f)
     metadata = ModelMetadata.from_dict(metadata_dict)
     
-    LOGGER.info(f"Modelo carregado para SKU: {sku}")
+    LOGGER.info(f"Modelo carregado para SKU: {sku}, target: {target}")
     
     return model, scaler, metadata
 
 
-def model_exists(sku: str) -> bool:
-    """Verifica se um modelo existe para o SKU especificado."""
-    model_dir = get_model_dir(sku)
+def model_exists(sku: str, target: str = "quantidade") -> bool:
+    """Verifica se um modelo existe para o SKU e target especificados."""
+    model_dir = get_model_dir(sku) / target
     model_path = model_dir / "model.pkl"
+    ensemble_base = model_dir / "ensemble_base.pkl"
     metadata_path = model_dir / "metadata.json"
-    return model_path.exists() and metadata_path.exists()
+    
+    has_model = model_path.exists() or (ensemble_base.exists())
+    return has_model and metadata_path.exists()
+
+
+def list_available_targets(sku: str) -> list[str]:
+    """Lista todos os targets disponíveis para um SKU.
+    
+    Args:
+        sku: SKU do produto
+    
+    Returns:
+        Lista de targets disponíveis (ex: ['quantidade', 'preco', 'receita'])
+    """
+    model_dir = get_model_dir(sku)
+    
+    if not model_dir.exists():
+        return []
+    
+    targets = []
+    for target_dir in model_dir.iterdir():
+        if target_dir.is_dir():
+            metadata_path = target_dir / "metadata.json"
+            if metadata_path.exists():
+                targets.append(target_dir.name)
+    
+    return sorted(targets)
 
 
 def list_trained_models() -> list[str]:
