@@ -408,12 +408,132 @@ def create_time_series_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+# ✅ NOVO: Transformações específicas por target
+def apply_target_transforms(df: pd.DataFrame, target: str) -> pd.DataFrame:
+    """
+    Aplica transformações específicas por target para melhorar previsibilidade.
+    
+    Estratégias:
+    - quantidade: log1p (muitos zeros)
+    - preco: sem transform (suave)
+    - receita: sem transform (estável)
+    - lucro: winsorization (outliers extremos)
+    - margem: log transform (distribuição assimétrica)
+    - custo: sem transform (herda de quantidade)
+    - rotatividade: log transform (muito assimétrica)
+    - dias_estoque: clipping + log (valores extremos)
+    """
+    df = df.copy()
+    
+    if target == "quantidade" and "quantidade" in df.columns:
+        # Log1p para quantidade (muitos zeros)
+        df["quantidade"] = np.log1p(df["quantidade"])
+        
+    elif target == "lucro" and "lucro" in df.columns:
+        # Winsorization para lucro (outliers extremos)
+        q01 = df["lucro"].quantile(0.01)
+        q99 = df["lucro"].quantile(0.99)
+        df["lucro"] = df["lucro"].clip(lower=q01, upper=q99)
+        
+    elif target == "margem" and "margem" in df.columns:
+        # Log transform para margem (distribuição assimétrica)
+        df["margem"] = np.log1p(df["margem"].clip(lower=0))
+        
+    elif target == "rotatividade" and "rotatividade" in df.columns:
+        # Log transform para rotatividade (muito assimétrica)
+        df["rotatividade"] = np.log1p(df["rotatividade"].clip(lower=0.001))
+        
+    elif target == "dias_estoque" and "dias_estoque" in df.columns:
+        # Clipping + log para dias_estoque (valores extremos)
+        df["dias_estoque"] = df["dias_estoque"].clip(upper=365)
+        df["dias_estoque"] = np.log1p(df["dias_estoque"])
+    
+    return df
+
+
+# ✅ NOVO: Hiperparâmetros otimizados por target
+def get_optimized_params(target: str) -> Dict[str, Any]:
+    """Retorna hiperparâmetros otimizados específicos para cada target."""
+    
+    params = {
+        "quantidade": {
+            "num_leaves": 31,
+            "max_depth": 5,
+            "learning_rate": 0.05,
+            "lambda_l1": 5.0,
+            "lambda_l2": 5.0,
+            "min_data_in_leaf": 20,
+        },
+        "preco": {
+            "num_leaves": 63,
+            "max_depth": 7,
+            "learning_rate": 0.02,
+            "lambda_l1": 1.0,
+            "lambda_l2": 1.0,
+            "min_data_in_leaf": 10,
+        },
+        "receita": {
+            "num_leaves": 47,
+            "max_depth": 6,
+            "learning_rate": 0.03,
+            "lambda_l1": 3.0,
+            "lambda_l2": 3.0,
+            "min_data_in_leaf": 15,
+        },
+        "lucro": {
+            "num_leaves": 31,
+            "max_depth": 5,
+            "learning_rate": 0.05,
+            "lambda_l1": 8.0,
+            "lambda_l2": 8.0,
+            "min_data_in_leaf": 30,
+        },
+        "margem": {
+            "num_leaves": 47,
+            "max_depth": 6,
+            "learning_rate": 0.03,
+            "lambda_l1": 2.0,
+            "lambda_l2": 2.0,
+            "min_data_in_leaf": 10,
+        },
+        "custo": {
+            "num_leaves": 31,
+            "max_depth": 5,
+            "learning_rate": 0.05,
+            "lambda_l1": 4.0,
+            "lambda_l2": 4.0,
+            "min_data_in_leaf": 15,
+        },
+        "rotatividade": {
+            "num_leaves": 31,
+            "max_depth": 5,
+            "learning_rate": 0.05,
+            "lambda_l1": 6.0,
+            "lambda_l2": 6.0,
+            "min_data_in_leaf": 20,
+        },
+        "dias_estoque": {
+            "num_leaves": 31,
+            "max_depth": 5,
+            "learning_rate": 0.05,
+            "lambda_l1": 6.0,
+            "lambda_l2": 6.0,
+            "min_data_in_leaf": 20,
+        },
+    }
+    
+    return params.get(target, params["quantidade"])
+
+
 def prepare_training_data(
     df: pd.DataFrame,
     forecast_horizon: int = FORECAST_HORIZON,
     target: str = "quantidade",
 ) -> Tuple[np.ndarray, np.ndarray, List[str]]:
     """Prepara dados de treino (suporta múltiplos targets)."""
+    
+    # ✅ NOVO: Aplicar transformações específicas por target
+    df = apply_target_transforms(df, target)
     features_df = df.drop(
         columns=["quantidade", "data_venda", "preco", "receita"],
         errors="ignore",
@@ -494,10 +614,12 @@ if not XGB_SKLEARN_HAS_ES:
 # ======================================================================================
 # 8) OBJETIVOS DO OPTUNA - OTIMIZADOS COM MAIS PARÂMETROS
 # ======================================================================================
-def objective_lgb(trial: optuna.Trial, X_train: np.ndarray, y_train: np.ndarray) -> float:
-    """
-    Objetivo otimizado para LightGBM com hiperparâmetros expandidos e mais exploração.
-    """
+def objective_lgb(
+    trial: optuna.Trial,
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+) -> float:
+    """Otimização LightGBM com Optuna (10 CV splits)."""
     params = {
         "num_leaves": trial.suggest_int("num_leaves", 31, 255),  # Ampliado o range
         "max_depth": trial.suggest_int("max_depth", 4, 20),  # Aumentado para 20
@@ -521,19 +643,43 @@ def objective_lgb(trial: optuna.Trial, X_train: np.ndarray, y_train: np.ndarray)
         X_tr, X_val = X_train[tr_idx], X_train[val_idx]
         y_tr, y_val = y_train[tr_idx], y_train[val_idx]
 
-        model = lgb.LGBMRegressor(
-            **params,
-            n_estimators=500,  # Aumentado de 300
-            random_state=RANDOM_SEED,
-            verbose=-1,
-        )
-        model.fit(
-            X_tr,
-            y_tr,
-            eval_set=[(X_val, y_val)],
-            eval_metric="rmse",
-            callbacks=[lgb.early_stopping(stopping_rounds=50, verbose=False)],
-        )
+        # ✅ NOVO: Tentar GPU, fallback para CPU se não compilado com CUDA
+        device = "cuda" if HAS_GPU else "cpu"
+        try:
+            model = lgb.LGBMRegressor(
+                **params,
+                n_estimators=500,
+                random_state=RANDOM_SEED,
+                verbose=-1,
+                device_type=device,
+            )
+            model.fit(
+                X_tr,
+                y_tr,
+                eval_set=[(X_val, y_val)],
+                eval_metric="rmse",
+                callbacks=[lgb.early_stopping(stopping_rounds=50, verbose=False)],
+            )
+        except Exception as e:
+            # Se GPU falhar, usar CPU
+            if "CUDA" in str(e) or "GPU" in str(e) or "not enabled" in str(e):
+                model = lgb.LGBMRegressor(
+                    **params,
+                    n_estimators=500,
+                    random_state=RANDOM_SEED,
+                    verbose=-1,
+                    device_type="cpu",  # Fallback para CPU
+                )
+                model.fit(
+                    X_tr,
+                    y_tr,
+                    eval_set=[(X_val, y_val)],
+                    eval_metric="rmse",
+                    callbacks=[lgb.early_stopping(stopping_rounds=50, verbose=False)],
+                )
+            else:
+                raise
+        
         y_pred = model.predict(X_val)
         m = eval_metrics(y_val, y_pred)
         scores.append(m["rmse"])
@@ -1011,7 +1157,7 @@ def train_product_model(
 def main() -> bool:
     parser = argparse.ArgumentParser("Treina modelos avançados por produto (Multi-Target).")
     parser.add_argument("--no-optuna", action="store_true", help="Desativa tuning com Optuna.")
-    parser.add_argument("--trials", type=int, default=50, help="Trials por modelo (padrão: 50).")
+    parser.add_argument("--trials", type=int, default=15, help="Trials por modelo (padrão: 15, reduzido para velocidade).")
     parser.add_argument("--no-backtest", action="store_true", help="Desativa backtest deslizante.")
     parser.add_argument("--sku", type=str, help="Treinar só 1 SKU.")
     parser.add_argument("--limit", type=int, help="Limitar quantidade de SKUs.")
@@ -1029,7 +1175,7 @@ def main() -> bool:
         "--targets",
         type=str,
         default="quantidade,preco",
-        help="Targets para treinar (separados por vírgula). "
+        help="Targets para treinar (padrão: quantidade,preco). "
              "Opções: quantidade, preco, receita, lucro, margem, custo, rotatividade, dias_estoque",
     )
     args = parser.parse_args()
@@ -1045,6 +1191,16 @@ def main() -> bool:
         print(f"❌ Targets inválidos: {invalid_targets}")
         print(f"   Válidos: {', '.join(sorted(VALID_TARGETS))}")
         return False
+    
+    # ✅ NOVO: Mostrar configuração de otimização + GPU
+    print(f"\n{'='*80}")
+    print(f"🚀 CONFIGURAÇÃO DE TREINO")
+    print(f"{'='*80}")
+    print(f"📊 Targets: {', '.join(targets_list)}")
+    print(f"🔧 Trials: {args.trials}")
+    print(f"🎮 GPU: {'✅ ATIVADA' if HAS_GPU else '❌ NÃO DETECTADA'} {f'({GPU_NAME})' if GPU_NAME else ''}")
+    print(f"📈 Feature Engineering: Lags até 90 dias")
+    print(f"{'='*80}\n")
 
     if args.bulk:
         optimize = False

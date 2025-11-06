@@ -569,19 +569,43 @@ def objective_lgb(trial: optuna.Trial, X_train: np.ndarray, y_train: np.ndarray)
         X_tr, X_val = X_train[tr_idx], X_train[val_idx]
         y_tr, y_val = y_train[tr_idx], y_train[val_idx]
 
-        model = lgb.LGBMRegressor(
-            **params,
-            n_estimators=500,  # Aumentado de 300
-            random_state=RANDOM_SEED,
-            verbose=-1,
-        )
-        model.fit(
-            X_tr,
-            y_tr,
-            eval_set=[(X_val, y_val)],
-            eval_metric="rmse",
-            callbacks=[lgb.early_stopping(stopping_rounds=50, verbose=False)],
-        )
+        # ✅ NOVO: Tentar GPU, fallback para CPU se não compilado com CUDA
+        device = "cuda" if USE_GPU else "cpu"
+        try:
+            model = lgb.LGBMRegressor(
+                **params,
+                n_estimators=500,
+                random_state=RANDOM_SEED,
+                verbose=-1,
+                device_type=device,
+            )
+            model.fit(
+                X_tr,
+                y_tr,
+                eval_set=[(X_val, y_val)],
+                eval_metric="rmse",
+                callbacks=[lgb.early_stopping(stopping_rounds=50, verbose=False)],
+            )
+        except Exception as e:
+            # Se GPU falhar, usar CPU
+            if "CUDA" in str(e) or "GPU" in str(e) or "not enabled" in str(e):
+                model = lgb.LGBMRegressor(
+                    **params,
+                    n_estimators=500,
+                    random_state=RANDOM_SEED,
+                    verbose=-1,
+                    device_type="cpu",  # Fallback para CPU
+                )
+                model.fit(
+                    X_tr,
+                    y_tr,
+                    eval_set=[(X_val, y_val)],
+                    eval_metric="rmse",
+                    callbacks=[lgb.early_stopping(stopping_rounds=50, verbose=False)],
+                )
+            else:
+                raise
+        
         y_pred = model.predict(X_val)
         m = eval_metrics(y_val, y_pred)
         scores.append(m["rmse"])
@@ -741,7 +765,7 @@ def build_stacking_with_oof(
 def train_model_for_product(
     sku: str,
     optimize: bool = True,
-    n_trials: int = 50,
+    n_trials: int = 15,  # ✅ Reduzido de 50 para 15 (3x mais rápido)
     backtest: bool = True,
     target: str = "quantidade",
     use_all_data: bool = False,
@@ -1005,13 +1029,31 @@ def sliding_backtest(
         X_tr = scaler.transform(X_tr)
         X_t = scaler.transform(X_t)
 
-        model = lgb.LGBMRegressor(
-            **best_params_lgb,
-            n_estimators=200,
-            random_state=RANDOM_SEED,
-            verbose=-1,
-        )
-        model.fit(X_tr, y_tr)
+        # ✅ NOVO: Tentar GPU, fallback para CPU se não compilado com CUDA
+        device = "cuda" if USE_GPU else "cpu"
+        try:
+            model = lgb.LGBMRegressor(
+                **best_params_lgb,
+                n_estimators=200,
+                random_state=RANDOM_SEED,
+                verbose=-1,
+                device_type=device,
+            )
+            model.fit(X_tr, y_tr)
+        except Exception as e:
+            # Se GPU falhar, usar CPU
+            if "CUDA" in str(e) or "GPU" in str(e) or "not enabled" in str(e):
+                model = lgb.LGBMRegressor(
+                    **best_params_lgb,
+                    n_estimators=200,
+                    random_state=RANDOM_SEED,
+                    verbose=-1,
+                    device_type="cpu",  # Fallback para CPU
+                )
+                model.fit(X_tr, y_tr)
+            else:
+                raise
+        
         y_pred = model.predict(X_t)
         results.append(eval_metrics(y_t, y_pred))
 
