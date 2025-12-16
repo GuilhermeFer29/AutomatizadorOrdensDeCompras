@@ -4,7 +4,7 @@ services:
       context: ./FrontEnd
       dockerfile: Dockerfile
     ports:
-      - "80:80"
+      - "3000:80"
     depends_on:
       - api
 
@@ -28,15 +28,15 @@ services:
       - ./scripts:/app/scripts
       - ./data:/app/data
       - ./models:/app/models
-    # GPU support
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    
+    # GPU removida para Project Lite
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
   worker:
     image: app:latest
     env_file:
@@ -57,14 +57,14 @@ services:
       - ./scripts:/app/scripts
       - ./data:/app/data
       - ./models:/app/models
-    # GPU support
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    # GPU removida para Project Lite
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
 
   beat:
     image: app:latest
@@ -98,7 +98,7 @@ services:
       - postgres_data:/var/lib/mysql
     command: --host-cache-size=0
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$${MYSQL_ROOT_PASSWORD}"]
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$${MYSQL_ROOT_PASSWORD}" ]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -111,11 +111,12 @@ services:
     ports:
       - "6380:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 3s
       timeout: 3s
       retries: 5
 
 volumes:
   postgres_data:
+
 

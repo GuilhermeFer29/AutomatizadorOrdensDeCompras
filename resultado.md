@@ -1,1 +1,0 @@
-Quando acionando o Criar nova ordem tanto manual como pelos agentes ele verrifica atraves dos modelos e do banco de dados tudo que e necessario  para criar a ordem de compras e os valores dos fornecedores ,

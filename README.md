@@ -70,27 +70,12 @@ USUÁRIO
 - **Status**: Corrigido (normalização de features)
 - **Funcionalidade**: Previsão autorregressiva multi-step
 
-#### ✅ 1.2. Fornecedores Sintéticos
-- **Arquivo**: `scripts/generate_synthetic_suppliers.py`
-- **Novos Modelos**:
-  ```python
-  # app/models/models.py
-  class Fornecedor:
-      confiabilidade: float  # 0.0 a 1.0
-      prazo_entrega_dias: int  # Dias úteis
-  
-  class OfertaProduto:
-      produto_id: int
-      fornecedor_id: int
-      preco_ofertado: Decimal
-      estoque_disponivel: int
-      validade_oferta: datetime
-  ```
+#### ⚠️ 1.2. Fornecedores Sintéticos (LEGADO / MOVIDO)
+- **Status**: MOVIDO PARA `_obsolete/`
+- **Arquivo Original**: `scripts/generate_synthetic_suppliers.py`
+- **Nota**: A funcionalidade de geração de dados sintéticos para fornecedores foi arquivada. Os modelos de `Fornecedor` e `OfertaProduto` permanecem ativos no banco de dados, mas o script de geração foi movido para a pasta `_obsolete` para revisão.
 
-- **Execução**:
-  ```bash
-  python scripts/setup_development.py generate_suppliers
-  ```
+- **Localização Atual**: `_obsolete/_obsolete/generate_synthetic_suppliers.py`
 
 ### FASE 2: Ferramentas Avançadas
 

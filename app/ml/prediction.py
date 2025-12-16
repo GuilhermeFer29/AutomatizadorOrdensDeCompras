@@ -1,429 +1,199 @@
 """
-Pipeline de previsão autorregressiva para modelos por produto.
-
-ARQUITETURA:
-============
-✅ Previsão autorregressiva multi-step (usa previsões anteriores como input)
-✅ Reconstrução automática de features temporais
-✅ Suporte a janelas móveis dinâmicas
-✅ Gestão de feriados e calendário
-✅ Fallback para médias se modelo não disponível
-
-COMO FUNCIONA:
-==============
-Para prever D+7:
-1. D+1: Usa histórico real até D
-2. D+2: Usa histórico real + previsão D+1
-3. D+3: Usa histórico real + previsões D+1 e D+2
-... e assim por diante
-
-Isso captura a dependência temporal entre as previsões.
+Módulo de Previsão Simplificado (Project Lite)
+Utiliza StatsForecast e AutoARIMA para previsões robustas e rápidas sem necessidade de GPU.
 """
 
 from __future__ import annotations
 
-from collections import deque
+import logging
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Tuple
+from typing import Dict, List, Any
 
-import holidays
-import numpy as np
 import pandas as pd
-import structlog
+import numpy as np
+from statsforecast import StatsForecast
+from statsforecast.models import AutoARIMA, Naive
 from sqlmodel import Session, select
 
 from app.core.database import engine
-from app.ml.model_manager import ModelNotFoundError, load_model
 from app.models.models import PrecosHistoricos, Produto, VendasHistoricas
 
-LOGGER = structlog.get_logger(__name__)
+LOGGER = logging.getLogger(__name__)
+
 
 # Configurações
-MINIMUM_HISTORY_DAYS = 30  # Histórico mínimo necessário para previsão (reduzido de 60 para 30)
-DEFAULT_FORECAST_HORIZON = 14  # Dias à frente por padrão
-
-# Feriados brasileiros
-BR_HOLIDAYS = holidays.Brazil()
-
+MINIMUM_HISTORY_DAYS = 14  # Reduzido para permitir previsão com menos dados
+DEFAULT_FORECAST_HORIZON = 14
 
 class InsufficientHistoryError(Exception):
-    """Exceção lançada quando não há histórico suficiente."""
+    """Erro levantado quando não há histórico suficiente para previsão."""
+    pass
 
-
-def _load_recent_history(
+def _load_history_as_dataframe(
     session: Session,
     sku: str,
-    days: int = 60,
-) -> Tuple[Produto, pd.DataFrame]:
-    """
-    Carrega histórico recente de preços e vendas.
+    days: int = 90
+) -> pd.DataFrame:
+    """Carrega histórico e retorna DataFrame compatível com StatsForecast (unique_id, ds, y)."""
     
-    Args:
-        session: Sessão do banco de dados
-        sku: SKU do produto
-        days: Número de dias de histórico a carregar
-    
-    Returns:
-        Tupla (produto, dataframe)
-    """
-    # Buscar produto
+    # 1. Buscar produto
     produto = session.exec(select(Produto).where(Produto.sku == sku)).first()
     if not produto:
-        raise ValueError(f"Produto com SKU '{sku}' não encontrado")
-    
-    # Data limite (days atrás)
+        raise ValueError(f"Produto {sku} não encontrado")
+
+    # 2. Buscar vendas
     cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+    vendas = list(session.exec(
+        select(VendasHistoricas)
+        .where(VendasHistoricas.produto_id == produto.id)
+        .where(VendasHistoricas.data_venda >= cutoff_date)
+        .order_by(VendasHistoricas.data_venda)
+    ))
+
+    if not vendas:
+        # Retorna DataFrame vazio se não houver vendas
+        return pd.DataFrame(columns=["unique_id", "ds", "y"])
+
+    # 3. Converter para DataFrame
+    df = pd.DataFrame([
+        {
+            "unique_id": sku,
+            "ds": v.data_venda,
+            "y": float(v.quantidade)
+        } 
+        for v in vendas
+    ])
     
-    # Carregar preços recentes
-    precos = list(
-        session.exec(
-            select(PrecosHistoricos)
-            .where(PrecosHistoricos.produto_id == produto.id)
-            .where(PrecosHistoricos.coletado_em >= cutoff_date)
-            .order_by(PrecosHistoricos.coletado_em)
-        )
+    # 4. Agrupar por data (caso haja múltiplas entradas por dia) e preencher gaps
+    df["ds"] = pd.to_datetime(df["ds"]).dt.tz_localize(None)
+    df = df.groupby(["unique_id", "ds"]).sum().reset_index()
+    
+    # Preencher dias faltantes com 0 (importante para varejo)
+    all_dates = pd.date_range(start=df["ds"].min(), end=df["ds"].max(), freq="D")
+    df = (
+        df.set_index("ds")
+        .reindex(all_dates, fill_value=0)
+        .rename_axis("ds")
+        .reset_index()
     )
+    df["unique_id"] = sku  # Restaurar ID após reindex
     
-    # Carregar vendas recentes
-    vendas = list(
-        session.exec(
-            select(VendasHistoricas)
-            .where(VendasHistoricas.produto_id == produto.id)
-            .where(VendasHistoricas.data_venda >= cutoff_date)
-            .order_by(VendasHistoricas.data_venda)
-        )
-    )
-    
-    if len(precos) < MINIMUM_HISTORY_DAYS:
-        raise InsufficientHistoryError(
-            f"Histórico insuficiente para {sku}. "
-            f"Encontrado: {len(precos)} dias, mínimo: {MINIMUM_HISTORY_DAYS}"
-        )
-    
-    # Criar DataFrame
-    price_rows = []
-    for preco in precos:
-        date = preco.coletado_em
-        if date.tzinfo is None:
-            date = date.replace(tzinfo=timezone.utc)
-        price_rows.append({
-            "date": date.astimezone(timezone.utc).replace(tzinfo=None).date(),
-            "price": float(preco.preco),
-        })
-    
-    df_prices = pd.DataFrame(price_rows)
-    df_prices = df_prices.groupby("date").agg({"price": "mean"}).reset_index()
-    
-    # Vendas
-    sales_rows = []
-    for venda in vendas:
-        date = venda.data_venda
-        if date.tzinfo is None:
-            date = date.replace(tzinfo=timezone.utc)
-        sales_rows.append({
-            "date": date.astimezone(timezone.utc).replace(tzinfo=None).date(),
-            "quantity": venda.quantidade,
-        })
-    
-    df_sales = pd.DataFrame(sales_rows) if sales_rows else pd.DataFrame(columns=["date", "quantity"])
-    if not df_sales.empty:
-        df_sales = df_sales.groupby("date").agg({"quantity": "sum"}).reset_index()
-    
-    # Merge
-    df = df_prices.copy()
-    if not df_sales.empty:
-        df = df.merge(df_sales, on="date", how="left")
-        df["quantity"] = df["quantity"].fillna(0)
-    else:
-        df["quantity"] = 0
-    
-    df = df.sort_values("date").reset_index(drop=True)
-    
-    return produto, df
-
-
-def _build_features_for_date(
-    target_date: datetime.date,
-    price_history: deque,
-    quantity_history: deque,
-) -> Dict[str, float]:
-    """
-    Constrói features para uma data futura usando histórico.
-    
-    Args:
-        target_date: Data para qual construir features
-        price_history: Deque com histórico de preços
-        quantity_history: Deque com histórico de quantidades
-    
-    Returns:
-        Dicionário com features
-    """
-    features = {}
-    
-    target_dt = datetime.combine(target_date, datetime.min.time())
-    
-    # ==========================
-    # 1. FEATURES DE CALENDÁRIO
-    # ==========================
-    features["day_of_week"] = target_dt.weekday()
-    features["day_of_month"] = target_dt.day
-    features["week_of_year"] = target_dt.isocalendar().week
-    features["month"] = target_dt.month
-    features["quarter"] = (target_dt.month - 1) // 3 + 1
-    features["is_weekend"] = 1 if target_dt.weekday() >= 5 else 0
-    features["is_month_start"] = 1 if target_dt.day == 1 else 0
-    features["is_month_end"] = 1 if target_dt.day >= 28 else 0  # Aproximação
-    
-    # ==========================
-    # 2. FEATURES DE FERIADOS
-    # ==========================
-    features["is_holiday"] = 1 if target_date in BR_HOLIDAYS else 0
-    
-    # Dias até próximo feriado
-    days_to_holiday = 30
-    for i in range(1, 31):
-        future_date = target_date + timedelta(days=i)
-        if future_date in BR_HOLIDAYS:
-            days_to_holiday = i
-            break
-    features["days_to_holiday"] = days_to_holiday
-    
-    # Dias desde último feriado
-    days_from_holiday = 30
-    for i in range(1, 31):
-        past_date = target_date - timedelta(days=i)
-        if past_date in BR_HOLIDAYS:
-            days_from_holiday = i
-            break
-    features["days_from_holiday"] = days_from_holiday
-    
-    # ==========================
-    # 3. FEATURES DE LAG
-    # ==========================
-    price_list = list(price_history)
-    quantity_list = list(quantity_history)
-    
-    def safe_lag(lst, lag):
-        return lst[-lag] if len(lst) >= lag else lst[-1] if lst else 0.0
-    
-    for lag in [1, 2, 7, 14, 30]:
-        features[f"price_lag_{lag}"] = safe_lag(price_list, lag)
-        features[f"quantity_lag_{lag}"] = safe_lag(quantity_list, lag)
-    
-    # ==========================
-    # 4. FEATURES DE ROLLING
-    # ==========================
-    for window in [7, 14, 30]:
-        # Preço
-        window_prices = price_list[-window:] if len(price_list) >= window else price_list
-        if window_prices:
-            features[f"price_rolling_mean_{window}"] = np.mean(window_prices)
-            features[f"price_rolling_std_{window}"] = np.std(window_prices)
-            features[f"price_rolling_min_{window}"] = np.min(window_prices)
-            features[f"price_rolling_max_{window}"] = np.max(window_prices)
-        else:
-            features[f"price_rolling_mean_{window}"] = 0.0
-            features[f"price_rolling_std_{window}"] = 0.0
-            features[f"price_rolling_min_{window}"] = 0.0
-            features[f"price_rolling_max_{window}"] = 0.0
-        
-        # Quantidade
-        window_quantities = quantity_list[-window:] if len(quantity_list) >= window else quantity_list
-        if window_quantities:
-            features[f"quantity_rolling_mean_{window}"] = np.mean(window_quantities)
-            features[f"quantity_rolling_std_{window}"] = np.std(window_quantities)
-            features[f"quantity_rolling_sum_{window}"] = np.sum(window_quantities)
-        else:
-            features[f"quantity_rolling_mean_{window}"] = 0.0
-            features[f"quantity_rolling_std_{window}"] = 0.0
-            features[f"quantity_rolling_sum_{window}"] = 0.0
-    
-    # ==========================
-    # 5. FEATURES DERIVADAS
-    # ==========================
-    price_ma7 = features["price_rolling_mean_7"]
-    price_ma30 = features["price_rolling_mean_30"]
-    
-    features["price_vs_ma7"] = safe_lag(price_list, 1) / (price_ma7 + 1e-6)
-    features["price_vs_ma30"] = safe_lag(price_list, 1) / (price_ma30 + 1e-6)
-    features["price_volatility_7"] = features["price_rolling_std_7"] / (price_ma7 + 1e-6)
-    
-    return features
-
+    return df
 
 def predict_prices_for_product(
     sku: str,
     days_ahead: int = DEFAULT_FORECAST_HORIZON,
-    target: str = "quantidade",  # ← Novo parâmetro
-) -> Dict[str, List]:
+    target: str = "quantidade",  # Mantido para compatibilidade, mas foco é demanda
+) -> Dict[str, Any]:
     """
-    Gera previsões autorregressivas para um produto.
-    
-    Args:
-        sku: SKU do produto
-        days_ahead: Número de dias à frente para prever
-    
-    Returns:
-        Dicionário com:
-        - dates: Lista de datas das previsões
-        - prices: Lista de preços previstos
-        - model_used: Nome do modelo usado
+    Gera previsão de demanda usando StatsForecast (AutoARIMA).
     """
-    LOGGER.info(f"Iniciando previsão para {sku}: {days_ahead} dias à frente")
-    
-    try:
-        # Carregar modelo com target específico
-        model, scaler, metadata = load_model(sku, target=target)  # ← Passar target
-        LOGGER.info(f"Modelo carregado: {metadata.model_type} v{metadata.version}, target: {target}")
-        
-        # Usar modelo direto para fazer previsão
-        result = _predict_with_model(sku, model, scaler, metadata, days_ahead)
-        
-        return result
-        
-    except ModelNotFoundError:
-        LOGGER.warning(f"Modelo não encontrado para {sku}, usando fallback")
-        return _fallback_prediction(sku, days_ahead)
-
-
-def _predict_with_model(
-    sku: str,
-    model: Any,
-    scaler: Any,
-    metadata: Any,
-    days_ahead: int = DEFAULT_FORECAST_HORIZON,
-) -> Dict[str, List]:
-    """
-    Faz previsão usando o modelo carregado (preço ou quantidade).
-    
-    Args:
-        sku: SKU do produto
-        model: Modelo carregado (stacking ensemble ou modelo único)
-        scaler: Scaler para normalização
-        metadata: Metadados do modelo
-        days_ahead: Dias à frente para prever
-    
-    Returns:
-        Dicionário com previsões
-    """
-    with Session(engine) as session:
-        # Carregar histórico recente
-        produto, df_history = _load_recent_history(session, sku, days=60)
-        
-        # Inicializar deques com histórico
-        price_history = deque(df_history["price"].tolist(), maxlen=60)
-        quantity_history = deque(df_history["quantity"].tolist(), maxlen=60)
-        
-        # Data inicial para previsão
-        last_date = df_history["date"].max()
-        if isinstance(last_date, pd.Timestamp):
-            last_date = last_date.date()
-        
-        # Gerar previsões autorregressivas
-        forecast_dates = []
-        forecast_values = []
-        
-        for step in range(1, days_ahead + 1):
-            target_date = last_date + timedelta(days=step)
-            
-            # Construir features
-            features_dict = _build_features_for_date(
-                target_date=target_date,
-                price_history=price_history,
-                quantity_history=quantity_history,
-            )
-            
-            # Ordenar features conforme esperado pelo modelo
-            feature_values = [features_dict[col] for col in metadata.features]
-            feature_array = np.array(feature_values).reshape(1, -1)
-            
-            # Normalizar features
-            feature_array_scaled = scaler.transform(feature_array)
-            
-            # Prever usando o modelo
-            if isinstance(model, dict) and model.get("type") == "stacking":
-                base_models = model["base_models"]
-                meta_learner = model["meta_learner"]
-                base_predictions = np.column_stack([
-                    m.predict(feature_array_scaled) for m in base_models
-                ])
-                predicted_value = meta_learner.predict(base_predictions)[0]
-            else:
-                predicted_value = model.predict(feature_array_scaled)[0]
-            
-            predicted_value = max(predicted_value, 0.0)
-            
-            # Adicionar aos resultados
-            forecast_dates.append(target_date.isoformat())
-            forecast_values.append(round(float(predicted_value), 2))
-            
-            # Atualizar histórico para próxima previsão
-            price_history.append(predicted_value)
-            avg_quantity = np.mean(list(quantity_history)[-7:])
-            quantity_history.append(avg_quantity)
-        
-        LOGGER.info(f"✅ Previsão concluída para {sku}: {len(forecast_values)} valores")
-        
-        # Extrair métricas
-        metrics_for_frontend = {}
-        if hasattr(metadata, 'metrics') and metadata.metrics:
-            if isinstance(metadata.metrics, dict):
-                if 'holdout' in metadata.metrics:
-                    metrics_for_frontend = metadata.metrics['holdout']
-                else:
-                    metrics_for_frontend = metadata.metrics
-        
-        return {
-            "sku": sku,
-            "dates": forecast_dates,
-            "prices": forecast_values,  # Pode ser preço ou quantidade dependendo do modelo
-            "model_used": f"{metadata.model_type}_v{metadata.version}",
-            "metrics": metrics_for_frontend,
-            "method": metadata.model_type,
-        }
-
-
-def _fallback_prediction(sku: str, days_ahead: int) -> Dict[str, List]:
-    """
-    Previsão fallback usando média móvel quando modelo não disponível.
-    """
-    LOGGER.warning(f"Usando previsão fallback (média móvel) para {sku}")
+    LOGGER.info(f"🔮 Iniciando previsão Lite para {sku} ({days_ahead} dias)")
     
     with Session(engine) as session:
         try:
-            produto, df_history = _load_recent_history(session, sku, days=30)
-        except (ValueError, InsufficientHistoryError) as e:
-            LOGGER.error(f"Não foi possível gerar previsão fallback: {e}")
+            # 1. Carregar dados
+            df = _load_history_as_dataframe(session, sku)
+            
+            # Validação
+            if len(df) < MINIMUM_HISTORY_DAYS:
+                LOGGER.warning(f"Histórico insuficiente para {sku}: {len(df)} dias (mínimo {MINIMUM_HISTORY_DAYS})")
+                return _fallback_forecast(sku, days_ahead, "insufficient_history")
+
+            # 2. Instanciar StatsForecast
+            # AutoARIMA é robusto e não precisa de ajuste manual de hiperparâmetros
+            # Naive é usado como baseline fallback se ARIMA falhar
+            models = [
+                AutoARIMA(season_length=7), 
+                Naive()
+            ]
+            
+            sf = StatsForecast(
+                models=models,
+                freq='D',
+                n_jobs=1,  # Serial é seguro e rápido suficiente para 1 série
+                verbose=False
+            )
+
+            # 3. Gerar previsão e métricas
+            # Para popular o dashboard, precisamos de métricas de erro.
+            # Vamos fazer um backtest rápido nos últimos 7 dias para estimar a acurácia.
+            metrics = {
+                "history_len": len(df),
+                "mape": 0.0,
+                "rmse": 0.0,
+                "mae": 0.0
+            }
+            
+            try:
+                if len(df) > MINIMUM_HISTORY_DAYS + 7:
+                    # Cross-validation simples (últimos 7 dias)
+                    cv_df = sf.cross_validation(
+                        df=df,
+                        h=7,
+                        step_size=7,
+                        n_windows=1
+                    )
+                    # Calcular métricas
+                    model_col = "AutoARIMA" if "AutoARIMA" in cv_df.columns else "Naive"
+                    y_true = cv_df["y"].values
+                    y_pred = cv_df[model_col].values
+                    
+                    # Evitar divisão por zero no MAPE
+                    mask = y_true != 0
+                    if np.any(mask):
+                        metrics["mape"] = float(np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100)
+                    
+                    metrics["rmse"] = float(np.sqrt(np.mean((y_true - y_pred)**2)))
+                    metrics["mae"] = float(np.mean(np.abs(y_true - y_pred)))
+            except Exception as e:
+                LOGGER.warning(f"Erro ao calcular métricas para {sku}: {e}")
+
+            # 4. Previsão final (Futuro)
+            sf.fit(df)
+            forecast_df = sf.predict(h=days_ahead)
+            
+            # 5. Processar resultados
+            # Preferência: AutoARIMA > Naive
+            model_name = "AutoARIMA"
+            if "AutoARIMA" in forecast_df.columns:
+                preds = forecast_df["AutoARIMA"].values
+            else:
+                preds = forecast_df["Naive"].values
+                model_name = "Naive"
+            
+            # Evitar valores negativos
+            preds = np.maximum(preds, 0)
+            
+            dates = forecast_df["ds"].dt.strftime("%Y-%m-%d").tolist()
+            values = [round(float(v), 2) for v in preds]
+
+            LOGGER.info(f"✅ Previsão Lite concluída: {model_name} (MAPE: {metrics['mape']:.1f}%)")
+
             return {
                 "sku": sku,
-                "dates": [],
-                "prices": [],
-                "model_used": "none",
-                "error": str(e),
+                "dates": dates,
+                "prices": values,  # Campo nomeado 'prices' por compatibilidade com frontend
+                "model_used": f"StatsForecast_{model_name}",
+                "method": "statistical",
+                "metrics": metrics
             }
-        
-        # Usar média dos últimos 14 dias
-        avg_price = df_history["price"].tail(14).mean()
-        last_date = df_history["date"].max()
-        if isinstance(last_date, pd.Timestamp):
-            last_date = last_date.date()
-        
-        forecast_dates = [
-            (last_date + timedelta(days=i)).isoformat()
-            for i in range(1, days_ahead + 1)
-        ]
-        forecast_prices = [round(float(avg_price), 2)] * days_ahead
-        
-        return {
-            "sku": sku,
-            "dates": forecast_dates,
-            "prices": forecast_prices,
-            "model_used": "moving_average_fallback",
-            "metrics": {},
-        }
 
+        except Exception as e:
+            LOGGER.error(f"❌ Erro na previsão Lite para {sku}: {str(e)}", exc_info=True)
+            return _fallback_forecast(sku, days_ahead, str(e))
 
-__all__ = [
-    "predict_prices_for_product",
-    "InsufficientHistoryError",
-]
+def _fallback_forecast(sku: str, days: int, reason: str) -> Dict[str, Any]:
+    """Retorna previsão zerada ou média simples em caso de erro."""
+    dates = [
+        (datetime.now() + timedelta(days=i)).strftime("%Y-%m-%d")
+        for i in range(1, days + 1)
+    ]
+    
+    return {
+        "sku": sku,
+        "dates": dates,
+        "prices": [0.0] * days,
+        "model_used": "fallback_zero",
+        "error": reason
+    }
