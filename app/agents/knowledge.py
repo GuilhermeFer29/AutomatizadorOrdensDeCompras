@@ -24,7 +24,8 @@ from app.core.database import engine
 from app.models.models import Produto
 
 # Diretório para persistir embeddings (mantendo compatibilidade de caminho)
-CHROMA_PERSIST_DIR = str(Path(__file__).resolve().parents[2] / "data" / "chroma")
+# Diretório para persistir embeddings (Volume persistente do Docker)
+CHROMA_PERSIST_DIR = "/app/data/chroma"
 
 def get_product_documents() -> List[Document]:
     """Gera lista de documentos Agno a partir dos produtos no banco de dados."""

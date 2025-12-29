@@ -37,7 +37,8 @@ from sqlmodel import Session, select
 from app.models.models import Produto, ChatMessage
 
 # Diretório para persistir embeddings
-CHROMA_PERSIST_DIR = str(Path(__file__).resolve().parents[2] / "data" / "chroma")
+# Diretório para persistir embeddings (Volume persistente do Docker)
+CHROMA_PERSIST_DIR = "/app/data/chroma"
 
 # Validação crítica da API Key
 if not os.getenv("GOOGLE_API_KEY"):

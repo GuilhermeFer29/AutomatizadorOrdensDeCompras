@@ -33,7 +33,8 @@ from app.core.database import engine
 logger = logging.getLogger(__name__)
 
 # Diretório do ChromaDB
-CHROMA_DIR = Path(__file__).resolve().parents[2] / "data" / "chroma"
+# Diretório do ChromaDB (Volume persistente do Docker)
+CHROMA_DIR = Path("/app/data/chroma")
 
 
 class RAGSyncService:
@@ -60,7 +61,13 @@ class RAGSyncService:
         try:
             if CHROMA_DIR.exists():
                 logger.info(f"🗑️ Limpando ChromaDB antigo: {CHROMA_DIR}")
-                shutil.rmtree(CHROMA_DIR)
+                # NÃO remover o diretório raiz para evitar 'Device or resource busy' se for volume/mount
+                # Em vez disso, remove o conteúdo
+                for item in CHROMA_DIR.iterdir():
+                    if item.is_dir():
+                        shutil.rmtree(item)
+                    else:
+                        item.unlink()
                 logger.info("✅ ChromaDB limpo com sucesso")
             else:
                 logger.info("📂 ChromaDB não existe ainda, será criado na indexação")

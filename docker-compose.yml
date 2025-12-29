@@ -27,6 +27,7 @@ services:
       - ./app:/app/app
       - ./scripts:/app/scripts
       - ./data:/app/data
+      - chroma_db_data:/app/data/chroma
       - ./models:/app/models
     # GPU removida para Project Lite
     # deploy:
@@ -59,6 +60,7 @@ services:
       - ./app:/app/app
       - ./scripts:/app/scripts
       - ./data:/app/data
+      - chroma_db_data:/app/data/chroma
       - ./models:/app/models
 
   beat:
@@ -80,6 +82,7 @@ services:
       - ./app:/app/app
       - ./scripts:/app/scripts
       - ./data:/app/data
+      - chroma_db_data:/app/data/chroma
       - ./models:/app/models
 
   db:
@@ -116,5 +119,6 @@ services:
 
 volumes:
   mysql_data:
+  chroma_db_data:
 
 
