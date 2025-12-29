@@ -24,37 +24,76 @@ def list_chat_sessions(
 ):
     """Lista todas as sessões de chat com preview da primeira mensagem."""
     from sqlalchemy import func, desc
+    from sqlalchemy import select as sa_select
     
-    # Buscar sessões ordenadas por data (mais recentes primeiro)
-    chat_sessions = session.exec(
+    # Query única para buscar sessões com contagem de mensagens
+    # Evita o problema N+1
+    
+    # Subquery para contar mensagens por sessão
+    message_counts = (
+        sa_select(
+            ChatMessage.session_id,
+            func.count(ChatMessage.id).label("message_count"),
+            func.min(ChatMessage.id).label("first_message_id")
+        )
+        .group_by(ChatMessage.session_id)
+        .subquery()
+    )
+    
+    # Query principal com LEFT JOIN para obter sessões + contagens
+    results = session.exec(
         select(ChatSession)
         .order_by(desc(ChatSession.criado_em))
         .limit(limit)
     ).all()
     
-    result = []
-    for chat_sess in chat_sessions:
-        # Buscar primeira mensagem como preview
-        first_message = session.exec(
+    # Buscar contagens e primeiras mensagens em uma única query
+    session_ids = [s.id for s in results]
+    
+    if not session_ids:
+        return []
+    
+    # Contagem de mensagens por sessão
+    counts = session.exec(
+        sa_select(
+            ChatMessage.session_id,
+            func.count(ChatMessage.id).label("cnt")
+        )
+        .where(ChatMessage.session_id.in_(session_ids))
+        .group_by(ChatMessage.session_id)
+    ).all()
+    count_map = {row[0]: row[1] for row in counts}
+    
+    # Primeira mensagem por sessão (busca IDs mínimos)
+    first_ids = session.exec(
+        sa_select(
+            ChatMessage.session_id,
+            func.min(ChatMessage.id).label("first_id")
+        )
+        .where(ChatMessage.session_id.in_(session_ids))
+        .group_by(ChatMessage.session_id)
+    ).all()
+    first_id_map = {row[0]: row[1] for row in first_ids}
+    
+    # Buscar conteúdo das primeiras mensagens
+    first_message_ids = [fid for fid in first_id_map.values() if fid]
+    preview_map = {}
+    if first_message_ids:
+        first_messages = session.exec(
             select(ChatMessage)
-            .where(ChatMessage.session_id == chat_sess.id)
-            .order_by(ChatMessage.criado_em)
-            .limit(1)
-        ).first()
-        
-        # Contar total de mensagens
-        message_count = session.exec(
-            select(func.count(ChatMessage.id))
-            .where(ChatMessage.session_id == chat_sess.id)
-        ).first() or 0
-        
-        preview = first_message.content[:80] + "..." if first_message and len(first_message.content) > 80 else (first_message.content if first_message else "Nova conversa")
-        
+            .where(ChatMessage.id.in_(first_message_ids))
+        ).all()
+        for msg in first_messages:
+            preview_map[msg.session_id] = msg.content[:80] + "..." if len(msg.content) > 80 else msg.content
+    
+    # Montar resultado
+    result = []
+    for chat_sess in results:
         result.append({
             "id": chat_sess.id,
             "criado_em": chat_sess.criado_em.isoformat(),
-            "preview": preview,
-            "message_count": message_count
+            "preview": preview_map.get(chat_sess.id, "Nova conversa"),
+            "message_count": count_map.get(chat_sess.id, 0)
         })
     
     return result

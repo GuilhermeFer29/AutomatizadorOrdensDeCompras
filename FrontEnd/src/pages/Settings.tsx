@@ -36,7 +36,7 @@ export default function Settings() {
         onSuccess: (data) => {
             toast({
                 title: "RAG Sincronizado",
-                description: `${data.data?.products_indexed || 0} produtos indexados com sucesso!`,
+                description: `${data.data?.total_products_indexed || data.products_indexed || 0} produtos indexados com sucesso!`,
             });
             checkRagStatus();
         },

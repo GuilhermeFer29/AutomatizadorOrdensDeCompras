@@ -1058,7 +1058,7 @@ O chat agora mantém histórico de conversas anteriores com navegação lateral.
 **Frontend (Agents.tsx):**
 - Sidebar com lista de conversas anteriores
 - Botão "Nova Conversa"
-- Botão de apagar (�️) em cada conversa
+- Botão de apagar (🗑️) em cada conversa
 - Sessão só é criada quando o usuário envia a primeira mensagem
 - Mensagem de boas-vindas quando não há sessão ativa
 

@@ -7,7 +7,7 @@ Endpoints:
 """
 
 from typing import Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 from sqlalchemy import desc
@@ -29,7 +29,7 @@ def list_decisions(
     """Lista decisões de agentes dos últimos X dias."""
     
     # Filtrar por data
-    min_date = datetime.now() - timedelta(days=days)
+    min_date = datetime.now(timezone.utc) - timedelta(days=days)
     
     query = select(AuditoriaDecisao).where(
         AuditoriaDecisao.data_decisao >= min_date
@@ -92,7 +92,7 @@ def get_audit_stats(
     """Estatísticas das decisões."""
     from sqlalchemy import func
     
-    min_date = datetime.now() - timedelta(days=days)
+    min_date = datetime.now(timezone.utc) - timedelta(days=days)
     
     # Total de decisões
     total = session.exec(

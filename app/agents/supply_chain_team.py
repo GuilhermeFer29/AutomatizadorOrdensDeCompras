@@ -265,6 +265,101 @@ def create_supply_chain_team() -> Team:
     return team
 
 
+# ============================================================================
+# FUNÇÕES AUXILIARES PARA PARSING E DETECÇÃO DE ERROS
+# ============================================================================
+
+def is_output_rate_limited(output_text: str) -> bool:
+    """
+    Detecta se o output indica erro de rate limit (429).
+    
+    Centraliza a lógica de detecção para evitar divergências.
+    """
+    from app.agents.gemini_fallback import is_rate_limit_error
+    
+    lowered = output_text.lower()
+    
+    # Detecção por substrings conhecidas
+    rate_limit_indicators = [
+        "429", "resource_exhausted", "quota", "too many requests", "rate limit"
+    ]
+    
+    if any(indicator in lowered for indicator in rate_limit_indicators):
+        return True
+    
+    # Opcionalmente usa a função centralizada do fallback manager
+    return is_rate_limit_error(output_text)
+
+
+def parse_team_json(output_text: str) -> dict:
+    """
+    Extrai JSON da resposta do Team de agentes.
+    
+    Trata diferentes formatos de resposta:
+    - JSON puro
+    - JSON em bloco ```json ... ```
+    - JSON em bloco ``` ... ```
+    - JSON misturado com texto
+    
+    Raises:
+        ValueError: Se não for possível extrair JSON válido
+    """
+    import re
+    
+    # Debug: log do output para diagnóstico
+    print(f"🔍 DEBUG - Output recebido ({len(output_text)} chars):")
+    print(f"   Primeiros 300 chars: {output_text[:300]}...")
+    
+    original_text = output_text
+    
+    # Caso 1: Bloco ```json ... ```
+    if "```json" in output_text:
+        json_part = output_text.split("```json", 1)[1]
+        if "```" in json_part:
+            json_part = json_part.split("```", 1)[0]
+        output_text = json_part.strip()
+        print("   ✓ JSON extraído de bloco ```json")
+    
+    # Caso 2: Bloco ``` ... ``` sem "json"
+    elif "```" in output_text:
+        for part in output_text.split("```"):
+            part = part.strip()
+            if part.startswith("{") and part.endswith("}"):
+                output_text = part
+                print("   ✓ JSON extraído de bloco ```")
+                break
+    
+    # Tenta parse direto
+    try:
+        return json.loads(output_text)
+    except json.JSONDecodeError as je:
+        print(f"   ⚠️ JSON decode falhou: {je}")
+    
+    # Fallback 1: Regex para JSON completo mais externo
+    json_search = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', original_text, re.DOTALL)
+    if json_search:
+        try:
+            result = json.loads(json_search.group(0))
+            print("   ✓ JSON extraído via regex (padrão completo)")
+            return result
+        except json.JSONDecodeError:
+            pass
+    
+    # Fallback 2: Busca padrão mais simples
+    json_search = re.search(r'(\{.*\})', original_text, re.DOTALL)
+    if json_search:
+        try:
+            result = json.loads(json_search.group(1))
+            print("   ✓ JSON extraído via regex (padrão simples)")
+            return result
+        except json.JSONDecodeError:
+            print("   ❌ Regex encontrou texto mas não é JSON válido")
+            raise ValueError("JSON inválido na resposta")
+    
+    print("   ❌ Nenhum padrão JSON encontrado no output")
+    raise ValueError("JSON não encontrado na resposta")
+
+
 def run_supply_chain_analysis(inquiry: str, max_retries: int = 3) -> Dict:
     """
     Função principal para executar análise de cadeia de suprimentos usando Agno Team.
@@ -288,7 +383,7 @@ def run_supply_chain_analysis(inquiry: str, max_retries: int = 3) -> Dict:
         'approve'
     """
     import time
-    from app.agents.gemini_fallback import get_fallback_manager, is_rate_limit_error
+    from app.agents.gemini_fallback import get_fallback_manager
     
     manager = get_fallback_manager()
     last_error = None
@@ -307,83 +402,22 @@ def run_supply_chain_analysis(inquiry: str, max_retries: int = 3) -> Dict:
             else:
                 output_text = str(response)
             
-            # Verifica se a resposta indica erro 429 (mesmo quando Agno captura)
-            if "429" in output_text or "RESOURCE_EXHAUSTED" in output_text or "quota" in output_text.lower():
+            # ✅ Usa helper centralizado para detectar 429 na resposta
+            if is_output_rate_limited(output_text):
                 raise Exception(f"429 Rate limit detectado na resposta: {output_text[:200]}")
             
-            # Parse do JSON da resposta
-            # O Agno com markdown=True pode envolver JSON em blocos ```json
-            
-            # Debug: log do output para diagnóstico
-            print(f"🔍 DEBUG - Output recebido ({len(output_text)} chars):")
-            print(f"   Primeiros 300 chars: {output_text[:300]}...")
-            
-            json_extracted = False
-            
-            # Caso 1: Bloco ```json ... ```
-            if "```json" in output_text:
-                json_part = output_text.split("```json")[1]
-                if "```" in json_part:
-                    json_part = json_part.split("```")[0]
-                output_text = json_part.strip()
-                json_extracted = True
-                print(f"   ✓ JSON extraído de bloco ```json")
-            
-            # Caso 2: Bloco ``` ... ``` sem "json"
-            elif "```" in output_text and not json_extracted:
-                parts = output_text.split("```")
-                for part in parts:
-                    part = part.strip()
-                    if part.startswith("{") and part.endswith("}"):
-                        output_text = part
-                        json_extracted = True
-                        print(f"   ✓ JSON extraído de bloco ```")
-                        break
-            
-            try:
-                result = json.loads(output_text)
-                print(f"✅ Análise concluída com sucesso na tentativa {attempt + 1}")
-                return result
-            except json.JSONDecodeError as je:
-                print(f"   ⚠️ JSON decode falhou: {je}")
-                # Tenta limpar mais (às vezes tem texto fora)
-                import re
-                
-                # Primeiro, tenta encontrar o JSON completo mais externo
-                json_search = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', output_text, re.DOTALL)
-                if json_search:
-                    try:
-                        result = json.loads(json_search.group(0))
-                        print(f"✅ Análise concluída (JSON extraído via regex) na tentativa {attempt + 1}")
-                        return result
-                    except json.JSONDecodeError:
-                        pass
-                
-                # Segundo, busca padrão mais simples
-                json_search = re.search(r'(\{.*\})', output_text, re.DOTALL)
-                if json_search:
-                    try:
-                        result = json.loads(json_search.group(1))
-                        print(f"✅ Análise concluída (JSON extraído) na tentativa {attempt + 1}")
-                        return result
-                    except:
-                        print(f"   ❌ Regex encontrou texto mas não é JSON válido")
-                        raise ValueError("JSON inválido na resposta")
-                else:
-                    print(f"   ❌ Nenhum padrão JSON encontrado no output")
-                    raise ValueError("JSON não encontrado na resposta")
+            # ✅ Usa helper centralizado para parsing de JSON
+            result = parse_team_json(output_text)
+            print(f"✅ Análise concluída com sucesso na tentativa {attempt + 1}")
+            return result
 
         except Exception as e:
             last_error = e
-            error_str = str(e).lower()
+            error_str = str(e)
             
-            # Detectar se é erro de rate limit (429)
-            is_429 = any(indicator in error_str for indicator in [
-                "429", "rate limit", "quota", "resource_exhausted", "too many requests"
-            ])
-            
-            if is_429:
-                print(f"⚠️ Erro 429 detectado na tentativa {attempt + 1}: {str(e)[:100]}")
+            # ✅ Usa helper centralizado para detecção de 429
+            if is_output_rate_limited(error_str):
+                print(f"⚠️ Erro 429 detectado na tentativa {attempt + 1}: {error_str[:100]}")
                 
                 # Tentar alternar para próximo modelo
                 if manager.switch_to_next_model():

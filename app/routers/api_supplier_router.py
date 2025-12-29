@@ -25,6 +25,8 @@ def list_suppliers(
     session: Session = Depends(get_session)
 ):
     """Lista todos os fornecedores com estatísticas."""
+    from sqlalchemy import func
+    from sqlalchemy import select as sa_select
     
     query = select(Fornecedor).order_by(Fornecedor.nome)
     
@@ -33,14 +35,26 @@ def list_suppliers(
     
     suppliers = session.exec(query.limit(limit)).all()
     
+    if not suppliers:
+        return []
+    
+    # Pré-calcular ofertas_count em uma única query (evita N+1)
+    supplier_ids = [s.id for s in suppliers]
+    
+    offers_count_rows = session.exec(
+        sa_select(
+            OfertaProduto.fornecedor_id,
+            func.count(OfertaProduto.id).label("cnt")
+        )
+        .where(OfertaProduto.fornecedor_id.in_(supplier_ids))
+        .group_by(OfertaProduto.fornecedor_id)
+    ).all()
+    
+    # Mapa fornecedor_id -> count
+    offers_count_map = {row[0]: row[1] for row in offers_count_rows}
+    
     result = []
     for supplier in suppliers:
-        # Contar ofertas do fornecedor
-        offer_count = session.exec(
-            select(OfertaProduto)
-            .where(OfertaProduto.fornecedor_id == supplier.id)
-        ).all()
-        
         result.append({
             "id": supplier.id,
             "nome": supplier.nome,
@@ -49,7 +63,7 @@ def list_suppliers(
             "prazo_entrega_dias": supplier.prazo_entrega_dias,
             "latitude": supplier.latitude,
             "longitude": supplier.longitude,
-            "ofertas_count": len(offer_count),
+            "ofertas_count": offers_count_map.get(supplier.id, 0),
             "criado_em": supplier.criado_em.isoformat(),
             "atualizado_em": supplier.atualizado_em.isoformat(),
         })

@@ -333,30 +333,4 @@ def with_model_fallback(max_retries: int = MAX_RETRIES_PER_MODEL):
         return wrapper
     return decorator
 
-
-# ============================================================================
-# TESTES
-# ============================================================================
-
-if __name__ == "__main__":
-    print("🧪 Testando GeminiFallbackManager...")
-    
-    manager = get_fallback_manager()
-    
-    print(f"📋 Modelo atual: {manager.current_model_id}")
-    print(f"📋 Chain completa: {manager.model_chain}")
-    
-    # Simular fallback
-    print("\n🔄 Simulando fallback...")
-    manager.switch_to_next_model()
-    print(f"📋 Novo modelo: {manager.current_model_id}")
-    
-    manager.switch_to_next_model()
-    print(f"📋 Novo modelo: {manager.current_model_id}")
-    
-    # Reset
-    print("\n🔄 Resetando para primário...")
-    manager.reset_to_primary()
-    print(f"📋 Modelo após reset: {manager.current_model_id}")
-    
-    print("\n✅ Testes concluídos!")
+# Testes movidos para tests/test_gemini_fallback.py
