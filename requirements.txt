@@ -40,13 +40,12 @@ langchain-community
 langchain-google-genai
 langchain-chroma
 
-# ML Essencial
-lightgbm
-xgboost
+# ML Lite (StatsForecast)
+statsforecast
+prophet
 scikit-learn
-optuna
-holidays
-pyarrow
+pandas
+numpy
 
 # Utils
 email-validator

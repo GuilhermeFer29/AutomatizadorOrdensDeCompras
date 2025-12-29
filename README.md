@@ -1,239 +1,208 @@
-# 🏗️ ARQUITETURA MULTI-AGENTE INTEGRADA
+# 🏭 Automação Inteligente de Ordens de Compra
 
-## 📋 Visão Geral
+<div align="center">
 
-Sistema completo de IA multi-agente para análise e recomendação inteligente de compras, integrando:
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-18.3-61DAFB?style=for-the-badge&logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 
-- **Agente Conversacional** (Gerente): Interface natural com delegação inteligente
-- **Time de Especialistas** (4 agentes): Análise aprofundada da cadeia de suprimentos
-- **Fontes de Dados**: SQL, RAG, ML, Mercado (Web Search)
-- **Ferramentas Avançadas**: Previsões, pesquisa de mercado, comparação de fornecedores
+**Sistema de IA Multi-Agente para Automação de Compras Industriais**
 
----
+[Funcionalidades](#-funcionalidades) •
+[Arquitetura](#-arquitetura) •
+[Instalação](#-instalação-rápida) •
+[Uso](#-como-usar) •
+[Documentação](#-documentação)
 
-## 🎯 Fluxo de Trabalho Completo
-
-```
-USUÁRIO
-   ↓
-📱 "Devo comprar o produto X?"
-   ↓
-🤖 AGENTE CONVERSACIONAL (Gerente)
-   │
-   ├─ Pergunta Simples? → Responde diretamente
-   │  • "Qual o estoque?" → ProductCatalogTool
-   │  • "Previsão de preço?" → get_price_forecast_for_sku
-   │
-   └─ Pergunta Complexa? → DELEGA ao Time de Especialistas
-      ↓
-   🏢 TIME DE ESPECIALISTAS (4 agentes)
-      │
-      ├─ 1️⃣ ANALISTA DE DEMANDA
-      │   └─ Determina: "Precisamos comprar?"
-      │       • Analisa estoque atual vs mínimo
-      │       • Avalia previsões ML de demanda
-      │       • Saída: need_restock (true/false)
-      │
-      ├─ 2️⃣ PESQUISADOR DE MERCADO
-      │   └─ Encontra: "Onde e por quanto?"
-      │       • find_supplier_offers_for_sku() → Ofertas reais
-      │       • search_market_trends_for_product() → Tendências web
-      │       • get_price_forecast_for_sku() → Previsões ML
-      │       • Saída: Lista de ofertas + contexto de mercado
-      │
-      ├─ 3️⃣ ANALISTA DE LOGÍSTICA
-      │   └─ Otimiza: "Qual fornecedor é melhor?"
-      │       • Avalia preço vs confiabilidade vs prazo
-      │       • Calcula custo total de aquisição
-      │       • compute_distance() → Custos logísticos
-      │       • Saída: Fornecedor recomendado
-      │
-      └─ 4️⃣ GERENTE DE COMPRAS
-          └─ Decide: "Aprovar, rejeitar ou revisar?"
-              • Consolida todas as análises
-              • Avalia riscos (fornecedor único, etc.)
-              • Saída: Decisão final + justificativa
-      ↓
-   💬 RESPOSTA NATURAL ao usuário
-      "Recomendo aprovar a compra de 100 unidades 
-       com Fornecedor X por R$ 1.500,00..."
-```
+</div>
 
 ---
 
-## 🛠️ Componentes Implementados
+## 📋 Sobre o Projeto
 
-### FASE 1: Pilares (Modelos + Dados)
+Sistema completo de **Inteligência Artificial** para automatizar e otimizar decisões de compra em **Pequenas e Médias Indústrias (PMI)**. Utiliza uma arquitetura multi-agente com IA generativa (Google Gemini 2.5), Machine Learning para previsões e RAG (Retrieval-Augmented Generation) para consultas inteligentes.
 
-#### ✅ 1.1. Modelo de Previsão ML
-- **Arquivo**: `app/ml/prediction.py`
-- **Status**: Corrigido (normalização de features)
-- **Funcionalidade**: Previsão autorregressiva multi-step
+### 🎯 Problema Resolvido
 
-#### ✅ 1.2. Fornecedores Sintéticos
-- **Arquivo**: `scripts/generate_synthetic_suppliers.py`
-- **Novos Modelos**:
-  ```python
-  # app/models/models.py
-  class Fornecedor:
-      confiabilidade: float  # 0.0 a 1.0
-      prazo_entrega_dias: int  # Dias úteis
-  
-  class OfertaProduto:
-      produto_id: int
-      fornecedor_id: int
-      preco_ofertado: Decimal
-      estoque_disponivel: int
-      validade_oferta: datetime
-  ```
+- ❌ Decisões de compra manuais e demoradas
+- ❌ Falta de análise de múltiplos fornecedores
+- ❌ Ausência de previsões de demanda
+- ❌ Processos não documentados
 
-- **Execução**:
-  ```bash
-  python scripts/setup_development.py generate_suppliers
-  ```
+### ✅ Solução
 
-### FASE 2: Ferramentas Avançadas
-
-#### ✅ 2.1. Ferramenta de Previsão ML
-```python
-# app/agents/tools.py
-def get_price_forecast_for_sku(sku: str, days_ahead: int = 7) -> str:
-    """
-    Obtém previsão de preços futuros para um SKU.
-    
-    Returns:
-        JSON com previsões, tendência (alta/baixa/estável) e métricas
-    """
-```
-
-**Uso pelos agentes**:
-- Agente Conversacional: Respostas rápidas sobre preços futuros
-- Pesquisador de Mercado: Contexto para avaliação de ofertas
-
-#### ✅ 2.2. Ferramenta de Pesquisa de Mercado (Tavily)
-```python
-def search_market_trends_for_product(product_name: str) -> str:
-    """
-    Pesquisa notícias e análises de mercado que influenciam preços.
-    
-    Uses:
-        Tavily API com search_depth="advanced"
-    
-    Returns:
-        JSON com insights ranqueados por relevância
-    """
-```
-
-**Configuração**:
-```bash
-# .env
-TAVILY_API_KEY=your_tavily_api_key_here
-```
-
-#### ✅ 2.3. Ferramenta de Análise de Fornecedores
-```python
-def find_supplier_offers_for_sku(sku: str) -> str:
-    """
-    Busca todas as ofertas de fornecedores para um produto.
-    
-    Returns:
-        JSON com:
-        - Lista de ofertas (preço, confiabilidade, prazo)
-        - Melhor oferta (balanceada)
-        - Preço médio do mercado
-    """
-```
-
-**Algoritmo de seleção**:
-```python
-# Penaliza baixa confiabilidade
-score = preco * (2 - confiabilidade)
-melhor_oferta = min(ofertas, key=lambda x: score)
-```
-
-#### ✅ 2.4. Super Ferramenta de Delegação
-```python
-def run_full_purchase_analysis(sku: str, reason: str) -> str:
-    """
-    DELEGA ao Time de Especialistas para análise completa.
-    
-    Quando usar:
-    - "Devo comprar o produto X?"
-    - "Análise completa para SKU Y"
-    - "Recomendação de compra para Z"
-    
-    Returns:
-        Análise consolidada dos 4 especialistas
-    """
-```
-
-### FASE 3: Hierarquia e Delegação
-
-#### ✅ 3.1. Time de Especialistas Atualizado
-- **Arquivo**: `app/agents/supply_chain_team.py`
-- **Mudanças**:
-  - Pesquisador de Mercado usa novas ferramentas:
-    - `find_supplier_offers_for_sku`
-    - `search_market_trends_for_product`
-    - `get_price_forecast_for_sku`
-  - Prompt atualizado com instruções claras
-
-#### ✅ 3.2. Agente Conversacional Promovido
-- **Arquivo**: `app/agents/conversational_agent.py`
-- **Novo Papel**: Gerente com delegação inteligente
-- **Ferramentas**:
-  ```python
-  tools=[
-      ProductCatalogTool(),         # Busca RAG
-      get_price_forecast_for_sku,   # Previsão rápida
-      run_full_purchase_analysis,   # DELEGAÇÃO
-      SupplyChainToolkit(),         # Análises manuais
-  ]
-  ```
-
-- **Prompt Atualizado**:
-  ```
-  "Você é um GERENTE experiente com um time de especialistas"
-  
-  QUANDO DELEGAR:
-  - Perguntas complexas: "Devo comprar X?"
-  - Recomendações de fornecedor
-  - Análises de trade-off
-  
-  QUANDO RESPONDER DIRETAMENTE:
-  - Perguntas simples: "Qual o estoque?"
-  - Consultas rápidas de previsão
-  - Busca de produtos
-  ```
+- ✅ **Chat inteligente** para consultas em linguagem natural
+- ✅ **Análise automatizada** por time de agentes IA
+- ✅ **Previsões de demanda** com Machine Learning
+- ✅ **Recomendações justificadas** com rastreabilidade
 
 ---
 
-## 🚀 Como Usar
+## ✨ Funcionalidades
 
-### 1. Setup Inicial (uma vez)
+| Módulo | Descrição |
+|--------|-----------|
+| 🤖 **Chat IA** | Converse naturalmente para obter recomendações de compra |
+| 📊 **Dashboard** | Visualize métricas, previsões e alertas em tempo real |
+| 📦 **Catálogo** | Gerencie produtos com estoque, preços e fornecedores |
+| 📋 **Ordens** | Crie, aprove ou rejeite ordens de compra automaticamente |
+| 🔮 **Previsões ML** | Previsão de demanda com AutoARIMA (StatsForecast) |
+| 🔍 **RAG** | Busca semântica inteligente no catálogo de produtos |
+| 🔐 **Autenticação** | Login seguro com JWT |
 
-```bash
-# 1. Criar tabelas no banco
-docker compose exec api alembic upgrade head
+---
 
-# Ou executar migration manual:
-docker compose exec db psql -U user -d supply_chain -f /migrations/add_supplier_market_features.sql
+## 🏗️ Arquitetura
 
-# 2. Gerar fornecedores e ofertas
-docker compose exec api python scripts/setup_development.py generate_suppliers
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     FRONTEND (React + Vite)                     │
+│          TypeScript • TailwindCSS • shadcn/ui • Recharts        │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓ HTTP/REST
+┌─────────────────────────────────────────────────────────────────┐
+│                      BACKEND (FastAPI)                          │
+├──────────────┬──────────────┬────────────────┬──────────────────┤
+│   Routers    │   Services   │    Agents      │       ML         │
+│  (Endpoints) │   (Lógica)   │  (Multi-Agent) │   (Previsões)    │
+└──────────────┴──────────────┴────────────────┴──────────────────┘
+        ↓               ↓              ↓               ↓
+┌───────────┐   ┌────────────┐   ┌──────────┐   ┌─────────────────┐
+│  MySQL    │   │  ChromaDB  │   │  Gemini  │   │   StatsForecast │
+│   8.0     │   │  (Vetores) │   │   2.5    │   │   (AutoARIMA)   │
+└───────────┘   └────────────┘   └──────────┘   └─────────────────┘
 ```
 
-### 2. Conversar com o Sistema
+### 🤖 Sistema Multi-Agente
+
+```
+                    ┌─────────────────────────────────┐
+                    │   AGENTE CONVERSACIONAL         │
+                    │        (Gerente)                │
+                    │   Interface com usuário         │
+                    └───────────────┬─────────────────┘
+                                    │ Delega
+        ┌───────────────┬───────────┴───────────┬───────────────┐
+        ↓               ↓                       ↓               ↓
+┌───────────────┐ ┌───────────────┐ ┌───────────────┐ ┌───────────────┐
+│   Analista    │ │  Pesquisador  │ │   Analista    │ │   Gerente     │
+│   de Demanda  │ │   de Mercado  │ │   Logística   │ │   de Compras  │
+├───────────────┤ ├───────────────┤ ├───────────────┤ ├───────────────┤
+│ • Estoque     │ │ • Ofertas     │ │ • Fornecedor  │ │ • Consolida   │
+│ • Previsão    │ │ • Tendências  │ │ • Custo total │ │ • Decisão     │
+│   demanda     │ │   de mercado  │ │   aquisição   │ │   final       │
+└───────────────┘ └───────────────┘ └───────────────┘ └───────────────┘
+```
+
+---
+
+## 🛠️ Stack Tecnológico
+
+### Backend
+- **Python 3.11+** - Linguagem principal
+- **FastAPI** - Framework web assíncrono
+- **SQLModel** - ORM moderno (SQLAlchemy + Pydantic)
+- **Agno 2.1.3+** - Framework de agentes IA
+- **LangChain** - Orquestração para RAG
+- **Celery + Redis** - Processamento assíncrono
+
+### Frontend
+- **React 18.3** - Biblioteca UI
+- **TypeScript 5.8** - Tipagem estática
+- **Vite 7.1** - Build tool
+- **TailwindCSS 3.4** - Estilização
+- **shadcn/ui** - Componentes UI
+- **Recharts** - Gráficos
+
+### IA/ML
+- **Google Gemini 2.5 Flash** - LLM principal
+- **ChromaDB** - Vector database
+- **StatsForecast (AutoARIMA)** - Previsões
+- **Google AI Embeddings** - text-embedding-004
+
+### Infraestrutura
+- **Docker & Docker Compose** - Containerização
+- **MySQL 8.0** - Banco de dados
+- **Redis 7** - Message broker
+- **Nginx** - Servidor web (frontend)
+
+---
+
+## 🚀 Instalação Rápida
+
+### Pré-requisitos
+
+- Docker & Docker Compose
+- Chave API do Google (Gemini)
+
+### 1. Clone o repositório
 
 ```bash
-# Iniciar a API
+git clone https://github.com/seu-usuario/automatizador-ordens-compra.git
+cd automatizador-ordens-compra
+```
+
+### 2. Configure as variáveis de ambiente
+
+```bash
+cp .env.example .env
+```
+
+Edite o arquivo `.env`:
+
+```env
+# Obrigatório - Google AI
+GOOGLE_API_KEY=sua_chave_google_api
+
+# Banco de dados
+MYSQL_ROOT_PASSWORD=root_password
+MYSQL_DATABASE=app_db
+MYSQL_USER=app_user
+MYSQL_PASSWORD=app_password
+
+# Opcional - Tavily (Web Search)
+TAVILY_API_KEY=sua_chave_tavily
+```
+
+> 📌 Obtenha sua chave Google em: https://aistudio.google.com/app/apikey
+
+### 3. Inicie os containers
+
+```bash
 docker compose up -d
-
-# Acessar chat
-http://localhost:3000/agents
 ```
 
-### 3. Exemplos de Perguntas
+### 4. Acesse a aplicação
+
+| Serviço | URL |
+|---------|-----|
+| 🌐 **Frontend** | http://localhost:3000 |
+| ⚡ **API** | http://localhost:8000 |
+| 📚 **Docs (Swagger)** | http://localhost:8000/docs |
+
+---
+
+## 📖 Como Usar
+
+### 1. Criar uma conta
+
+Acesse http://localhost:3000/register e crie sua conta.
+
+### 2. Popular o banco de dados
+
+```bash
+# Produtos de exemplo
+docker compose exec api python scripts/seed_database.py
+
+# Sincronizar RAG
+docker compose exec api python scripts/sync_vectors.py
+```
+
+### 3. Conversar com o Agente
+
+Acesse a página **Agents** e faça perguntas como:
 
 #### Perguntas Simples (Resposta Direta)
 ```
@@ -242,196 +211,257 @@ http://localhost:3000/agents
 "Previsão de preço para SKU_001 nos próximos 7 dias?"
 ```
 
-#### Perguntas Complexas (Delegação ao Time)
+#### Perguntas Complexas (Análise pelo Time)
 ```
 "Devo comprar o produto SKU_001?"
+"Qual fornecedor é melhor para parafusos?"
 "Analise a necessidade de reposição para SKU_001"
-"Qual fornecedor é melhor para SKU_001?"
-"Me dê uma recomendação de compra para SKU_001"
 ```
 
----
+### 4. Exemplo de Resposta
 
-## 📊 Fluxo de Dados
+```markdown
+✅ **Recomendo APROVAR a compra de 100 unidades**
 
-```
-┌──────────────────────────────────────────────────────┐
-│           FONTES DE DADOS INTEGRADAS                 │
-├──────────────────────────────────────────────────────┤
-│                                                      │
-│  1. 📦 BANCO DE DADOS (PostgreSQL)                  │
-│     • Produtos, estoque, vendas                     │
-│     • Fornecedores, ofertas                         │
-│     • Histórico de preços                           │
-│                                                      │
-│  2. 🎯 VETORIAL (ChromaDB)                          │
-│     • Embeddings de produtos                        │
-│     • Busca semântica (RAG)                         │
-│                                                      │
-│  3. 🤖 MACHINE LEARNING (LightGBM)                  │
-│     • Previsões de preços (7-14 dias)              │
-│     • Tendências (alta/baixa/estável)               │
-│                                                      │
-│  4. 🌐 WEB (Tavily API)                             │
-│     • Notícias de mercado                           │
-│     • Tendências de preço                           │
-│     • Análises competitivas                         │
-│                                                      │
-└──────────────────────────────────────────────────────┘
-                         ↓
-┌──────────────────────────────────────────────────────┐
-│              CAMADA DE FERRAMENTAS                   │
-├──────────────────────────────────────────────────────┤
-│  • get_product_info           (RAG)                  │
-│  • get_price_forecast_for_sku (ML)                   │
-│  • find_supplier_offers       (SQL + JOIN)           │
-│  • search_market_trends       (Tavily)               │
-│  • run_full_purchase_analysis (Delegação)            │
-└──────────────────────────────────────────────────────┘
-                         ↓
-┌──────────────────────────────────────────────────────┐
-│                  CAMADA DE AGENTES                   │
-├──────────────────────────────────────────────────────┤
-│                                                      │
-│  GERENTE (Conversacional)                           │
-│     ↓                                                │
-│     ├─ Perguntas Simples → Ferramentas diretas      │
-│     └─ Perguntas Complexas → Delega ao Time         │
-│                              ↓                       │
-│                       TIME DE ESPECIALISTAS         │
-│                       (4 agentes colaborativos)     │
-│                                                      │
-└──────────────────────────────────────────────────────┘
-                         ↓
-                   💬 USUÁRIO
-```
+**Fornecedor Recomendado:** Distribuidora Nacional
+- 💰 Preço: R$ 1.450,00 (R$ 14,50/un)
+- ⏱️ Prazo: 5 dias úteis  
+- ⭐ Confiabilidade: 95%
 
----
-
-## 🧪 Testes
-
-### Teste 1: Consulta Simples
-```
-USUÁRIO: "Qual o estoque de parafusos?"
-
-AGENTE CONVERSACIONAL:
-  → Usa ProductCatalogTool (RAG)
-  → Resposta direta em 2-3 segundos
-
-ESPERADO: Lista de parafusos com estoque
-```
-
-### Teste 2: Previsão Rápida
-```
-USUÁRIO: "Qual a tendência de preço do SKU_001?"
-
-AGENTE CONVERSACIONAL:
-  → Usa get_price_forecast_for_sku
-  → Resposta com gráfico de tendência
-
-ESPERADO: "Tendência de ALTA (+5%) nos próximos 7 dias"
-```
-
-### Teste 3: Análise Completa (Delegação)
-```
-USUÁRIO: "Devo comprar 100 unidades do SKU_001?"
-
-AGENTE CONVERSACIONAL:
-  1. Detecta pergunta complexa
-  2. Informa: "Consultando meu time de especialistas..."
-  3. Usa run_full_purchase_analysis(sku="SKU_001", reason="reposição")
-     ↓
-  TIME DE ESPECIALISTAS executa:
-     a) Analista de Demanda → need_restock = true
-     b) Pesquisador de Mercado → 5 ofertas encontradas
-     c) Analista de Logística → melhor_fornecedor = "X"
-     d) Gerente de Compras → decision = "approve"
-  4. Retorna resposta consolidada
-
-ESPERADO:
-"Recomendo aprovar a compra de 100 unidades.
-
-Fornecedor Recomendado: Distribuidora Nacional
-Preço: R$ 1.450,00 (R$ 14,50/un)
-Prazo: 5 dias úteis
-Confiabilidade: 95%
-
-Justificativa:
+**Justificativa:**
 - Estoque atual (45 un) abaixo do mínimo (80 un)
 - Previsão ML indica tendência de alta (+3%)
 - Melhor custo-benefício entre 5 fornecedores
 
-Próximos passos:
-- Emitir ordem de compra
-- Agendar entrega para +5 dias"
+**Próximos passos:**
+1. Emitir ordem de compra
+2. Agendar entrega para +5 dias
 ```
 
 ---
 
-## 📁 Arquivos Modificados/Criados
+## 📂 Estrutura do Projeto
 
-### Novos Arquivos
 ```
-scripts/generate_synthetic_suppliers.py    # Gerador de mercado
-migrations/add_supplier_market_features.sql  # Migration DB
-docs/MULTI_AGENT_ARCHITECTURE.md           # Esta documentação
-```
-
-### Arquivos Modificados
-```
-app/models/models.py                     # +Fornecedor, +OfertaProduto
-app/agents/tools.py                      # +4 novas ferramentas
-app/agents/supply_chain_team.py          # Prompt atualizado
-app/agents/conversational_agent.py       # Delegação implementada
-scripts/setup_development.py             # +comando suppliers
+📦 projeto/
+├── 📂 app/                    # Backend FastAPI
+│   ├── 📂 agents/             # Sistema Multi-Agente
+│   ├── 📂 core/               # Configurações (DB, Auth)
+│   ├── 📂 ml/                 # Machine Learning
+│   ├── 📂 models/             # Modelos SQLModel
+│   ├── 📂 routers/            # API Endpoints
+│   ├── 📂 services/           # Lógica de negócio
+│   └── main.py                # Entry point
+├── 📂 FrontEnd/               # React + Vite
+│   ├── 📂 src/
+│   │   ├── 📂 components/     # Componentes React
+│   │   ├── 📂 pages/          # Páginas
+│   │   └── App.tsx            # Entry point
+│   └── package.json
+├── 📂 scripts/                # Scripts utilitários
+├── 📂 migrations/             # Migrations SQL
+├── docker-compose.yml         # Orquestração Docker
+├── Dockerfile                 # Build API
+├── requirements.txt           # Dependências Python
+└── README.md                  # Este arquivo
 ```
 
 ---
 
-## ⚙️ Configuração Necessária
+## 🔧 Comandos Úteis
 
-### 1. Variáveis de Ambiente (.env)
+### Docker
+
 ```bash
-# Google AI (obrigatório)
-GOOGLE_API_KEY=your_google_api_key
+# Iniciar
+docker compose up -d
 
-# Tavily (opcional, mas recomendado)
-TAVILY_API_KEY=your_tavily_api_key
+# Ver logs
+docker compose logs -f api
 
-# Database
-DATABASE_URL=postgresql://user:password@db:5432/supply_chain
+# Parar
+docker compose down
+
+# Reconstruir
+docker compose build --no-cache
 ```
 
-### 2. Dependências Python
+### Scripts
+
 ```bash
-# Já no requirements.txt
-tavily-python>=0.3.0    # Pesquisa web para agentes
-agno>=2.1.3             # Framework de agentes
-langchain>=0.2.1        # RAG
-lightgbm>=4.0.0         # ML predictions
+# Popular banco
+docker compose exec api python scripts/seed_database.py
+
+# Sincronizar RAG
+docker compose exec api python scripts/sync_vectors.py
+
+# Gerar dados sintéticos
+docker compose exec api python scripts/generate_realistic_data.py
+
+# Treinar modelos ML
+docker compose exec api python scripts/train_all_phases.py
+```
+
+### Desenvolvimento Local
+
+```bash
+# Backend
+cd projeto
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+
+# Frontend
+cd FrontEnd
+npm install
+npm run dev
 ```
 
 ---
 
-## 🎯 Próximos Passos
+## 📡 API Endpoints
 
-1. ✅ **CONCLUÍDO**: Implementação completa da arquitetura
-2. 🧪 **TESTAR**: Fluxo end-to-end com diferentes cenários
-3. 📊 **OTIMIZAR**: Performance das queries de ofertas
-4. 🌐 **PRODUÇÃO**: Deploy com rate limiting da Tavily API
-5. 📈 **MONITORAR**: Métricas de uso das ferramentas
-6. 🔒 **SEGURANÇA**: Validação de inputs dos agentes
+### Autenticação
+
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| POST | `/auth/login` | Login (retorna JWT) |
+| POST | `/auth/register` | Criar conta |
+| GET | `/auth/me` | Usuário atual |
+
+### Chat
+
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| POST | `/api/chat/sessions` | Nova sessão |
+| POST | `/api/chat/sessions/{id}/messages` | Enviar mensagem |
+| GET | `/api/chat/sessions/{id}/history` | Histórico |
+
+### Produtos
+
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| GET | `/api/products/` | Listar produtos |
+| GET | `/api/products/{id}` | Detalhes |
+| POST | `/api/products/` | Criar produto |
+
+### Ordens
+
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| GET | `/api/orders/` | Listar ordens |
+| POST | `/api/orders/` | Criar ordem |
+| POST | `/api/orders/{id}/approve` | Aprovar |
+| POST | `/api/orders/{id}/reject` | Rejeitar |
+
+### Machine Learning
+
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| GET | `/ml/forecast/{sku}` | Previsão para SKU |
+| GET | `/ml/metrics` | Métricas do modelo |
 
 ---
 
-## 🎓 Referências
+## 🔐 Variáveis de Ambiente
 
-- **Agno Framework**: https://docs.agno.com/
-- **Tavily API**: https://docs.tavily.com/
-- **SQLModel**: https://sqlmodel.tiangolo.com/
-- **LightGBM**: https://lightgbm.readthedocs.io/
+| Variável | Obrigatório | Descrição |
+|----------|-------------|-----------|
+| `GOOGLE_API_KEY` | ✅ | Chave API Google Gemini |
+| `DATABASE_URL` | ✅ | URL conexão MySQL |
+| `MYSQL_*` | ✅ | Credenciais MySQL |
+| `SECRET_KEY` | ⚠️ | Chave JWT (gerar segura) |
+| `TAVILY_API_KEY` | ❌ | Web search (opcional) |
+| `REDIS_URL` | ❌ | URL Redis (padrão: broker:6379) |
 
 ---
 
-**Status**: ✅ Arquitetura Multi-Agente Implementada e Pronta para Testes  
-**Versão**: 1.0.0
+## 🐛 Troubleshooting
+
+### Erro: "GOOGLE_API_KEY não encontrada"
+```bash
+# Verificar .env
+cat .env | grep GOOGLE_API_KEY
+
+# Recriar containers
+docker compose down && docker compose up -d
+```
+
+### Erro: "Conexão com banco recusada"
+```bash
+# Aguardar MySQL iniciar (pode levar ~30s)
+docker compose logs -f db
+
+# Verificar status
+docker compose ps
+```
+
+### Erro: "ChromaDB instance conflict"
+```bash
+# Limpar e resincronizar
+rm -rf data/chroma
+docker compose exec api python scripts/sync_vectors.py
+```
+
+### Frontend não conecta na API
+```bash
+# Verificar URL no frontend
+cat FrontEnd/.env.local
+# Deve conter: VITE_API_URL=http://localhost:8000
+```
+
+---
+
+## 📚 Documentação
+
+Para documentação técnica detalhada, consulte:
+
+- 📖 [**DOCUMENTACAO_COMPLETA.md**](./DOCUMENTACAO_COMPLETA.md) - Documentação técnica completa
+
+---
+
+## 🗺️ Roadmap
+
+- [x] Sistema Multi-Agente com Agno
+- [x] RAG com ChromaDB + LangChain
+- [x] Previsões com StatsForecast
+- [x] Frontend React completo
+- [x] Autenticação JWT
+- [ ] Integração com ERPs
+- [ ] App mobile
+- [ ] Monitoramento Prometheus/Grafana
+- [ ] Deploy em cloud (AWS/GCP)
+
+---
+
+## 🤝 Contribuindo
+
+1. Fork o projeto
+2. Crie sua branch (`git checkout -b feature/NovaFuncionalidade`)
+3. Commit suas mudanças (`git commit -m 'Adiciona nova funcionalidade'`)
+4. Push para a branch (`git push origin feature/NovaFuncionalidade`)
+5. Abra um Pull Request
+
+---
+
+## 📄 Licença
+
+Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
+
+---
+
+## 📞 Suporte
+
+- 📧 Email: suporte@exemplo.com
+- 🐛 Issues: [GitHub Issues](https://github.com/seu-usuario/projeto/issues)
+
+---
+
+<div align="center">
+
+**Desenvolvido com ❤️ para PMIs brasileiras**
+
+⭐ Star este repositório se foi útil para você!
+
+</div>

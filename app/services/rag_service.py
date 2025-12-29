@@ -55,22 +55,21 @@ google_embeddings = GoogleGenerativeAIEmbeddings(
 
 def get_vector_store() -> Chroma:
     """
-    Retorna instância do vector store ChromaDB configurado com embeddings do Google.
+    Retorna instância do vector store ChromaDB (LangChain) compartilhando o cliente do Agno.
     
-    Usa o singleton ChromaClientSingleton para evitar o erro:
-    "An instance of Chroma already exists with different settings"
-    
-    Returns:
-        Chroma: Vector store pronto para uso
+    Isso evita o erro: "An instance of Chroma already exists with different settings"
     """
-    from app.services.chroma_client import get_chroma_client
+    from app.agents.knowledge import get_product_knowledge
     
-    # Usa o cliente singleton
-    client = get_chroma_client(CHROMA_PERSIST_DIR)
+    # Obtém o knowledge singleton do Agno
+    kb = get_product_knowledge()
+    
+    # Extrai o cliente Chroma nativo (chromadb.PersistentClient) usado pelo Agno/Agno
+    shared_client = kb.vector_db.client
     
     return Chroma(
-        client=client,
-        collection_name="products",
+        client=shared_client,
+        collection_name="products_agno", # Mesma collection usada no knowledge.py
         embedding_function=google_embeddings
     )
 
@@ -297,10 +296,11 @@ def index_chat_message(message: ChatMessage) -> None:
     NOTA: Agora usa o singleton ChromaClientSingleton para evitar conflitos.
     """
     try:
-        from app.services.chroma_client import get_chroma_client
+        from app.agents.knowledge import get_product_knowledge
         
-        # Usa o cliente singleton
-        client = get_chroma_client(CHROMA_PERSIST_DIR)
+        # Usa o cliente singleton do Agno
+        kb = get_product_knowledge()
+        client = kb.vector_db.client
         
         collection = client.get_or_create_collection(name="chat_history")
         

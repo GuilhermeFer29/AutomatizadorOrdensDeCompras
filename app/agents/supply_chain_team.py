@@ -16,7 +16,7 @@ ATUALIZAÇÃO PARA GEMINI 2.5 (2025-10-14):
 - LLM: Google Gemini 2.5 Flash (models/gemini-2.5-flash)
 - Framework: Agno 2.1.3
 - Embeddings: Google text-embedding-004 (via rag_service.py)
-- Tools: SupplyChainToolkit customizado
+- Tools: Funções puras (tools.py)
 
 🎯 AGENTES ESPECIALIZADOS:
 ==========================
@@ -35,22 +35,21 @@ REFERÊNCIAS:
 from __future__ import annotations
 
 import json
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 from agno.agent import Agent
 from agno.team import Team
-from agno.tools import Toolkit
 
 # ✅ IMPORTAÇÃO CENTRALIZADA: LLMs otimizados por tipo de agente
 from app.agents.llm_config import (
     get_gemini_for_fast_agents,      # Para agentes intermediários (Flash - rápido)
     get_gemini_for_decision_making   # Para decisões críticas (Pro - preciso)
 )
+# Import tools directly as functions
 from app.agents.tools import (
-    SupplyChainToolkit,
-    lookup_product,
-    load_demand_forecast,
-    search_market_trends_for_product,
+    get_product_info, # Used as "lookup_product" equivalent
+    get_forecast_tool, # Used as "load_demand_forecast" equivalent
+    search_market_price,
     find_supplier_offers_for_sku,
     get_price_forecast_for_sku
 )
@@ -84,16 +83,15 @@ PESQUISADOR_MERCADO_PROMPT = """Você é o Pesquisador de Mercado, especialista 
 Coletar e analisar dados atualizados de mercado sobre preços e fornecedores.
 
 ## Ferramentas Disponíveis
-1. **{find_supplier_offers_for_sku}**: Busca ofertas reais de fornecedores cadastrados
-2. **{search_market_trends_for_product}**: Pesquisa tendências e notícias de mercado na web
-3. **{get_price_forecast_for_sku}**: Obtém previsões ML de preços futuros
+1. **find_supplier_offers_for_sku**: Busca ofertas reais de fornecedores cadastrados
+2. **get_price_forecast_for_sku**: Obtém previsões ML de preços futuros
+3. **search_market_price**: Scraping de preço atual de mercado (se necessário)
 
 ## Diretrizes de Resiliência
 1. Se `need_restock` for falso, retorne offers vazio
 2. SEMPRE use find_supplier_offers_for_sku primeiro para obter ofertas reais
-3. Use search_market_trends_for_product para contexto de mercado
-4. Compare as ofertas encontradas com previsões ML quando disponível
-5. Documente qualquer falha ou limitação nos dados coletados
+3. Compare as ofertas encontradas com previsões ML quando disponível
+4. Documente qualquer falha ou limitação nos dados coletados
 
 ## Formato de Saída
 Retorne APENAS um JSON válido com:
@@ -176,7 +174,7 @@ def create_supply_chain_team() -> Team:
     ✅ ARQUITETURA ATUALIZADA (Agno 2.1.3 + Gemini 2.5):
     - LLM: Google Gemini 2.5 Flash (configurado via get_gemini_llm())
     - Framework: Agno 2.1.3 com coordenação automática de agentes
-    - Tools: SupplyChainToolkit customizado com 6 ferramentas especializadas
+    - Tools: Lista de Funções Python Puras (tools.py)
     - Output: JSON estruturado com recomendação de compra
     
     🎯 AGENTES ESPECIALIZADOS:
@@ -200,8 +198,14 @@ def create_supply_chain_team() -> Team:
     fast_llm = get_gemini_for_fast_agents()      # Flash temp=0.2 (velocidade)
     decision_llm = get_gemini_for_decision_making()  # Pro temp=0.1 (precisão)
     
-    # Inicializa o toolkit compartilhado (todas as ferramentas disponíveis)
-    toolkit = SupplyChainToolkit()
+    # Lista de ferramentas disponíveis (Funções Puras)
+    shared_tools = [
+        get_product_info,
+        get_forecast_tool,
+        search_market_price,
+        find_supplier_offers_for_sku,
+        get_price_forecast_for_sku
+    ]
     
     # ✅ AGENTE 1: Analista de Demanda (RÁPIDO)
     # Responsável por determinar SE precisamos comprar
@@ -210,7 +214,7 @@ def create_supply_chain_team() -> Team:
         description="Especialista em previsão de demanda e análise de estoque",
         model=fast_llm,  # ⚡ Flash - processamento rápido de dados estruturados
         instructions=[ANALISTA_DEMANDA_PROMPT],
-        tools=[toolkit],
+        tools=shared_tools, # Disponibiliza todas as ferramentas relevantes
         markdown=True,
     )
     
@@ -221,7 +225,7 @@ def create_supply_chain_team() -> Team:
         description="Especialista em inteligência competitiva e análise de preços",
         model=fast_llm,  # ⚡ Flash - busca e comparação rápida de ofertas
         instructions=[PESQUISADOR_MERCADO_PROMPT],
-        tools=[toolkit],
+        tools=shared_tools,
         markdown=True,
     )
     
@@ -232,7 +236,7 @@ def create_supply_chain_team() -> Team:
         description="Especialista em otimização de cadeia de suprimentos e logística",
         model=fast_llm,  # ⚡ Flash - cálculos logísticos rápidos
         instructions=[ANALISTA_LOGISTICA_PROMPT],
-        tools=[toolkit],
+        tools=shared_tools,
         markdown=True,
     )
     
@@ -279,36 +283,50 @@ def run_supply_chain_analysis(inquiry: str) -> Dict:
         'approve'
     """
     # Cria e executa o team
-    team = create_supply_chain_team()
-    response = team.run(inquiry)
-    
-    # Extrai conteúdo da resposta
-    if hasattr(response, 'content'):
-        output_text = response.content
-    else:
-        output_text = str(response)
-    
-    # Parse do JSON da resposta
-    # O Agno com markdown=True pode envolver JSON em blocos ```json
-    if "```json" in output_text:
-        json_part = output_text.split("```json")[1]
-        if "```" in json_part:
-            json_part = json_part.split("```")[0]
-        output_text = json_part.strip()
-    
     try:
-        result = json.loads(output_text)
-    except json.JSONDecodeError:
-        # Fallback em caso de erro de parsing
+        team = create_supply_chain_team()
+        response = team.run(inquiry)
+        
+        # Extrai conteúdo da resposta
+        if hasattr(response, 'content'):
+            output_text = response.content
+        else:
+            output_text = str(response)
+        
+        # Parse do JSON da resposta
+        # O Agno com markdown=True pode envolver JSON em blocos ```json
+        if "```json" in output_text:
+            json_part = output_text.split("```json")[1]
+            if "```" in json_part:
+                json_part = json_part.split("```")[0]
+            output_text = json_part.strip()
+        
+        try:
+            result = json.loads(output_text)
+        except json.JSONDecodeError:
+            # Tenta limpar mais (às vezes tem texto fora)
+            import re
+            json_search = re.search(r'\{.*\}', output_text, re.DOTALL)
+            if json_search:
+                try:
+                    result = json.loads(json_search.group(0))
+                except:
+                    raise ValueError("JSON inválido na resposta")
+            else:
+                 raise ValueError("JSON não encontrado na resposta")
+
+    except Exception as e:
+        # Fallback em caso de erro de execução ou parsing
+        print(f"❌ Erro na execução do Team: {e}")
         result = {
             "decision": "manual_review",
-            "rationale": f"Erro ao processar resposta do team: {output_text[:200]}",
+            "rationale": f"Erro técnico ao processar análise: {str(e)}",
             "supplier": None,
             "price": None,
             "currency": "BRL",
             "quantity_recommended": 0,
-            "next_steps": ["Revisar manualmente a análise completa"],
-            "risk_assessment": "Dados insuficientes ou formato inválido"
+            "next_steps": ["Verificar logs do sistema", "Tentar novamente mais tarde"],
+            "risk_assessment": "Erro sistêmico"
         }
     
     return result
@@ -330,9 +348,25 @@ def execute_supply_chain_team(sku: str, inquiry_reason: Optional[str] = None) ->
     if not sku.strip():
         raise ValueError("O SKU informado não pode ser vazio.")
     
-    # Carrega dados iniciais do produto
-    product_data = lookup_product(sku)
-    forecast_data = load_demand_forecast(sku)
+    # Carrega dados iniciais do produto usando a nova função (get_product_info)
+    try:
+        product_info_json = get_product_info(sku)
+        product_data = json.loads(product_info_json)
+        
+        # Se retornou string de erro do tool
+        if isinstance(product_data, str): 
+             # Tenta ver se é mensagem de erro "não encontrado"
+             if "não encontrado" in product_data:
+                 product_data = {"sku": sku, "nome": "Desconhecido", "erro": product_data}
+    except:
+        product_data = {"sku": sku, "nome": "Erro ao carregar", "erro": "Parsing error"}
+
+    # Carrega forecast
+    try:
+        forecast_json = get_forecast_tool(sku)
+        forecast_data = json.loads(forecast_json)
+    except:
+        forecast_data = {}
     
     # Monta o contexto inicial
     context = {
@@ -372,6 +406,3 @@ Execute a análise completa e forneça a recomendação final em JSON válido.""
     }
     
     return result
-
-
-__all__ = ["create_supply_chain_team", "run_supply_chain_analysis", "execute_supply_chain_team"]

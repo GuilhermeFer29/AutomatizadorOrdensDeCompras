@@ -1,117 +1,34 @@
-# 🚀 Dockerfile - LightGBM com CUDA (2025)
-# Baseado em nvidia/cuda:12.8.0-cudnn-devel-ubuntu22.04 com LightGBM compilado com CUDA
+# 🚀 Dockerfile Lite (CPU Only)
+# Base leve e rápida para execução em qualquer ambiente
 
-FROM nvidia/cuda:12.8.0-cudnn-devel-ubuntu22.04
+FROM python:3.11-slim
 
-# Definir variáveis de ambiente
-ENV DEBIAN_FRONTEND=noninteractive \
+# Variáveis de ambiente
+ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    CUDA_HOME=/usr/local/cuda \
-    PATH=/usr/local/cuda/bin:$PATH \
-    LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+    DEBIAN_FRONTEND=noninteractive
 
-# ============================================================================
-# 1. Instalar dependências do sistema
-# ============================================================================
+# Instalar dependências do sistema
+# build-essential e git são úteis para instalar pacotes python se necessário, mas mantendo o mínimo
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    cmake \
     git \
     curl \
-    wget \
-    ca-certificates \
-    libboost-dev \
-    libboost-system-dev \
-    libboost-filesystem-dev \
-    libboost-program-options-dev \
-    libboost-thread-dev \
-    libboost-regex-dev \
-    libboost-date-time-dev \
-    gcc \
-    g++ \
-    gfortran \
-    python3 \
-    python3-dev \
-    python3-pip \
-    python3-setuptools \
-    libopenblas-dev \
-    liblapack-dev \
-    libblas-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# ============================================================================
-# 2. Atualizar CMake para 3.28+ (LightGBM requer)
-# ============================================================================
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    apt-transport-https \
-    ca-certificates \
-    gnupg \
-    lsb-release && \
-    wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null && \
-    echo "deb https://apt.kitware.com/ubuntu/ $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/kitware.list >/dev/null && \
-    apt-get update && apt-get install -y --no-install-recommends cmake && \
-    rm -rf /var/lib/apt/lists/*
-
-# ============================================================================
-# 3. Copiar requirements.txt
-# ============================================================================
-COPY requirements.txt /tmp/requirements.txt
-
-# ============================================================================
-# 4. Configurar OpenCL para NVIDIA GPU
-# ============================================================================
-RUN mkdir -p /etc/OpenCL/vendors && \
-    echo "libnvidia-opencl.so.1" > /etc/OpenCL/vendors/nvidia.icd
-
-# ============================================================================
-# 5. Compilar LightGBM com CUDA
-# ============================================================================
-RUN cd /tmp && \
-    git clone --recursive --branch stable --depth 1 https://github.com/microsoft/LightGBM && \
-    cd LightGBM && \
-    mkdir build && \
-    cd build && \
-    cmake -DUSE_GPU=1 \
-          -DUSE_CUDA=1 \
-          -DCUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda \
-          -DOpenCL_LIBRARY=/usr/local/cuda/lib64/libOpenCL.so \
-          -DOpenCL_INCLUDE_DIR=/usr/local/cuda/include \
-          -DCMAKE_CUDA_ARCHITECTURES=75 \
-          .. && \
-    make -j$(nproc) && \
-    make install && \
-    cd /tmp/LightGBM/python-package && \
-    cp ../LICENSE . && \
-    pip install --no-cache-dir . && \
-    cd / && \
-    rm -rf /tmp/LightGBM
-
-# ============================================================================
-# 6. Instalar Python packages do requirements.txt
-# ============================================================================
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r /tmp/requirements.txt && \
-    rm /tmp/requirements.txt
-
-# ============================================================================
-# 7. Verificar instalação de LightGBM com CUDA
-# ============================================================================
-RUN python3 -c "import lightgbm as lgb; print('LightGBM version:', lgb.__version__); m = lgb.LGBMRegressor(device_type='cuda', n_estimators=1); print('✅ LightGBM com CUDA OK')"
-
-# ============================================================================
-# 8. Copiar aplicação
-# ============================================================================
+# Diretório de trabalho
 WORKDIR /app
 
+# Copiar e instalar dependências Python
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Copiar código da aplicação
 COPY . .
 
-# ============================================================================
-# 9. Expor porta
-# ============================================================================
+# Expor porta
 EXPOSE 8000
 
-# ============================================================================
-# 10. Comando padrão
-# ============================================================================
+# Comando padrão
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -44,6 +44,19 @@ Esta pasta contém todo o código identificado como **obsoleto, descontinuado ou
 
 ---
 
+### 4️⃣ **Scripts de Fornecedores Sintéticos**
+
+#### `scripts/generate_synthetic_suppliers.py`
+- **Motivo**: Funcionalidade de geração de dados sintéticos arquivada
+- **Status**: Movido para `_obsolete/_obsolete/`
+- **Contexto**: Os modelos de dados foram mantidos, mas o gerador foi arquivado.
+
+#### `scripts/migrate_supplier_features.py`
+- **Motivo**: Script de migração legado
+- **Status**: Movido para `_obsolete/_obsolete/`
+
+---
+
 ### 4️⃣ **Backup de Configuração**
 
 #### `requirements.txt.old`
