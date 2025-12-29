@@ -1,0 +1,38 @@
+# =====================================================
+# Dockerfile para Testes do Frontend
+# =====================================================
+# Build: docker build -f Dockerfile.test -t frontend-test .
+# Run:   docker run frontend-test npm run test
+# =====================================================
+
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Instalar dependências de sistema
+RUN apk add --no-cache git
+
+# Copiar arquivos de dependências
+COPY package*.json ./
+
+# Instalar todas as dependências incluindo devDependencies
+RUN npm install
+
+# Instalar dependências de teste
+RUN npm install -D \
+    vitest \
+    @testing-library/react \
+    @testing-library/jest-dom \
+    @testing-library/user-event \
+    jsdom \
+    @vitest/coverage-v8 \
+    msw
+
+# Copiar código fonte
+COPY . .
+
+# Expor porta para watch mode (opcional)
+EXPOSE 51204
+
+# Comando padrão: rodar testes
+CMD ["npm", "run", "test"]

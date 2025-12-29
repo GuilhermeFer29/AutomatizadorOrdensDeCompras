@@ -1,4 +1,4 @@
-# ============================================================================
+                                        # ============================================================================
 # REFATORAÇÃO PÓS-AUDITORIA (2025-10-16):
 # - Scraping desativado: removido beautifulsoup4
 # - Consolidado Google AI: apenas google-generativeai
@@ -17,6 +17,7 @@ uvicorn[standard]
 
 # Database
 mysql-connector-python
+pymysql
 redis
 sqlalchemy
 sqlmodel

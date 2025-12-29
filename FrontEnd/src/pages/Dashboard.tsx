@@ -3,6 +3,7 @@ import { TrendingUp, ShoppingBag, Package, Target } from "lucide-react";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { PriceChart } from "@/components/dashboard/PriceChart";
 import { AlertsTable } from "@/components/dashboard/AlertsTable";
+import { AgentStatusPanel } from "@/components/agents/AgentStatusPanel";
 import { useDashboardKPIs, useDashboardAlerts } from "@/hooks/useDashboard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -32,6 +33,13 @@ export default function Dashboard() {
     </Alert>;
   }
 
+  // Determinar cor do ícone de estoque baseado no nível
+  const stockIconColor = kpiData?.stockLevel === 'Crítico'
+    ? 'text-destructive'
+    : kpiData?.stockLevel === 'Atenção'
+      ? 'text-warning'
+      : 'text-success';
+
   return (
     <div className="space-y-8">
       <div>
@@ -45,7 +53,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <KPICard
           title="Economia Estimada"
-          value={`R$ ${kpiData?.economy.toFixed(2)}`}
+          value={`R$ ${(kpiData?.economy || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
           icon={TrendingUp}
           iconColor="text-success"
         />
@@ -59,19 +67,21 @@ export default function Dashboard() {
           title="Nível de Estoque"
           value={kpiData?.stockLevel || 'N/A'}
           icon={Package}
-          iconColor="text-success"
+          iconColor={stockIconColor}
         />
         <KPICard
           title="Acurácia do Modelo"
           value={
             selectedProductMetrics
               ? `${(100 - selectedProductMetrics.mape).toFixed(1)}%`
-              : `${(kpiData?.modelAccuracy || 0) * 100}%`
+              : kpiData?.modelAccuracy
+                ? `${(kpiData.modelAccuracy * 100).toFixed(0)}%`
+                : 'N/A'
           }
           subtitle={
             selectedProductMetrics
               ? `${selectedProductMetrics.productName.substring(0, 30)}...`
-              : "Média Global"
+              : kpiData?.modelAccuracy ? "Média Global" : "Modelo não treinado"
           }
           icon={Target}
           iconColor="text-primary"
@@ -81,8 +91,14 @@ export default function Dashboard() {
       {/* Price Prediction Chart */}
       <PriceChart onModelMetricsChange={setSelectedProductMetrics} />
 
-      {/* Alerts Table */}
-      <AlertsTable alerts={alerts || []} />
+      {/* Two Column Layout for Alerts and Agent Status */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Alerts Table */}
+        <AlertsTable alerts={alerts || []} />
+
+        {/* Agent Status Panel */}
+        <AgentStatusPanel />
+      </div>
     </div>
   );
 }

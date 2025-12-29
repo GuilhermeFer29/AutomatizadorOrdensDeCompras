@@ -1,4 +1,4 @@
-import { LayoutDashboard, Bot, ShoppingCart, Package, LogOut } from "lucide-react";
+import { LayoutDashboard, Bot, ShoppingCart, Package, LogOut, Settings2 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ const navigation = [
   { name: "Chat com Agentes", href: "/agents", icon: Bot },
   { name: "Ordens de Compra", href: "/orders", icon: ShoppingCart },
   { name: "Catálogo", href: "/catalog", icon: Package },
+  { name: "Configurações", href: "/settings", icon: Settings2 },
 ];
 
 export function Sidebar() {

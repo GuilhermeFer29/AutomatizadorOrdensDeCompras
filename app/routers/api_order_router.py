@@ -12,11 +12,36 @@ class OrderCreate(BaseModel):
     value: float = Field(gt=0, description="O valor deve ser positivo")
     origin: Optional[str] = Field(default='Manual', max_length=100, description="Origem da ordem")
 
+class OrderRead(BaseModel):
+    id: int
+    product: str
+    quantity: int
+    value: float
+    status: str
+    origin: str
+    date: str
+    supplier: Optional[str] = None
+    justification: Optional[str] = None
+
 router = APIRouter(prefix="/api/orders", tags=["api-orders"])
 
-@router.get("/")
+@router.get("/", response_model=list[OrderRead])
 def read_orders(status: Optional[str] = None, search: Optional[str] = None, session: Session = Depends(get_session)):
-    return get_orders(session, status, search)
+    orders = get_orders(session, status, search)
+    # Map models to schema manually to handle product name and date formatting
+    return [
+        OrderRead(
+            id=o.id,
+            product=o.produto.nome if o.produto else "Desconhecido",
+            quantity=o.quantidade,
+            value=float(o.valor),
+            status=o.status,
+            origin=o.origem,
+            date=o.data_criacao.isoformat(),
+            supplier=o.fornecedor.nome if o.fornecedor else "Padrão",
+            justification=o.justificativa
+        ) for o in orders
+    ]
 
 @router.post("/")
 def handle_create_order(order: OrderCreate, session: Session = Depends(get_session)):

@@ -38,6 +38,9 @@ services:
     #           capabilities: [gpu]
 
   worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
     image: app:latest
     env_file:
       - .env
@@ -57,16 +60,11 @@ services:
       - ./scripts:/app/scripts
       - ./data:/app/data
       - ./models:/app/models
-    # GPU removida para Project Lite
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
 
   beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
     image: app:latest
     env_file:
       - .env
@@ -95,7 +93,7 @@ services:
     ports:
       - "3306:3306"
     volumes:
-      - postgres_data:/var/lib/mysql
+      - mysql_data:/var/lib/mysql
     command: --host-cache-size=0
     healthcheck:
       test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$${MYSQL_ROOT_PASSWORD}" ]
@@ -117,6 +115,6 @@ services:
       retries: 5
 
 volumes:
-  postgres_data:
+  mysql_data:
 
 

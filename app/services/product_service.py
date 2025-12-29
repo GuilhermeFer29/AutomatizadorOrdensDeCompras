@@ -12,13 +12,13 @@ def get_product_by_id(session: Session, product_id: int):
     return session.get(Produto, product_id)
 
 def create_product(session: Session, product_data: dict):
-    # Mock supplier and price for now
+    # Map English API fields to Portuguese model fields
     new_product = Produto(
         sku=product_data['sku'],
-        name=product_data['name'],
-        supplier="Fornecedor Padrão",
-        price=product_data.get('price', 0),
-        stock=product_data.get('stock', 0)
+        nome=product_data['name'],  # API: name -> Model: nome
+        categoria=product_data.get('categoria'),
+        estoque_atual=product_data.get('stock', 0),  # API: stock -> Model: estoque_atual
+        estoque_minimo=product_data.get('estoque_minimo', 10),  # Default minimum stock
     )
     session.add(new_product)
     session.commit()
@@ -29,8 +29,19 @@ def update_product(session: Session, product_id: int, product_data: dict):
     product = session.get(Produto, product_id)
     if not product:
         return None
+    
+    # Map English API fields to Portuguese model fields
+    field_mapping = {
+        'name': 'nome',
+        'stock': 'estoque_atual',
+        'price': 'preco_medio',  # If price update needed
+    }
+    
     for key, value in product_data.items():
-        setattr(product, key, value)
+        model_field = field_mapping.get(key, key)  # Use mapping or original key
+        if hasattr(product, model_field):
+            setattr(product, model_field, value)
+    
     session.add(product)
     session.commit()
     session.refresh(product)
