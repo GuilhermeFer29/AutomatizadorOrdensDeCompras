@@ -4,7 +4,7 @@ from sqlmodel import Session, select
 from app.core.database import get_session
 from app.services.chat_service import get_or_create_chat_session, get_chat_history, process_user_message, add_chat_message
 from app.services.websocket_manager import websocket_manager
-from app.models.models import ChatAction
+from app.models.models import ChatAction, ChatSession, ChatMessage
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 
@@ -17,9 +17,75 @@ class ChatActionExecute(BaseModel):
     action_type: str
     action_data: Dict[str, Any]
 
+@router.get("/sessions")
+def list_chat_sessions(
+    limit: int = 20,
+    session: Session = Depends(get_session)
+):
+    """Lista todas as sessões de chat com preview da primeira mensagem."""
+    from sqlalchemy import func, desc
+    
+    # Buscar sessões ordenadas por data (mais recentes primeiro)
+    chat_sessions = session.exec(
+        select(ChatSession)
+        .order_by(desc(ChatSession.criado_em))
+        .limit(limit)
+    ).all()
+    
+    result = []
+    for chat_sess in chat_sessions:
+        # Buscar primeira mensagem como preview
+        first_message = session.exec(
+            select(ChatMessage)
+            .where(ChatMessage.session_id == chat_sess.id)
+            .order_by(ChatMessage.criado_em)
+            .limit(1)
+        ).first()
+        
+        # Contar total de mensagens
+        message_count = session.exec(
+            select(func.count(ChatMessage.id))
+            .where(ChatMessage.session_id == chat_sess.id)
+        ).first() or 0
+        
+        preview = first_message.content[:80] + "..." if first_message and len(first_message.content) > 80 else (first_message.content if first_message else "Nova conversa")
+        
+        result.append({
+            "id": chat_sess.id,
+            "criado_em": chat_sess.criado_em.isoformat(),
+            "preview": preview,
+            "message_count": message_count
+        })
+    
+    return result
+
 @router.post("/sessions")
 def create_chat_session(session: Session = Depends(get_session)):
     return get_or_create_chat_session(session)
+
+
+@router.delete("/sessions/{session_id}")
+def delete_chat_session(session_id: int, session: Session = Depends(get_session)):
+    """Deleta uma sessão de chat e todas as suas mensagens."""
+    
+    # Verificar se a sessão existe
+    chat_sess = session.get(ChatSession, session_id)
+    if not chat_sess:
+        raise HTTPException(status_code=404, detail="Sessão não encontrada")
+    
+    # Deletar todas as mensagens da sessão primeiro
+    messages = session.exec(
+        select(ChatMessage).where(ChatMessage.session_id == session_id)
+    ).all()
+    
+    for msg in messages:
+        session.delete(msg)
+    
+    # Deletar a sessão
+    session.delete(chat_sess)
+    session.commit()
+    
+    return {"message": "Sessão deletada com sucesso"}
 
 @router.get("/sessions/{session_id}/messages")
 def read_chat_history(session_id: int, session: Session = Depends(get_session)):

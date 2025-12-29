@@ -107,6 +107,36 @@ class ModelsListResponse(BaseModel):
 # ============================================================================
 
 @router.post(
+    "/train/all/async",
+    response_model=AsyncTaskResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Treinar todos os modelos assincronamente",
+)
+def train_all_products_async(
+    optimize: bool = Query(False, description="Otimizar hiperparâmetros"),
+    limit: int = Query(None, ge=1, le=1000, description="Limite de produtos"),
+) -> AsyncTaskResponse:
+    """
+    Inicia treinamento assíncrono de todos os produtos.
+    
+    - **optimize**: Se True, otimiza hiperparâmetros (muito mais lento)
+    - **limit**: Número máximo de produtos para treinar
+    """
+    try:
+        task = train_all_products_task.delay(optimize=optimize, limit=limit)
+        return AsyncTaskResponse(
+            task_id=task.id,
+            status=task.status,
+            message=f"Task de treinamento em lote iniciada (limit={limit})"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao iniciar task: {str(e)}",
+        )
+
+
+@router.post(
     "/train/{sku}/async",
     response_model=AsyncTaskResponse,
     status_code=status.HTTP_202_ACCEPTED,
@@ -171,35 +201,6 @@ def get_task_status(task_id: str) -> TaskStatusResponse:
             detail=f"Erro ao consultar task: {str(e)}",
         )
 
-
-@router.post(
-    "/train/all/async",
-    response_model=AsyncTaskResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Treinar todos os modelos assincronamente",
-)
-def train_all_products_async(
-    optimize: bool = Query(False, description="Otimizar hiperparâmetros"),
-    limit: int = Query(None, ge=1, le=1000, description="Limite de produtos"),
-) -> AsyncTaskResponse:
-    """
-    Inicia treinamento assíncrono de todos os produtos.
-    
-    - **optimize**: Se True, otimiza hiperparâmetros (muito mais lento)
-    - **limit**: Número máximo de produtos para treinar
-    """
-    try:
-        task = train_all_products_task.delay(optimize=optimize, limit=limit)
-        return AsyncTaskResponse(
-            task_id=task.id,
-            status=task.status,
-            message=f"Task de treinamento em lote iniciada (limit={limit})"
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao iniciar task: {str(e)}",
-        )
 
 
 @router.post(

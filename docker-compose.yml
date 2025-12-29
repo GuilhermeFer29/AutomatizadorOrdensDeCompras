@@ -27,7 +27,7 @@ services:
       - ./app:/app/app
       - ./scripts:/app/scripts
       - ./data:/app/data
-      - chroma_db_data:/app/data/chroma
+      - chroma_db_data:/data/chroma # Dedicated path, no nesting
       - ./models:/app/models
     # GPU removida para Project Lite
     # deploy:
@@ -60,7 +60,7 @@ services:
       - ./app:/app/app
       - ./scripts:/app/scripts
       - ./data:/app/data
-      - chroma_db_data:/app/data/chroma
+      - chroma_db_data:/data/chroma # Dedicated path, no nesting
       - ./models:/app/models
 
   beat:
@@ -82,7 +82,7 @@ services:
       - ./app:/app/app
       - ./scripts:/app/scripts
       - ./data:/app/data
-      - chroma_db_data:/app/data/chroma
+      - chroma_db_data:/data/chroma # Dedicated path, no nesting
       - ./models:/app/models
 
   db:

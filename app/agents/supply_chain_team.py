@@ -40,10 +40,11 @@ from typing import Dict, Optional, List
 from agno.agent import Agent
 from agno.team import Team
 
-# ✅ IMPORTAÇÃO CENTRALIZADA: LLMs otimizados por tipo de agente
+# ✅ IMPORTAÇÃO CENTRALIZADA: LLMs otimizados com FALLBACK AUTOMÁTICO para 429
 from app.agents.llm_config import (
-    get_gemini_for_fast_agents,      # Para agentes intermediários (Flash - rápido)
-    get_gemini_for_decision_making   # Para decisões críticas (Pro - preciso)
+    get_gemini_with_fallback,         # Para todos os agentes - com fallback automático
+    get_gemini_for_fast_agents,       # Fallback: Para agentes intermediários (Flash)
+    get_gemini_for_decision_making    # Fallback: Para decisões críticas (Pro)
 )
 # Import tools directly as functions
 from app.agents.tools import (
@@ -190,13 +191,14 @@ def create_supply_chain_team() -> Team:
         ValueError: Se GOOGLE_API_KEY não estiver configurada
     """
     
-    # ✅ CONFIGURAÇÃO OTIMIZADA: Flash (rápido) para intermediários, Pro (preciso) para decisões
-    print("🚀 Configurando agentes com LLMs otimizados...")
-    print("   - Flash (2-3x mais rápido): Analistas intermediários")
-    print("   - Pro (mais preciso): Gerente de Compras e Team")
+    # ✅ CONFIGURAÇÃO OTIMIZADA COM FALLBACK: Modelos alternam automaticamente em caso de 429
+    print("🚀 Configurando agentes com LLMs otimizados + fallback automático...")
+    print("   - Fallback chain: 2.5-flash -> 2.5-flash-lite -> 3-flash")
+    print("   - Em caso de 429, o sistema muda automaticamente de modelo")
     
-    fast_llm = get_gemini_for_fast_agents()      # Flash temp=0.2 (velocidade)
-    decision_llm = get_gemini_for_decision_making()  # Pro temp=0.1 (precisão)
+    # Usar fallback-enabled models para evitar erros 429
+    fast_llm = get_gemini_with_fallback(temperature=0.2)      # Com fallback automático
+    decision_llm = get_gemini_with_fallback(temperature=0.1)  # Com fallback automático
     
     # Lista de ferramentas disponíveis (Funções Puras)
     shared_tools = [
@@ -263,7 +265,7 @@ def create_supply_chain_team() -> Team:
     return team
 
 
-def run_supply_chain_analysis(inquiry: str) -> Dict:
+def run_supply_chain_analysis(inquiry: str, max_retries: int = 3) -> Dict:
     """
     Função principal para executar análise de cadeia de suprimentos usando Agno Team.
     
@@ -271,8 +273,11 @@ def run_supply_chain_analysis(inquiry: str) -> Dict:
     na consulta (inquiry) fornecida. O Team coordena automaticamente a execução
     dos agentes especializados.
     
+    FALLBACK AUTOMÁTICO: Em caso de erro 429 (rate limit), alterna para outro modelo.
+    
     Args:
         inquiry: Consulta/pergunta sobre a análise de compra (ex: "Analisar compra do SKU_001")
+        max_retries: Número máximo de tentativas com diferentes modelos
     
     Returns:
         Dicionário com o resultado consolidado da análise
@@ -282,54 +287,130 @@ def run_supply_chain_analysis(inquiry: str) -> Dict:
         >>> print(result["recommendation"]["decision"])
         'approve'
     """
-    # Cria e executa o team
-    try:
-        team = create_supply_chain_team()
-        response = team.run(inquiry)
-        
-        # Extrai conteúdo da resposta
-        if hasattr(response, 'content'):
-            output_text = response.content
-        else:
-            output_text = str(response)
-        
-        # Parse do JSON da resposta
-        # O Agno com markdown=True pode envolver JSON em blocos ```json
-        if "```json" in output_text:
-            json_part = output_text.split("```json")[1]
-            if "```" in json_part:
-                json_part = json_part.split("```")[0]
-            output_text = json_part.strip()
-        
-        try:
-            result = json.loads(output_text)
-        except json.JSONDecodeError:
-            # Tenta limpar mais (às vezes tem texto fora)
-            import re
-            json_search = re.search(r'\{.*\}', output_text, re.DOTALL)
-            if json_search:
-                try:
-                    result = json.loads(json_search.group(0))
-                except:
-                    raise ValueError("JSON inválido na resposta")
-            else:
-                 raise ValueError("JSON não encontrado na resposta")
-
-    except Exception as e:
-        # Fallback em caso de erro de execução ou parsing
-        print(f"❌ Erro na execução do Team: {e}")
-        result = {
-            "decision": "manual_review",
-            "rationale": f"Erro técnico ao processar análise: {str(e)}",
-            "supplier": None,
-            "price": None,
-            "currency": "BRL",
-            "quantity_recommended": 0,
-            "next_steps": ["Verificar logs do sistema", "Tentar novamente mais tarde"],
-            "risk_assessment": "Erro sistêmico"
-        }
+    import time
+    from app.agents.gemini_fallback import get_fallback_manager, is_rate_limit_error
     
-    return result
+    manager = get_fallback_manager()
+    last_error = None
+    
+    for attempt in range(max_retries):
+        try:
+            print(f"🔄 Tentativa {attempt + 1}/{max_retries} (modelo: {manager.current_model_id})")
+            
+            # Cria o team (usa o modelo atual do fallback manager)
+            team = create_supply_chain_team()
+            response = team.run(inquiry)
+            
+            # Extrai conteúdo da resposta
+            if hasattr(response, 'content'):
+                output_text = response.content
+            else:
+                output_text = str(response)
+            
+            # Verifica se a resposta indica erro 429 (mesmo quando Agno captura)
+            if "429" in output_text or "RESOURCE_EXHAUSTED" in output_text or "quota" in output_text.lower():
+                raise Exception(f"429 Rate limit detectado na resposta: {output_text[:200]}")
+            
+            # Parse do JSON da resposta
+            # O Agno com markdown=True pode envolver JSON em blocos ```json
+            
+            # Debug: log do output para diagnóstico
+            print(f"🔍 DEBUG - Output recebido ({len(output_text)} chars):")
+            print(f"   Primeiros 300 chars: {output_text[:300]}...")
+            
+            json_extracted = False
+            
+            # Caso 1: Bloco ```json ... ```
+            if "```json" in output_text:
+                json_part = output_text.split("```json")[1]
+                if "```" in json_part:
+                    json_part = json_part.split("```")[0]
+                output_text = json_part.strip()
+                json_extracted = True
+                print(f"   ✓ JSON extraído de bloco ```json")
+            
+            # Caso 2: Bloco ``` ... ``` sem "json"
+            elif "```" in output_text and not json_extracted:
+                parts = output_text.split("```")
+                for part in parts:
+                    part = part.strip()
+                    if part.startswith("{") and part.endswith("}"):
+                        output_text = part
+                        json_extracted = True
+                        print(f"   ✓ JSON extraído de bloco ```")
+                        break
+            
+            try:
+                result = json.loads(output_text)
+                print(f"✅ Análise concluída com sucesso na tentativa {attempt + 1}")
+                return result
+            except json.JSONDecodeError as je:
+                print(f"   ⚠️ JSON decode falhou: {je}")
+                # Tenta limpar mais (às vezes tem texto fora)
+                import re
+                
+                # Primeiro, tenta encontrar o JSON completo mais externo
+                json_search = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', output_text, re.DOTALL)
+                if json_search:
+                    try:
+                        result = json.loads(json_search.group(0))
+                        print(f"✅ Análise concluída (JSON extraído via regex) na tentativa {attempt + 1}")
+                        return result
+                    except json.JSONDecodeError:
+                        pass
+                
+                # Segundo, busca padrão mais simples
+                json_search = re.search(r'(\{.*\})', output_text, re.DOTALL)
+                if json_search:
+                    try:
+                        result = json.loads(json_search.group(1))
+                        print(f"✅ Análise concluída (JSON extraído) na tentativa {attempt + 1}")
+                        return result
+                    except:
+                        print(f"   ❌ Regex encontrou texto mas não é JSON válido")
+                        raise ValueError("JSON inválido na resposta")
+                else:
+                    print(f"   ❌ Nenhum padrão JSON encontrado no output")
+                    raise ValueError("JSON não encontrado na resposta")
+
+        except Exception as e:
+            last_error = e
+            error_str = str(e).lower()
+            
+            # Detectar se é erro de rate limit (429)
+            is_429 = any(indicator in error_str for indicator in [
+                "429", "rate limit", "quota", "resource_exhausted", "too many requests"
+            ])
+            
+            if is_429:
+                print(f"⚠️ Erro 429 detectado na tentativa {attempt + 1}: {str(e)[:100]}")
+                
+                # Tentar alternar para próximo modelo
+                if manager.switch_to_next_model():
+                    print(f"🔄 Alternando para modelo: {manager.current_model_id}")
+                    # Pequeno delay antes de retry
+                    time.sleep(2)
+                    continue
+                else:
+                    print("❌ Todos os modelos na chain de fallback esgotaram quota!")
+                    break
+            else:
+                # Erro não relacionado a 429, não faz retry
+                print(f"❌ Erro não-429 na execução do Team: {e}")
+                break
+    
+    # Fallback em caso de todas as tentativas falharem
+    print(f"❌ Todas as {max_retries} tentativas falharam. Retornando manual_review.")
+    return {
+        "decision": "manual_review",
+        "rationale": f"Erro técnico ao processar análise: {str(last_error)}",
+        "supplier": None,
+        "price": None,
+        "currency": "BRL",
+        "quantity_recommended": 0,
+        "next_steps": ["Verificar logs do sistema", "Aguardar cooldown de rate limit", "Tentar novamente mais tarde"],
+        "risk_assessment": "Erro sistêmico - rate limit de API"
+    }
 
 
 def execute_supply_chain_team(sku: str, inquiry_reason: Optional[str] = None) -> Dict:

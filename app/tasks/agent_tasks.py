@@ -37,6 +37,35 @@ def execute_agent_analysis_task(self, sku: str, session_id: int = None):
         result = execute_supply_chain_analysis(sku=sku)
         LOGGER.info("agents.task.completed", sku=sku, decision=result.get("recommendation", {}).get("decision"))
         
+        # ✅ SALVA RESULTADO NA AUDITORIA (aparece na página de Auditoria do frontend)
+        try:
+            from app.core.database import engine
+            from app.models.models import AuditoriaDecisao
+            from sqlmodel import Session
+            import json
+            
+            recommendation = result.get("recommendation", {})
+            
+            with Session(engine) as db_session:
+                auditoria = AuditoriaDecisao(
+                    agente_nome=result.get("agent_name", "Supply Chain Team"),
+                    sku=sku,
+                    acao=recommendation.get("decision", "unknown"),
+                    decisao=json.dumps(recommendation, ensure_ascii=False, indent=2),
+                    raciocinio=recommendation.get("rationale", "Sem raciocínio disponível"),
+                    contexto=json.dumps({
+                        "forecast": result.get("forecast", {}),
+                        "need_restock": result.get("need_restock", False),
+                        "market_prices": result.get("market_prices", []),
+                    }, ensure_ascii=False, indent=2),
+                )
+                db_session.add(auditoria)
+                db_session.commit()
+                
+            LOGGER.info("agents.task.audit_saved", sku=sku)
+        except Exception as audit_err:
+            LOGGER.warning("agents.task.audit_failed", sku=sku, error=str(audit_err))
+        
         # ✅ CORREÇÃO: Salva resultado no chat quando terminar
         if session_id:
             try:

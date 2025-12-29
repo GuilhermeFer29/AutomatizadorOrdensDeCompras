@@ -16,6 +16,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Create persistent data directory for ChromaDB (outside /app to avoid bind mount conflicts)
+RUN mkdir -p /data/chroma && chmod 777 /data/chroma
+
 # Diretório de trabalho
 WORKDIR /app
 

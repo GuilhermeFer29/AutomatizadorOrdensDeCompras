@@ -15,6 +15,7 @@ export interface PricePoint {
 export interface Alert {
   id: number;
   product: string;
+  sku: string;
   alert: string;
   stock: number;
   severity: 'success' | 'warning' | 'error';
@@ -72,10 +73,10 @@ export type AgentStatus = 'active' | 'inactive';
 
 export interface Agent {
   id: number;
-  name: string;
-  description: string;
+  nome: string;
+  descricao: string;
   status: AgentStatus;
-  lastRun: string;
+  ultima_execucao: string | null;
 }
 
 export interface ChatAction {

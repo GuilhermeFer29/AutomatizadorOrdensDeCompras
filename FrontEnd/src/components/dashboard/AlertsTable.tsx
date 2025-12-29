@@ -21,10 +21,10 @@ export function AlertsTable({ alerts }: AlertsTableProps) {
 
   const handleAnalyze = (sku: string, product: string) => {
     // Navega para a página de agentes e passa o SKU via state
-    navigate("/agents", { 
-      state: { 
-        prefillMessage: `Analise a compra do produto ${product} (SKU: ${sku}). Qual é a melhor estratégia de reposição?` 
-      } 
+    navigate("/agents", {
+      state: {
+        prefillMessage: `Analise a compra do produto ${product} (SKU: ${sku}). Qual é a melhor estratégia de reposição?`
+      }
     });
   };
 
@@ -54,10 +54,10 @@ export function AlertsTable({ alerts }: AlertsTableProps) {
                 </TableCell>
                 <TableCell className="text-right">{alert.stock} unidades</TableCell>
                 <TableCell className="text-right">
-                  <Button 
-                    size="sm" 
+                  <Button
+                    size="sm"
                     variant="outline"
-                    onClick={() => handleAnalyze(`SKU_${alert.id}`, alert.product)}
+                    onClick={() => handleAnalyze(alert.sku, alert.product)}
                     className="gap-2"
                   >
                     <Zap className="h-4 w-4" />

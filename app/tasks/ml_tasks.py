@@ -31,21 +31,22 @@ LOGGER = structlog.get_logger(__name__)
     retry_backoff=True,
     retry_kwargs={"max_retries": 2},
 )
-def train_product_model_task(self, sku: str, optimize: bool = False) -> Dict[str, Any]:
+def train_product_model_task(self, sku: str, optimize: bool = False, n_trials: int = 30) -> Dict[str, Any]:
     """
     Task Celery para treinar modelo de um produto específico.
     
     Args:
         sku: SKU do produto
         optimize: Se True, otimiza hiperparâmetros com Optuna
+        n_trials: Número de trials para otimização Optuna
     
     Returns:
         Dicionário com status e métricas
     """
-    LOGGER.info(f"ml.tasks.train_product.start", sku=sku, optimize=optimize)
+    LOGGER.info(f"ml.tasks.train_product.start", sku=sku, optimize=optimize, n_trials=n_trials)
     
     try:
-        result = train_model_for_product(sku=sku, optimize=optimize, n_trials=30, backtest=False)
+        result = train_model_for_product(sku=sku, optimize=optimize, n_trials=n_trials, backtest=False)
         
         payload = {
             "status": "success",

@@ -95,14 +95,14 @@ export function AgentStatusPanel() {
 
                                     {/* Agent Info */}
                                     <div>
-                                        <h4 className="font-medium">{agent.name}</h4>
-                                        <p className="text-sm text-muted-foreground">{agent.description}</p>
-                                        {agent.lastRun && (
+                                        <h4 className="font-medium">{agent.nome}</h4>
+                                        <p className="text-sm text-muted-foreground">{agent.descricao}</p>
+                                        {agent.ultima_execucao && (
                                             <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
                                                 <Clock className="h-3 w-3" />
                                                 <span>
                                                     Última execução:{" "}
-                                                    {formatDistanceToNow(new Date(agent.lastRun), {
+                                                    {formatDistanceToNow(new Date(agent.ultima_execucao), {
                                                         addSuffix: true,
                                                         locale: ptBR,
                                                     })}

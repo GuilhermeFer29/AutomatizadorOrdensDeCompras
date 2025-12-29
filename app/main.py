@@ -103,8 +103,10 @@ def create_application() -> FastAPI:
     application.include_router(api_agent_router.router)
     application.include_router(api_order_router.router)
 
-    from app.routers import api_chat_router
+    from app.routers import api_chat_router, api_supplier_router, api_audit_router
     application.include_router(api_chat_router.router)
+    application.include_router(api_supplier_router.router)
+    application.include_router(api_audit_router.router)
     
     # Rota de gerenciamento do RAG
     from app.routers.rag_router import router as rag_router

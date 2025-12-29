@@ -48,8 +48,12 @@ Sistema completo de **Inteligência Artificial** para automatizar e otimizar dec
 | 📊 **Dashboard** | Visualize métricas, previsões e alertas em tempo real |
 | 📦 **Catálogo** | Gerencie produtos com estoque, preços e fornecedores |
 | 📋 **Ordens** | Crie, aprove ou rejeite ordens de compra automaticamente |
+| 🚚 **Fornecedores** | Gestão completa de fornecedores e ofertas |
+| 📝 **Auditoria** | Visualize histórico de decisões dos agentes |
+| 💬 **Histórico Chat** | Navegue entre conversas anteriores |
 | 🔮 **Previsões ML** | Previsão de demanda com AutoARIMA (StatsForecast) |
 | 🔍 **RAG** | Busca semântica inteligente no catálogo de produtos |
+| 🔄 **Fallback AI** | Alternância automática entre modelos Gemini |
 | 🔐 **Autenticação** | Login seguro com JWT |
 
 ---
@@ -334,9 +338,30 @@ npm run dev
 
 | Método | Endpoint | Descrição |
 |--------|----------|-----------|
+| GET | `/api/chat/sessions` | Listar sessões |
 | POST | `/api/chat/sessions` | Nova sessão |
+| DELETE | `/api/chat/sessions/{id}` | Apagar sessão |
 | POST | `/api/chat/sessions/{id}/messages` | Enviar mensagem |
 | GET | `/api/chat/sessions/{id}/history` | Histórico |
+
+### Fornecedores
+
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| GET | `/api/suppliers/` | Listar fornecedores |
+| GET | `/api/suppliers/{id}` | Detalhes |
+| GET | `/api/suppliers/{id}/offers` | Ofertas do fornecedor |
+| POST | `/api/suppliers/` | Criar fornecedor |
+| PUT | `/api/suppliers/{id}` | Atualizar |
+| DELETE | `/api/suppliers/{id}` | Remover |
+
+### Auditoria
+
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| GET | `/api/audit/decisions/` | Listar decisões |
+| GET | `/api/audit/decisions/{id}` | Detalhes da decisão |
+| GET | `/api/audit/stats/` | Estatísticas |
 
 ### Produtos
 
@@ -428,6 +453,10 @@ Para documentação técnica detalhada, consulte:
 - [x] Previsões com StatsForecast
 - [x] Frontend React completo
 - [x] Autenticação JWT
+- [x] Página de Fornecedores
+- [x] Log de Auditoria
+- [x] Histórico de Chat
+- [x] Fallback automático de modelos Gemini
 - [ ] Integração com ERPs
 - [ ] App mobile
 - [ ] Monitoramento Prometheus/Grafana

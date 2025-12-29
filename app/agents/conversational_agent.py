@@ -17,7 +17,7 @@ from sqlmodel import Session
 
 # Importações locais (Nova Arquitetura)
 from app.agents.knowledge import load_knowledge_base
-from app.agents.llm_config import get_gemini_for_decision_making
+from app.agents.llm_config import get_gemini_for_decision_making, get_gemini_with_fallback
 from app.agents.tools import (
     get_product_info,
     search_market_price,
@@ -87,7 +87,7 @@ def get_conversational_agent(session_id: str) -> Agent:
     # 4. Instanciar o Agente
     agent = Agent(
         name="PurchaseAssistant",
-        model=get_gemini_for_decision_making(), # Gemini 1.5 Flash/Pro configurado
+        model=get_gemini_with_fallback(temperature=0.1), # Gemini with auto-fallback on 429
         
         # Cérebro & Conhecimento
         instructions=instructions,
@@ -171,3 +171,62 @@ def extract_entities(message: str, session: Session = None, session_id: int = No
     except Exception as e:
         print(f"⚠️ Erro na extração de entidades: {e}")
         return {"sku": None, "intent": "unknown"}
+
+
+def format_agent_response(result: dict, intent: str = "general") -> str:
+    """
+    Formata a resposta de análise dos agentes para exibição no chat.
+    
+    Args:
+        result: Dicionário com resultado da análise (vindo de execute_supply_chain_analysis)
+        intent: Tipo de intenção para customizar a formatação
+        
+    Returns:
+        String formatada em Markdown para exibição
+    """
+    try:
+        sku = result.get("product_sku", "N/A")
+        recommendation = result.get("recommendation", {})
+        forecast = result.get("forecast", {})
+        need_restock = result.get("need_restock", False)
+        
+        # Construir resposta formatada
+        lines = []
+        
+        # Cabeçalho
+        lines.append(f"## 📊 Análise Completa - {sku}\n")
+        
+        # Recomendação Principal
+        if recommendation:
+            decision = recommendation.get("decision", "Análise não disponível")
+            reasoning = recommendation.get("reasoning", "")
+            
+            emoji = "✅" if "comprar" in decision.lower() else "⏳" if "aguardar" in decision.lower() else "ℹ️"
+            lines.append(f"### {emoji} Recomendação")
+            lines.append(f"**{decision}**\n")
+            if reasoning:
+                lines.append(f"{reasoning}\n")
+        
+        # Status de Estoque
+        if need_restock:
+            lines.append("### ⚠️ Alerta de Estoque")
+            lines.append("Este produto precisa de reposição urgente!\n")
+        
+        # Previsão
+        if forecast and forecast.get("prices"):
+            lines.append("### 📈 Previsão de Preços")
+            prices = forecast.get("prices", [])
+            dates = forecast.get("dates", [])
+            if prices and dates:
+                lines.append(f"- Próximo preço previsto: R$ {prices[0]:.2f}")
+                lines.append(f"- Tendência: {'📉 Queda' if prices[-1] < prices[0] else '📈 Alta'}\n")
+        
+        # Rodapé
+        lines.append("---")
+        lines.append("*Análise gerada automaticamente pelo sistema de agentes.*")
+        
+        return "\n".join(lines)
+        
+    except Exception as e:
+        return f"❌ Erro ao formatar resposta da análise: {str(e)}\n\nDados brutos: {result}"
+

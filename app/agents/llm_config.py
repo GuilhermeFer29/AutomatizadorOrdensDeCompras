@@ -113,6 +113,43 @@ def get_gemini_llm(
     )
 
 
+def get_gemini_with_fallback(temperature: float = 0.3) -> Gemini:
+    """
+    Retorna modelo Gemini com FALLBACK AUTOMÁTICO para erros 429.
+    
+    Esta função deve ser usada para agentes que podem sofrer rate limiting.
+    Automaticamente alterna entre modelos quando quota é excedida:
+    1. gemini-2.5-flash (principal)
+    2. gemini-2.5-flash-lite (alternativo)
+    3. gemini-3-flash (alternativo)
+    4. gemma-3-27b (fallback final)
+    
+    Args:
+        temperature: Temperatura do modelo (padrão: 0.3)
+        
+    Returns:
+        Gemini: Instância do modelo atual na chain de fallback
+        
+    Example:
+        ```python
+        from app.agents.llm_config import get_gemini_with_fallback
+        
+        # Obter modelo (pode ser qualquer um da chain)
+        model = get_gemini_with_fallback(temperature=0.2)
+        
+        # O modelo retornado depende do estado atual da chain
+        agent = Agent(model=model, instructions="...")
+        ```
+    """
+    try:
+        from app.agents.gemini_fallback import get_model_with_fallback
+        return get_model_with_fallback(temperature)
+    except ImportError:
+        # Fallback se módulo não disponível
+        print("⚠️ gemini_fallback não disponível, usando modelo padrão")
+        return get_gemini_llm(temperature)
+
+
 def get_gemini_for_nlu() -> Gemini:
     """
     Retorna uma instância do Gemini otimizada para tarefas de NLU (Natural Language Understanding).

@@ -34,49 +34,51 @@ def _load_history_as_dataframe(
     sku: str,
     days: int = 90
 ) -> pd.DataFrame:
-    """Carrega histórico e retorna DataFrame compatível com StatsForecast (unique_id, ds, y)."""
+    """Carrega histórico de PREÇOS e retorna DataFrame compatível com StatsForecast (unique_id, ds, y)."""
     
     # 1. Buscar produto
     produto = session.exec(select(Produto).where(Produto.sku == sku)).first()
     if not produto:
         raise ValueError(f"Produto {sku} não encontrado")
 
-    # 2. Buscar vendas
+    # 2. Buscar histórico de PREÇOS (não vendas!)
     cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
-    vendas = list(session.exec(
-        select(VendasHistoricas)
-        .where(VendasHistoricas.produto_id == produto.id)
-        .where(VendasHistoricas.data_venda >= cutoff_date)
-        .order_by(VendasHistoricas.data_venda)
+    precos = list(session.exec(
+        select(PrecosHistoricos)
+        .where(PrecosHistoricos.produto_id == produto.id)
+        .where(PrecosHistoricos.coletado_em >= cutoff_date)
+        .order_by(PrecosHistoricos.coletado_em)
     ))
 
-    if not vendas:
-        # Retorna DataFrame vazio se não houver vendas
+    if not precos:
+        # Retorna DataFrame vazio se não houver preços
         return pd.DataFrame(columns=["unique_id", "ds", "y"])
 
     # 3. Converter para DataFrame
     df = pd.DataFrame([
         {
             "unique_id": sku,
-            "ds": v.data_venda,
-            "y": float(v.quantidade)
+            "ds": p.coletado_em,
+            "y": float(p.preco)  # Usar PREÇO, não quantidade!
         } 
-        for v in vendas
+        for p in precos
     ])
     
-    # 4. Agrupar por data (caso haja múltiplas entradas por dia) e preencher gaps
+    # 4. Agrupar por data (média dos preços do dia) e preencher gaps
     df["ds"] = pd.to_datetime(df["ds"]).dt.tz_localize(None)
-    df = df.groupby(["unique_id", "ds"]).sum().reset_index()
+    df = df.groupby(["unique_id", "ds"]).mean().reset_index()
     
-    # Preencher dias faltantes com 0 (importante para varejo)
-    all_dates = pd.date_range(start=df["ds"].min(), end=df["ds"].max(), freq="D")
-    df = (
-        df.set_index("ds")
-        .reindex(all_dates, fill_value=0)
-        .rename_axis("ds")
-        .reset_index()
-    )
-    df["unique_id"] = sku  # Restaurar ID após reindex
+    # Preencher dias faltantes com forward fill (manter último preço conhecido)
+    if len(df) > 0:
+        all_dates = pd.date_range(start=df["ds"].min(), end=df["ds"].max(), freq="D")
+        df = (
+            df.set_index("ds")
+            .reindex(all_dates)
+            .ffill()  # Forward fill para preços (não usar 0!)
+            .rename_axis("ds")
+            .reset_index()
+        )
+        df["unique_id"] = sku  # Restaurar ID após reindex
     
     return df
 

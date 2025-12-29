@@ -36,7 +36,7 @@ export default function Settings() {
         onSuccess: (data) => {
             toast({
                 title: "RAG Sincronizado",
-                description: `${data.products_indexed || 0} produtos indexados com sucesso!`,
+                description: `${data.data?.products_indexed || 0} produtos indexados com sucesso!`,
             });
             checkRagStatus();
         },
@@ -75,8 +75,8 @@ export default function Settings() {
         try {
             const response = await api.get('/api/rag/status');
             setRagStatus({
-                indexed: response.data.products_indexed || 0,
-                lastSync: response.data.last_sync || null,
+                indexed: response.data.data?.total_products_indexed || 0,
+                lastSync: response.data.data?.last_sync || null,
             });
         } catch (error) {
             console.error('Erro ao verificar status RAG:', error);

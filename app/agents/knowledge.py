@@ -24,8 +24,8 @@ from app.core.database import engine
 from app.models.models import Produto
 
 # Diretório para persistir embeddings (mantendo compatibilidade de caminho)
-# Diretório para persistir embeddings (Volume persistente do Docker)
-CHROMA_PERSIST_DIR = "/app/data/chroma"
+# Diretório para persistir embeddings (Volume persistente dedicado do Docker)
+CHROMA_PERSIST_DIR = "/data/chroma"
 
 def get_product_documents() -> List[Document]:
     """Gera lista de documentos Agno a partir dos produtos no banco de dados."""
@@ -107,6 +107,19 @@ def get_product_knowledge() -> Knowledge:
     )
     
     return _knowledge_instance
+
+
+def reset_knowledge_singleton() -> None:
+    """
+    Resets the Knowledge singleton to allow a fresh ChromaDB client to be created.
+    
+    This should be called after clearing the ChromaDB directory to ensure the
+    next call to get_product_knowledge() creates a new client instead of
+    reusing a stale connection to a deleted database file.
+    """
+    global _knowledge_instance
+    _knowledge_instance = None
+
 
 def load_knowledge_base() -> Knowledge:
     """Função utilitária para inicializar e carregar a base de conhecimento."""

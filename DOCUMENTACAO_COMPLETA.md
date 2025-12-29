@@ -26,6 +26,7 @@
 16. [Deploy com Docker](#deploy-com-docker)
 17. [Variáveis de Ambiente](#variáveis-de-ambiente)
 18. [Troubleshooting](#troubleshooting)
+19. [**Funcionalidades Recentes (v1.1.0)**](#funcionalidades-recentes-v110)
 
 ---
 
@@ -50,6 +51,10 @@ Este sistema foi desenvolvido para automatizar e otimizar o processo de tomada d
 | 📋 Ordens de Compra | Criação e aprovação automatizada |
 | 🔮 Previsões ML | Previsão de demanda com AutoARIMA |
 | 🔍 RAG | Busca semântica no catálogo de produtos |
+| 🚚 Fornecedores | Gestão de fornecedores e ofertas |
+| 📝 Auditoria | Log de decisões dos agentes |
+| 💬 Histórico de Chat | Navegação entre conversas anteriores |
+| 🔄 Fallback de Modelos | Alternância automática entre modelos Gemini |
 
 ---
 
@@ -1017,7 +1022,123 @@ curl http://localhost:8000/health
 
 ---
 
-## 📚 Referências
+## 🆕 Funcionalidades Recentes (v1.1.0)
+
+### 1. Sistema de Fallback Automático de Modelos Gemini
+
+O sistema agora possui fallback automático entre modelos quando ocorrem erros de rate limit (429):
+
+```
+Cadeia de Fallback:
+gemini-2.5-flash → gemini-2.5-flash-lite → gemini-3-flash
+```
+
+**Arquivos:**
+- `app/agents/gemini_fallback.py` - Gerenciador de fallback
+- `app/agents/supply_chain_team.py` - Integração com fallback
+
+**Comportamento:**
+- Detecta automaticamente erros 429 (Rate Limit Exceeded)
+- Alterna para o próximo modelo na cadeia
+- Implementa retry com backoff exponencial
+- Cooldown de 5 minutos antes de tentar voltar ao modelo primário
+
+---
+
+### 2. Histórico de Chat
+
+O chat agora mantém histórico de conversas anteriores com navegação lateral.
+
+**Backend:**
+| Endpoint | Método | Descrição |
+|----------|--------|-----------|
+| `/api/chat/sessions` | GET | Lista sessões de chat |
+| `/api/chat/sessions/{id}` | DELETE | Apaga uma sessão |
+
+**Frontend (Agents.tsx):**
+- Sidebar com lista de conversas anteriores
+- Botão "Nova Conversa"
+- Botão de apagar (�️) em cada conversa
+- Sessão só é criada quando o usuário envia a primeira mensagem
+- Mensagem de boas-vindas quando não há sessão ativa
+
+---
+
+### 3. Página de Fornecedores
+
+Nova página completa para gestão de fornecedores (`/suppliers`).
+
+**Backend (api_supplier_router.py):**
+| Endpoint | Método | Descrição |
+|----------|--------|-----------|
+| `/api/suppliers/` | GET | Lista todos |
+| `/api/suppliers/{id}` | GET | Detalhes |
+| `/api/suppliers/{id}/offers` | GET | Ofertas do fornecedor |
+| `/api/suppliers/` | POST | Criar novo |
+| `/api/suppliers/{id}` | PUT | Atualizar |
+| `/api/suppliers/{id}` | DELETE | Remover |
+
+**Frontend (Suppliers.tsx):**
+- Listagem de fornecedores com estatísticas
+- Cards com indicador de confiabilidade
+- Modal para ver ofertas de produtos
+- Modal de cadastro com slider de confiabilidade
+- Busca por nome
+
+---
+
+### 4. Log de Auditoria
+
+Nova página para visualizar decisões dos agentes (`/audit`).
+
+**Backend (api_audit_router.py):**
+| Endpoint | Método | Descrição |
+|----------|--------|-----------|
+| `/api/audit/decisions/` | GET | Lista decisões |
+| `/api/audit/decisions/{id}` | GET | Detalhes completos |
+| `/api/audit/stats/` | GET | Estatísticas |
+
+**Frontend (AuditLog.tsx):**
+- Tabela com histórico de decisões
+- Filtro por SKU
+- Modal com detalhes (raciocínio completo, contexto)
+- Estatísticas: total de decisões, agentes ativos, SKUs analisados
+
+**Integração:**
+- Todas as análises de agentes são salvas automaticamente na tabela `AuditoriaDecisao`
+- Resultados aparecem na página de Auditoria após execução
+
+---
+
+### 5. Melhorias no Menu de Navegação
+
+**Sidebar atualizado:**
+| Item | Rota | Ícone |
+|------|------|-------|
+| Dashboard | `/` | LayoutDashboard |
+| Agentes | `/agents` | Bot |
+| Ordens | `/orders` | ClipboardList |
+| Catálogo | `/catalog` | Package |
+| Fornecedores | `/suppliers` | Truck |
+| Auditoria | `/audit` | FileText |
+| Configurações | `/settings` | Settings2 |
+
+---
+
+### 6. Tabela de Auditoria (Banco de Dados)
+
+A tabela `auditoria_decisoes` foi ajustada para suportar textos longos:
+
+```sql
+ALTER TABLE auditoria_decisoes 
+  MODIFY COLUMN decisao TEXT,
+  MODIFY COLUMN raciocinio TEXT,
+  MODIFY COLUMN contexto TEXT;
+```
+
+---
+
+## �📚 Referências
 
 - [Agno Framework](https://docs.agno.com/) - Framework de agentes
 - [FastAPI](https://fastapi.tiangolo.com/) - Framework web
@@ -1029,8 +1150,8 @@ curl http://localhost:8000/health
 
 ---
 
-**Versão da Documentação**: 1.0.0  
-**Última Atualização**: 28/12/2025  
+**Versão da Documentação**: 1.1.0  
+**Última Atualização**: 29/12/2025  
 **Status do Projeto**: ✅ Pronto para Produção
 
 ---

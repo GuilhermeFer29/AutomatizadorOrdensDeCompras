@@ -9,6 +9,8 @@ import Dashboard from "./pages/Dashboard";
 import Agents from "./pages/Agents";
 import Orders from "./pages/Orders";
 import Catalog from "./pages/Catalog";
+import Suppliers from "./pages/Suppliers";
+import AuditLog from "./pages/AuditLog";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -41,6 +43,8 @@ const App = () => (
                       <Route path="/agents" element={<Agents />} />
                       <Route path="/orders" element={<Orders />} />
                       <Route path="/catalog" element={<Catalog />} />
+                      <Route path="/suppliers" element={<Suppliers />} />
+                      <Route path="/audit" element={<AuditLog />} />
                       <Route path="/settings" element={<Settings />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
