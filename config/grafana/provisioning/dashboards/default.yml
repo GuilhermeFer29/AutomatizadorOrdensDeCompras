@@ -1,0 +1,13 @@
+# Grafana Dashboard Provisioning
+apiVersion: 1
+
+providers:
+  - name: 'PMI Dashboards'
+    orgId: 1
+    folder: 'PMI'
+    folderUid: 'pmi'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/provisioning/dashboards

@@ -121,8 +121,8 @@ def get_sync_engine() -> Engine:
     return _sync_engine
 
 
-# Alias para compatibilidade
-engine: Engine = property(lambda self: get_sync_engine())
+# Inicializa engine no import para compatibilidade
+engine: Engine = get_sync_engine()
 
 
 # ============================================================================
@@ -264,15 +264,8 @@ def check_database_health() -> dict:
 # EXPORTS
 # ============================================================================
 
-# Para compatibilidade, exportamos o engine como propriedade lazy
-def __getattr__(name: str):
-    """Lazy loading do engine para compatibilidade."""
-    if name == "engine":
-        return get_sync_engine()
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
 __all__ = [
+    "engine",
     "get_session",
     "get_async_session", 
     "get_sync_engine",
@@ -281,3 +274,4 @@ __all__ = [
     "create_db_and_tables_async",
     "check_database_health",
 ]
+

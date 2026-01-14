@@ -1,12 +1,74 @@
-"""SQLModel data models for the supply chain automation domain."""
+"""
+SQLModel data models for the supply chain automation domain.
+
+ARQUITETURA SaaS MULTI-TENANT:
+==============================
+- TenantMixin: Adiciona tenant_id a modelos que precisam de isolamento
+- Tenant: Modelo que representa um cliente/organização
+- User: Agora vinculado a um tenant
+
+Autor: Sistema PMI | Atualizado: 2026-01-14
+"""
 
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Dict, List, Optional
+from uuid import UUID, uuid4
 
 from sqlalchemy import Column, Text
 from sqlalchemy.dialects.mysql import JSON as MySQLJSON
 from sqlmodel import Field, Relationship, SQLModel
+
+
+# ============================================================================
+# TENANT MODEL (Representa um cliente/organização)
+# ============================================================================
+
+class Tenant(SQLModel, table=True):
+    """
+    Representa um cliente/organização no sistema SaaS.
+    
+    Cada tenant tem seus dados isolados dos demais.
+    """
+    __tablename__ = "tenants"
+    
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    nome: str = Field(max_length=255, index=True)
+    slug: str = Field(max_length=64, unique=True, index=True)  # URL-friendly identifier
+    plano: str = Field(default="free", max_length=32)  # free, starter, pro, enterprise
+    ativo: bool = Field(default=True)
+    max_usuarios: int = Field(default=5)
+    max_produtos: int = Field(default=100)
+    criado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    atualizado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+# ============================================================================
+# TENANT MIXIN (Para modelos que precisam de isolamento)
+# ============================================================================
+
+class TenantMixin:
+    """
+    Mixin que adiciona tenant_id a modelos SQLModel.
+    
+    Uso:
+        class Produto(TenantMixin, SQLModel, table=True):
+            ...
+    
+    IMPORTANTE: Herde TenantMixin ANTES de SQLModel.
+    """
+    tenant_id: Optional[UUID] = Field(
+        default=None,
+        foreign_key="tenants.id",
+        index=True,
+        nullable=True,  # Nullable para migração gradual
+        description="ID do tenant proprietário"
+    )
+
+
+# ============================================================================
+# MODELS COM TENANT (Dados isolados por cliente)
+# ============================================================================
 
 
 class Produto(SQLModel, table=True):

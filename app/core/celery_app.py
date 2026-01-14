@@ -1,4 +1,18 @@
-"""Celery application factory and configuration."""
+"""
+Celery Application Factory - RabbitMQ Edition.
+
+ARQUITETURA SaaS:
+=================
+- Broker: RabbitMQ (persistência, garantias de entrega)
+- Result Backend: Redis (rápido, temporário)
+- Quorum Queues: Para alta disponibilidade
+
+REFERÊNCIAS:
+- Celery RabbitMQ: https://docs.celeryq.dev/en/stable/getting-started/backends-and-brokers/rabbitmq.html
+- Celery Config: https://docs.celeryq.dev/en/stable/userguide/configuration.html
+
+Autor: Sistema PMI | Data: 2026-01-14
+"""
 
 from __future__ import annotations
 
@@ -8,36 +22,120 @@ from functools import lru_cache
 from celery import Celery
 from celery.schedules import crontab
 
-DEFAULT_BROKER_URL = "redis://broker:6379/0"
 
+# ============================================================================
+# CONFIGURAÇÃO DE BROKERS
+# ============================================================================
+
+def _get_broker_url() -> str:
+    """
+    Retorna URL do RabbitMQ.
+    
+    Formato: amqp://user:password@host:port/vhost
+    """
+    # Tenta variável específica do Celery primeiro
+    broker_url = os.getenv("CELERY_BROKER_URL")
+    if broker_url:
+        return broker_url
+    
+    # Constrói a partir das variáveis do RabbitMQ
+    user = os.getenv("RABBITMQ_DEFAULT_USER", "pmi")
+    password = os.getenv("RABBITMQ_DEFAULT_PASS", "pmi_secret")
+    host = os.getenv("RABBITMQ_HOST", "rabbitmq")
+    port = os.getenv("RABBITMQ_PORT", "5672")
+    vhost = os.getenv("RABBITMQ_DEFAULT_VHOST", "pmi")
+    
+    return f"amqp://{user}:{password}@{host}:{port}/{vhost}"
+
+
+def _get_result_backend() -> str:
+    """
+    Retorna URL do Redis para result backend.
+    """
+    return os.getenv("CELERY_RESULT_BACKEND", "redis://redis:6379/0")
+
+
+# ============================================================================
+# CELERY APP FACTORY
+# ============================================================================
 
 @lru_cache(maxsize=1)
 def create_celery_app() -> Celery:
-    """Create and configure the Celery application instance."""
-
-    broker_url = os.getenv("REDIS_URL", DEFAULT_BROKER_URL)
-    backend_url = os.getenv("CELERY_RESULT_BACKEND", broker_url)
-
+    """
+    Cria e configura a aplicação Celery.
+    
+    Configuração otimizada para produção:
+    - RabbitMQ como broker (persistent, reliable)
+    - Redis como result backend (fast, temporary)
+    - Prefetch multiplier baixo para distribuição justa
+    - Acknowledgment tardio para retry em caso de crash
+    """
+    broker_url = _get_broker_url()
+    backend_url = _get_result_backend()
+    
+    print(f"🐰 Celery Broker: {broker_url.replace(os.getenv('RABBITMQ_DEFAULT_PASS', 'pmi_secret'), '***')}")
+    print(f"📦 Result Backend: {backend_url}")
+    
     celery_app = Celery(
-        "worker",
+        "pmi_worker",
         broker=broker_url,
         backend=backend_url,
-        broker_connection_retry_on_startup=True,  # Add this line
+        broker_connection_retry_on_startup=True,
     )
 
     celery_app.conf.update(
+        # Queue Configuration
         task_default_queue="default",
-        task_routes={"app.tasks.*": {"queue": "default"}},
-        result_expires=3600,
-        timezone="UTC",
+        task_queues={
+            "default": {"exchange": "default", "routing_key": "default"},
+            "agents": {"exchange": "agents", "routing_key": "agents.#"},
+            "ml": {"exchange": "ml", "routing_key": "ml.#"},
+        },
+        task_routes={
+            "app.tasks.agent_tasks.*": {"queue": "agents"},
+            "app.tasks.ml_tasks.*": {"queue": "ml"},
+        },
+        
+        # Performance & Reliability
+        worker_prefetch_multiplier=1,  # Distribui tarefas de forma justa
+        task_acks_late=True,           # ACK após execução (retry em crash)
+        task_reject_on_worker_lost=True,
+        
+        # Timeouts
+        task_soft_time_limit=300,      # 5 min soft limit
+        task_time_limit=600,           # 10 min hard limit
+        result_expires=3600,           # Results expiram em 1 hora
+        
+        # Serialization
+        task_serializer="json",
+        accept_content=["json"],
+        result_serializer="json",
+        
+        # Timezone
+        timezone="America/Sao_Paulo",
+        enable_utc=True,
+        
+        # Worker
         worker_disable_rate_limits=True,
+        worker_send_task_events=True,  # Para monitoring
+        task_send_sent_event=True,
     )
 
-    # Configurar Celery Beat para retreinamento automático do modelo global
+    # ==========================================================================
+    # BEAT SCHEDULE (Tarefas Agendadas)
+    # ==========================================================================
     celery_app.conf.beat_schedule = {
+        # Retreinamento de modelo global diariamente
         'retrain-global-model-daily': {
             'task': 'app.tasks.ml_tasks.retrain_global_model_task',
-            'schedule': crontab(hour=1, minute=0),  # Todo dia à 1h da manhã (UTC)
+            'schedule': crontab(hour=1, minute=0),  # 1h da manhã
+            'options': {'queue': 'ml'},
+        },
+        # Limpeza de cache de resultados semanalmente
+        'cleanup-old-results-weekly': {
+            'task': 'app.tasks.maintenance_tasks.cleanup_old_results',
+            'schedule': crontab(hour=3, minute=0, day_of_week='sunday'),
+            'options': {'queue': 'default'},
         },
     }
 
@@ -46,8 +144,12 @@ def create_celery_app() -> Celery:
     return celery_app
 
 
+# ============================================================================
+# INSTÂNCIA GLOBAL
+# ============================================================================
+
 celery_app: Celery = create_celery_app()
 
-# Import tasks to ensure they are registered with the Celery application.
+# Import tasks to ensure they are registered
 import app.tasks.agent_tasks  # noqa: E402,F401
 import app.tasks.ml_tasks  # noqa: E402,F401

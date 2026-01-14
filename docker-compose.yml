@@ -1,4 +1,14 @@
+# ============================================================================
+# DOCKER COMPOSE - SaaS Multi-Tenant Edition
+# ============================================================================
+# Serviços: Frontend, API, Worker, Beat, MySQL, RabbitMQ, Redis, Prometheus, Grafana
+# Atualizado: 2026-01-14
+# ============================================================================
+
 services:
+  # ==========================================================================
+  # FRONTEND
+  # ==========================================================================
   frontend:
     build:
       context: ./FrontEnd
@@ -8,6 +18,9 @@ services:
     depends_on:
       - api
 
+  # ==========================================================================
+  # API (FastAPI)
+  # ==========================================================================
   api:
     build:
       context: .
@@ -15,29 +28,31 @@ services:
     image: app:latest
     env_file:
       - .env
+    environment:
+      # Celery usa RabbitMQ como broker
+      CELERY_BROKER_URL: amqp://${RABBITMQ_DEFAULT_USER:-pmi}:${RABBITMQ_DEFAULT_PASS:-pmi_secret}@rabbitmq:5672/${RABBITMQ_DEFAULT_VHOST:-pmi}
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      CACHE_REDIS_URL: redis://redis:6379/1
     ports:
       - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
-      broker:
+      rabbitmq:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     volumes:
       - ./app:/app/app
       - ./scripts:/app/scripts
       - ./data:/app/data
-      - chroma_db_data:/data/chroma # Dedicated path, no nesting
+      - chroma_db_data:/data/chroma
       - ./models:/app/models
-    # GPU removida para Project Lite
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
 
+  # ==========================================================================
+  # CELERY WORKER
+  # ==========================================================================
   worker:
     build:
       context: .
@@ -46,12 +61,15 @@ services:
     env_file:
       - .env
     environment:
-      # ✅ GEMINI 2.5 FLASH - Rápido e Gratuito
       GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      CELERY_BROKER_URL: amqp://${RABBITMQ_DEFAULT_USER:-pmi}:${RABBITMQ_DEFAULT_PASS:-pmi_secret}@rabbitmq:5672/${RABBITMQ_DEFAULT_VHOST:-pmi}
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
     depends_on:
       db:
         condition: service_healthy
-      broker:
+      rabbitmq:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       api:
         condition: service_started
@@ -60,9 +78,12 @@ services:
       - ./app:/app/app
       - ./scripts:/app/scripts
       - ./data:/app/data
-      - chroma_db_data:/data/chroma # Dedicated path, no nesting
+      - chroma_db_data:/data/chroma
       - ./models:/app/models
 
+  # ==========================================================================
+  # CELERY BEAT (Scheduler)
+  # ==========================================================================
   beat:
     build:
       context: .
@@ -70,8 +91,13 @@ services:
     image: app:latest
     env_file:
       - .env
+    environment:
+      CELERY_BROKER_URL: amqp://${RABBITMQ_DEFAULT_USER:-pmi}:${RABBITMQ_DEFAULT_PASS:-pmi_secret}@rabbitmq:5672/${RABBITMQ_DEFAULT_VHOST:-pmi}
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
     depends_on:
-      broker:
+      rabbitmq:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       db:
         condition: service_healthy
@@ -82,9 +108,12 @@ services:
       - ./app:/app/app
       - ./scripts:/app/scripts
       - ./data:/app/data
-      - chroma_db_data:/data/chroma # Dedicated path, no nesting
+      - chroma_db_data:/data/chroma
       - ./models:/app/models
 
+  # ==========================================================================
+  # MYSQL DATABASE
+  # ==========================================================================
   db:
     image: mysql:8.0
     restart: unless-stopped
@@ -105,20 +134,86 @@ services:
       retries: 10
       start_period: 30s
 
-  broker:
+  # ==========================================================================
+  # RABBITMQ (Message Broker - Celery)
+  # ==========================================================================
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-pmi}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-pmi_secret}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_DEFAULT_VHOST:-pmi}
+    ports:
+      - "5672:5672" # AMQP
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "check_port_connectivity" ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ==========================================================================
+  # REDIS (Cache + Result Backend)
+  # ==========================================================================
+  redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
-      - "6380:6379"
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 3s
       timeout: 3s
       retries: 5
 
+  # ==========================================================================
+  # PROMETHEUS (Métricas)
+  # ==========================================================================
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+
+  # ==========================================================================
+  # GRAFANA (Dashboards)
+  # ==========================================================================
+  grafana:
+    image: grafana/grafana:11.1.0
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+
+# ==========================================================================
+# VOLUMES
+# ==========================================================================
 volumes:
   mysql_data:
   chroma_db_data:
-
-
+  rabbitmq_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:

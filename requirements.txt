@@ -1,12 +1,11 @@
-                                        # ============================================================================
-# REFATORAÇÃO PÓS-AUDITORIA (2025-10-16):
-# - Scraping desativado: removido beautifulsoup4
-# - Consolidado Google AI: apenas google-generativeai
-# - LangChain mantido: arquitetura híbrida RAG ativa
-# - Base limpa para módulo ML avançado
+# ============================================================================
+# REQUIREMENTS - Sistema PMI SaaS Multi-Tenant
+# Atualizado: 2026-01-14
 # ============================================================================
 
-# Core Framework
+# ==========================================================================
+# CORE FRAMEWORK
+# ==========================================================================
 agno
 fastapi
 python-dotenv
@@ -15,17 +14,26 @@ structlog
 tenacity
 uvicorn[standard]
 
-# Database
+# ==========================================================================
+# DATABASE (Sync + Async)
+# ==========================================================================
 mysql-connector-python
 pymysql
+aiomysql
 redis
-sqlalchemy
+sqlalchemy[asyncio]
 sqlmodel
+greenlet
 
-# Task Queue
+# ==========================================================================
+# MESSAGE QUEUE (RabbitMQ + Celery)
+# ==========================================================================
 celery
+kombu              # AMQP protocol support
 
-# AI/ML (essenciais)
+# ==========================================================================
+# AI/ML
+# ==========================================================================
 chromadb
 google-genai
 httpx
@@ -34,29 +42,53 @@ pandas
 requests
 tavily-python
 
-# LangChain ecosystem for RAG (Google AI integration)
+# ==========================================================================
+# LANGCHAIN (RAG Pipeline)
+# ==========================================================================
 langchain
 langchain-core
 langchain-community
 langchain-google-genai
 langchain-chroma
 
-# ML Lite (StatsForecast)
+# ==========================================================================
+# ML FORECASTING
+# ==========================================================================
 statsforecast
 prophet
 scikit-learn
-pandas
-numpy
 
-# Utils
+# ==========================================================================
+# CACHE (fastapi-cache2)
+# ==========================================================================
+fastapi-cache2[redis]
+
+# ==========================================================================
+# OBSERVABILITY (Prometheus)
+# ==========================================================================
+prometheus-fastapi-instrumentator
+
+# ==========================================================================
+# TIMEZONE
+# ==========================================================================
+pytz
+
+# ==========================================================================
+# SECURITY
+# ==========================================================================
 email-validator
-reportlab
-faker
 passlib[bcrypt,argon2]
 python-jose[cryptography]
 
-# Testing
+# ==========================================================================
+# UTILS
+# ==========================================================================
+reportlab
+faker
+
+# ==========================================================================
+# TESTING
+# ==========================================================================
 pytest
 pytest-asyncio
 pytest-cov
-httpxpytz
