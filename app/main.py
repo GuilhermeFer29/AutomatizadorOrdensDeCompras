@@ -42,6 +42,12 @@ LOGGER = logging.getLogger(__name__)
 
 def _get_allowed_origins() -> List[str]:
     """Obtém lista de origens permitidas para CORS."""
+    
+    # CORS_ALLOW_ALL=true libera para qualquer origem (APENAS DESENVOLVIMENTO!)
+    if os.getenv("CORS_ALLOW_ALL", "false").lower() == "true":
+        LOGGER.warning("⚠️ CORS: LIBERADO PARA TODAS AS ORIGENS (CORS_ALLOW_ALL=true)")
+        return ["*"]
+    
     origins_env = os.getenv("ALLOWED_ORIGINS", "")
     if origins_env:
         return [origin.strip() for origin in origins_env.split(",")]
@@ -143,20 +149,12 @@ def create_application() -> FastAPI:
         try:
             from prometheus_fastapi_instrumentator import Instrumentator
             
-            instrumentator = Instrumentator(
-                should_group_status_codes=True,
-                should_ignore_untemplated=True,
-                should_respect_env_var=True,
-                should_instrument_requests_inprogress=True,
-                excluded_handlers=["/health", "/metrics"],
-                inprogress_name="http_requests_inprogress",
-                inprogress_labels=True,
-            )
-            
-            instrumentator.instrument(application).expose(application, endpoint="/metrics")
+            Instrumentator().instrument(application).expose(application)
             LOGGER.info("✅ Prometheus metrics habilitadas em /metrics")
-        except ImportError:
-            LOGGER.warning("⚠️ prometheus-fastapi-instrumentator não instalado")
+        except ImportError as e:
+            LOGGER.warning(f"⚠️ prometheus-fastapi-instrumentator não instalado: {e}")
+        except Exception as e:
+            LOGGER.error(f"❌ Erro ao configurar Prometheus: {e}")
 
     # ====== TENANT MIDDLEWARE ======
     try:

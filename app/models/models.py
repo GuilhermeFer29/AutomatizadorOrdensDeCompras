@@ -71,7 +71,7 @@ class TenantMixin:
 # ============================================================================
 
 
-class Produto(SQLModel, table=True):
+class Produto(TenantMixin, SQLModel, table=True):
     """Entity representing a product in the catalogue."""
 
     __tablename__ = "produtos"
@@ -90,7 +90,7 @@ class Produto(SQLModel, table=True):
     modelos_predicao: List["ModeloPredicao"] = Relationship(back_populates="produto")
 
 
-class VendasHistoricas(SQLModel, table=True):
+class VendasHistoricas(TenantMixin, SQLModel, table=True):
     """Historical sales record captured per product and date."""
 
     __tablename__ = "vendas_historicas"
@@ -105,7 +105,7 @@ class VendasHistoricas(SQLModel, table=True):
     produto: "Produto" = Relationship(back_populates="vendas")
 
 
-class PrecosHistoricos(SQLModel, table=True):
+class PrecosHistoricos(TenantMixin, SQLModel, table=True):
     """Historical price observation for a product."""
 
     __tablename__ = "precos_historicos"
@@ -122,7 +122,7 @@ class PrecosHistoricos(SQLModel, table=True):
 
 
 # Modelo de Usuário para autenticação
-class User(SQLModel, table=True):
+class User(TenantMixin, SQLModel, table=True):
     __tablename__ = "users"
     id: Optional[int] = Field(default=None, primary_key=True)
     email: str = Field(unique=True, index=True)
@@ -131,7 +131,7 @@ class User(SQLModel, table=True):
     full_name: Optional[str] = Field(default=None)
 
 
-class ModeloPredicao(SQLModel, table=True):
+class ModeloPredicao(TenantMixin, SQLModel, table=True):
     """Metadata describing trained forecasting models for a product."""
 
     __tablename__ = "modelos_predicao"
@@ -150,7 +150,7 @@ class ModeloPredicao(SQLModel, table=True):
     produto: "Produto" = Relationship(back_populates="modelos_predicao")
 
 
-class ModeloGlobal(SQLModel, table=True):
+class ModeloGlobal(TenantMixin, SQLModel, table=True):
     """Metadata describing the aggregated catalogue forecasting model."""
 
     __tablename__ = "modelos_globais"
@@ -168,7 +168,7 @@ class ModeloGlobal(SQLModel, table=True):
     treinado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
 
 
-class Fornecedor(SQLModel, table=True):
+class Fornecedor(TenantMixin, SQLModel, table=True):
     """Entity representing a supplier."""
 
     __tablename__ = "fornecedores"
@@ -184,7 +184,7 @@ class Fornecedor(SQLModel, table=True):
     atualizado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
 
 
-class OfertaProduto(SQLModel, table=True):
+class OfertaProduto(TenantMixin, SQLModel, table=True):
     """Ofertas de produtos por fornecedores (simulação de mercado)."""
 
     __tablename__ = "ofertas_produtos"
@@ -202,7 +202,7 @@ class OfertaProduto(SQLModel, table=True):
     fornecedor: Fornecedor = Relationship()
 
 
-class OrdemDeCompra(SQLModel, table=True):
+class OrdemDeCompra(TenantMixin, SQLModel, table=True):
     __tablename__ = "ordens_de_compra"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -222,7 +222,7 @@ class OrdemDeCompra(SQLModel, table=True):
     fornecedor: Fornecedor = Relationship()
 
 
-class AuditoriaDecisao(SQLModel, table=True):
+class AuditoriaDecisao(TenantMixin, SQLModel, table=True):
     """Trilha de auditoria para decisões dos agentes."""
     
     __tablename__ = "auditoria_decisoes"
@@ -239,7 +239,7 @@ class AuditoriaDecisao(SQLModel, table=True):
     ip_origem: Optional[str] = Field(default=None)
 
 
-class Agente(SQLModel, table=True):
+class Agente(TenantMixin, SQLModel, table=True):
     __tablename__ = "agentes"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -249,7 +249,7 @@ class Agente(SQLModel, table=True):
     ultima_execucao: Optional[datetime] = Field(default=None)
 
 
-class ChatSession(SQLModel, table=True):
+class ChatSession(TenantMixin, SQLModel, table=True):
     __tablename__ = "chat_sessions"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -257,7 +257,7 @@ class ChatSession(SQLModel, table=True):
     # Poderia ter um nome, ou estar associado a um usuário
 
 
-class ChatMessage(SQLModel, table=True):
+class ChatMessage(TenantMixin, SQLModel, table=True):
     __tablename__ = "chat_messages"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -270,7 +270,7 @@ class ChatMessage(SQLModel, table=True):
     session: ChatSession = Relationship()
 
 
-class ChatContext(SQLModel, table=True):
+class ChatContext(TenantMixin, SQLModel, table=True):
     """Armazena contexto da sessão para memória entre mensagens."""
     __tablename__ = "chat_context"
 
@@ -281,7 +281,7 @@ class ChatContext(SQLModel, table=True):
     atualizado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-class ChatAction(SQLModel, table=True):
+class ChatAction(TenantMixin, SQLModel, table=True):
     """Armazena ações pendentes (botões interativos) de mensagens do chat."""
     __tablename__ = "chat_actions"
 

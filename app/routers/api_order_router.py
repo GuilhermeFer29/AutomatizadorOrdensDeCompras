@@ -1,10 +1,11 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlmodel import Session, select
 from app.core.database import get_session
 from app.services.order_service import get_orders, create_order
 from app.models.models import OrdemDeCompra
 from pydantic import BaseModel, Field
+from app.core.cache import cache_response, invalidate_dashboard_cache
 
 class OrderCreate(BaseModel):
     product: str = Field(..., min_length=1, max_length=255, description="Nome do produto")
@@ -26,6 +27,7 @@ class OrderRead(BaseModel):
 router = APIRouter(prefix="/api/orders", tags=["api-orders"])
 
 @router.get("/", response_model=list[OrderRead])
+@cache_response(namespace="orders")
 def read_orders(status: Optional[str] = None, search: Optional[str] = None, session: Session = Depends(get_session)):
     orders = get_orders(session, status, search)
     # Map models to schema manually to handle product name and date formatting
@@ -44,11 +46,22 @@ def read_orders(status: Optional[str] = None, search: Optional[str] = None, sess
     ]
 
 @router.post("/")
-def handle_create_order(order: OrderCreate, session: Session = Depends(get_session)):
-    return create_order(session, order.model_dump())
+async def handle_create_order(
+    order: OrderCreate, 
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_session)
+):
+    result = create_order(session, order.model_dump())
+    # Invalida cache do dashboard em background
+    background_tasks.add_task(invalidate_dashboard_cache)
+    return result
 
 @router.post("/{order_id}/approve", tags=["api-orders"])
-def approve_order(order_id: int, session: Session = Depends(get_session)):
+async def approve_order(
+    order_id: int, 
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_session)
+):
     """Aprova uma ordem de compra pendente."""
     order = session.get(OrdemDeCompra, order_id)
     if not order:
@@ -59,10 +72,18 @@ def approve_order(order_id: int, session: Session = Depends(get_session)):
     session.add(order)
     session.commit()
     session.refresh(order)
+    
+    # Invalida cache do dashboard em background
+    background_tasks.add_task(invalidate_dashboard_cache)
+    
     return order
 
 @router.post("/{order_id}/reject", tags=["api-orders"])
-def reject_order(order_id: int, session: Session = Depends(get_session)):
+async def reject_order(
+    order_id: int, 
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_session)
+):
     """Rejeita uma ordem de compra pendente."""
     order = session.get(OrdemDeCompra, order_id)
     if not order:
@@ -73,4 +94,8 @@ def reject_order(order_id: int, session: Session = Depends(get_session)):
     session.add(order)
     session.commit()
     session.refresh(order)
+    
+    # Invalida cache do dashboard em background
+    background_tasks.add_task(invalidate_dashboard_cache)
+    
     return order

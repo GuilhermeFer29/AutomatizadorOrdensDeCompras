@@ -76,6 +76,9 @@ def get_product_knowledge() -> Knowledge:
     """
     Retorna o objeto Knowledge configurado para o Agno Agent.
     Usa cache para garantir Singleton e evitar conflitos do ChromaDB.
+    
+    IMPORTANTE: Usa o VectorDBManager singleton para evitar conflitos
+    de múltiplas instâncias do ChromaDB.
     """
     global _knowledge_instance
     if _knowledge_instance:
@@ -89,19 +92,33 @@ def get_product_knowledge() -> Knowledge:
     embedder = GeminiEmbedder(
         id="models/text-embedding-004",
         api_key=api_key,
-        dimensions=768 # text-embedding-004 dimensão padrão
+        dimensions=768  # text-embedding-004 dimensão padrão
     )
 
-    # 2. Configurar ChromaDB
-    vector_db = ChromaDb(
-        collection="products_agno",
-        path=CHROMA_PERSIST_DIR,
-        embedder=embedder,
-        persistent_client=True
-    )
+    # 2. Usar cliente ChromaDB do singleton (evita conflito de instâncias)
+    try:
+        from app.core.vector_db import VectorDBManager
+        
+        # Obtém o cliente singleton
+        chroma_client = VectorDBManager.get_client()
+        
+        # Configura ChromaDb do Agno
+        vector_db = ChromaDb(
+            collection="products_agno",
+            embedder=embedder,
+        )
+        # Injeção manual do cliente singleton (contorna a limitação do construtor do Agno)
+        vector_db._client = chroma_client
+    except ImportError:
+        # Fallback: criar novo cliente (pode conflitar)
+        vector_db = ChromaDb(
+            collection="products_agno",
+            path=CHROMA_PERSIST_DIR,
+            embedder=embedder,
+            persistent_client=True
+        )
 
     # 3. Criar Knowledge
-    # Na versão 2.3, documentos são carregados via vector_db, a Knowledge é apenas a interface
     _knowledge_instance = Knowledge(
         vector_db=vector_db,
     )

@@ -180,7 +180,7 @@ services:
     image: prom/prometheus:v2.53.0
     restart: unless-stopped
     ports:
-      - "9090:9090"
+      - "9095:9090"
     volumes:
       - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus

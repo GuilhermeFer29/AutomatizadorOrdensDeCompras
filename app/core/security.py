@@ -93,3 +93,25 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
         raise credentials_exception
     
     return user
+
+
+def decode_jwt_token(token: str) -> dict:
+    """
+    Decodifica JWT token e retorna o payload.
+    
+    Usado pelo TenantMiddleware para extrair tenant_id.
+    
+    Args:
+        token: JWT token string
+        
+    Returns:
+        dict: Payload do token
+        
+    Raises:
+        JWTError: Se o token for inválido
+    """
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except JWTError:
+        return {}

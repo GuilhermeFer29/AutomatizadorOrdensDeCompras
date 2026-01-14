@@ -18,6 +18,7 @@ from app.core.config import DEFAULT_HORIZON_DAYS, ROOT_DIR
 from app.core.database import engine
 from app.ml.prediction import predict_prices_for_product
 from app.models.models import PrecosHistoricos, Produto
+from app.core.cache import cache_response
 
 LOGGER = structlog.get_logger(__name__)
 router = APIRouter(tags=["dashboard"])
@@ -25,6 +26,7 @@ router = APIRouter(tags=["dashboard"])
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
+@cache_response(namespace="dashboard")
 def render_dashboard(
   produto_id: Optional[int] = Query(default=None),
   busca: Optional[str] = Query(default=None, alias="q"),

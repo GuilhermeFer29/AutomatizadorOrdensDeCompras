@@ -151,7 +151,7 @@ class TenantMiddleware(BaseHTTPMiddleware):
             user_id = payload.get("sub")
             if user_id:
                 # Busca tenant do usuário no banco
-                return await self._get_tenant_from_user(int(user_id))
+                return await self._get_tenant_from_user(user_id)
             
             return None
             
@@ -159,23 +159,31 @@ class TenantMiddleware(BaseHTTPMiddleware):
             LOGGER.warning(f"Erro ao extrair tenant do JWT: {e}")
             return None
     
-    async def _get_tenant_from_user(self, user_id: int) -> Optional[UUID]:
+    async def _get_tenant_from_user(self, user_id: Any) -> Optional[UUID]:
         """
         Busca tenant_id do usuário no banco.
         
         Args:
-            user_id: ID do usuário
+            user_id: ID do usuário (pode ser int ou email string)
             
         Returns:
             UUID do tenant ou None
         """
         try:
             from app.core.database import get_sync_engine
-            from app.models.models import Usuario
+            from app.models.models import User
             
             engine = get_sync_engine()
             with Session(engine) as session:
-                user = session.get(Usuario, user_id)
+                # Tenta buscar por ID ou Email
+                if isinstance(user_id, str) and "@" in user_id:
+                    user = session.exec(select(User).where(User.email == user_id)).first()
+                else:
+                    try:
+                        user = session.get(User, int(user_id))
+                    except (ValueError, TypeError):
+                        user = session.exec(select(User).where(User.email == str(user_id))).first()
+
                 if user and hasattr(user, 'tenant_id'):
                     return user.tenant_id
             return None

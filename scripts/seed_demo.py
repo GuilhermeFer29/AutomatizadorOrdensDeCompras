@@ -23,10 +23,25 @@ from app.models.models import (
 )
 
 def clear_db(session: Session):
-    print("🏗️ Criando tabelas se não existirem...")
+    print("🗑️ Resetando esquema do banco de dados (SaaS)...")
+    SQLModel.metadata.drop_all(engine)
     SQLModel.metadata.create_all(engine)
     
-    print("🧹 Limpando banco de dados...")
+    print("🏢 Criando Tenant padrão...")
+    from app.models.models import Tenant
+    default_tenant = Tenant(
+        nome="PMI Standard", 
+        slug="standard", 
+        plano="pro",
+        ativo=True
+    )
+    session.add(default_tenant)
+    session.commit()
+    session.refresh(default_tenant)
+    return default_tenant
+
+def clear_data_only(session: Session):
+    print("🧹 Limpando dados existentes...")
     session.exec(delete(AuditoriaDecisao))
     session.exec(delete(OrdemDeCompra))
     session.exec(delete(OfertaProduto))
@@ -50,16 +65,29 @@ def seed_agentes(session: Session):
 
 def seed_demo():
     with Session(engine) as session:
-        clear_db(session)
-        seed_agentes(session)
+        tenant = clear_db(session)
+        tenant_id = tenant.id
+        
+        print(f"🔑 Usando Tenant ID: {tenant_id}")
+        
+        # Injetar tenant_id nos agentes
+        print("🤖 Populando agentes...")
+        agentes = [
+            Agente(nome="Analisador de Demanda", descricao="Analisa histórico de vendas e prevê necessidade de estoque.", status="active", tenant_id=tenant_id),
+            Agente(nome="Otimizador de Compras", descricao="Compara fornecedores e recomenda a melhor opção de compra.", status="active", tenant_id=tenant_id),
+            Agente(nome="Auditores de Risco", descricao="Verifica saúde do fornecedor e prazos de entrega.", status="inactive", tenant_id=tenant_id)
+        ]
+        for a in agentes:
+            session.add(a)
+        session.commit()
 
         print("🏭 Criando fornecedores...")
         fornecedores = [
-            Fornecedor(nome="Metalúrgica Central", cep="01001-000", confiabilidade=0.98, prazo_entrega_dias=3),
-            Fornecedor(nome="Elétrica Industrial Ltda", cep="04578-000", confiabilidade=0.88, prazo_entrega_dias=5),
-            Fornecedor(nome="Química do Brasil", cep="13083-000", confiabilidade=0.92, prazo_entrega_dias=10),
-            Fornecedor(nome="Distribuidora Express", cep="80215-000", confiabilidade=0.75, prazo_entrega_dias=2),
-            Fornecedor(nome="Importadora Técnica", cep="20020-000", confiabilidade=0.85, prazo_entrega_dias=30)
+            Fornecedor(nome="Metalúrgica Central", cep="01001-000", confiabilidade=0.98, prazo_entrega_dias=3, tenant_id=tenant_id),
+            Fornecedor(nome="Elétrica Industrial Ltda", cep="04578-000", confiabilidade=0.88, prazo_entrega_dias=5, tenant_id=tenant_id),
+            Fornecedor(nome="Química do Brasil", cep="13083-000", confiabilidade=0.92, prazo_entrega_dias=10, tenant_id=tenant_id),
+            Fornecedor(nome="Distribuidora Express", cep="80215-000", confiabilidade=0.75, prazo_entrega_dias=2, tenant_id=tenant_id),
+            Fornecedor(nome="Importadora Técnica", cep="20020-000", confiabilidade=0.85, prazo_entrega_dias=30, tenant_id=tenant_id)
         ]
         for f in fornecedores:
             session.add(f)
@@ -86,7 +114,8 @@ def seed_demo():
                 sku=item["sku"],
                 categoria=item["cat"],
                 estoque_atual=item["estoque"],
-                estoque_minimo=item["min"]
+                estoque_minimo=item["min"],
+                tenant_id=tenant_id
             )
             session.add(p)
             produtos_criados.append((p, Decimal(str(item["preco"]))))
@@ -102,7 +131,8 @@ def seed_demo():
                     produto_id=p.id,
                     fornecedor_id=f.id,
                     preco_ofertado=preco_base * variacao,
-                    estoque_disponivel=random.randint(50, 1000)
+                    estoque_disponivel=random.randint(50, 1000),
+                    tenant_id=tenant_id
                 )
                 session.add(oferta)
 
@@ -117,7 +147,8 @@ def seed_demo():
                         produto_id=p.id,
                         data_venda=data,
                         quantidade=venda_qtd,
-                        receita=Decimal(venda_qtd) * preco_base
+                        receita=Decimal(venda_qtd) * preco_base,
+                        tenant_id=tenant_id
                     )
                     session.add(venda)
                 
@@ -129,7 +160,8 @@ def seed_demo():
                         fornecedor=random.choice(fornecedores).nome,
                         preco=preco_base * variacao_hist,
                         coletado_em=data,
-                        is_synthetic=True
+                        is_synthetic=True,
+                        tenant_id=tenant_id
                     )
                     session.add(phost)
 
@@ -150,7 +182,8 @@ def seed_demo():
                 origem=random.choice(["Manual", "Automática"]),
                 data_criacao=data_o,
                 data_aprovacao=data_o + timedelta(hours=2) if status == "approved" else None,
-                justificativa="Reposição de estoque baseada em demanda histórica." if status != "pending" else None
+                justificativa="Reposição de estoque baseada em demanda histórica." if status != "pending" else None,
+                tenant_id=tenant_id
             )
             session.add(ordem)
 
@@ -163,7 +196,8 @@ def seed_demo():
                     decisao='{"status": "recommended", "savings_percent": 12.5}',
                     raciocinio=f"Recomendado compra de {p.nome} do fornecedor {f.nome} devido ao melhor preço e prazo de entrega.",
                     contexto=f"Estoque atual ({p.estoque_atual}) abaixo do mínimo ({p.estoque_minimo}).",
-                    data_decisao=data_o
+                    data_decisao=data_o,
+                    tenant_id=tenant_id
                 )
                 session.add(audit)
 
