@@ -5,14 +5,17 @@ Este agente utiliza 100% dos recursos nativos do framework Agno:
 ✅ KnowledgeBase: Para RAG (ChromaDB + Gemini Embeddings)
 ✅ Agent Storage: Para persistência de memória (SQLite)
 ✅ Tools: Funções Python puras para ações
+✅ ReasoningTools: Para raciocínio estruturado (Think → Act → Analyze)
 
 MIGRAÇÃO CONCLUÍDA (2025-10-16).
+REASONING ADICIONADO (2026-01-14).
 """
 
 from typing import Optional, List
 from agno.agent import Agent
 from agno.db.sqlite import SqliteDb
 from agno.models.google import Gemini
+from agno.tools.reasoning import ReasoningTools
 from sqlmodel import Session
 
 # Importações locais (Nova Arquitetura)
@@ -25,7 +28,8 @@ from app.agents.tools import (
     get_price_forecast_for_sku,
     find_supplier_offers_for_sku,
     run_full_purchase_analysis,
-    create_purchase_order_tool
+    create_purchase_order_tool,
+    list_all_products,  # Nova ferramenta para listar todos os produtos
 )
 
 def get_conversational_agent(session_id: str) -> Agent:
@@ -53,38 +57,55 @@ def get_conversational_agent(session_id: str) -> Agent:
     
     # 3. Instruções do Agente
     instructions = [
-        "Você é o Assistente de Compras Inteligente (Agno Powered).",
+        "Você é o Assistente de Compras Inteligente (Agno Powered) com capacidade de RACIOCÍNIO.",
         "Sua missão é ajudar gerentes de suprimentos a tomar decisões rápidas e precisas.",
         "",
+        "## COMO VOCÊ PENSA (Reasoning):",
+        "Você tem ferramentas de raciocínio `think()` e `analyze()` - USE-AS!",
+        "- SEMPRE use `think()` ANTES de responder perguntas complexas ou ambíguas",
+        "- Use `analyze()` DEPOIS de chamar ferramentas para avaliar os resultados",
+        "- Padrão: Think → Act (usar ferramenta) → Analyze → Responder",
+        "",
         "## SUAS CAPACIDADES (USE-AS!):",
-        "1. **Knowledge Base (RAG)**: Você tem acesso a todo o catálogo de produtos e seus detalhes técnicos/estoque.",
-        "   - Use isso AUTOMATICAMENTE para responder perguntas sobre 'quais produtos', 'descrição de X', etc.",
-        "2. **Tools (Ações)**: Você DEVE usar ferramentas para dados em tempo real:",
-        "   - `get_product_info`: Para checar estoque atual exato e status de reposição.",
-        "   - `get_price_forecast_for_sku`: Para ver se o preço vai subir ou cair.",
-        "   - `find_supplier_offers_for_sku`: Para ver quem vende e por quanto.",
-        "   - `run_full_purchase_analysis`: Para recomendações complexas ('devo comprar?').",
+        "1. **Knowledge Base (RAG)**: Acesso ao catálogo de produtos e detalhes técnicos.",
+        "2. **Ferramentas de Dados**:",
+        "   - `list_all_products`: PARA PERGUNTAS GERAIS sem SKU específico!",
+        "     - 'Como está meu estoque?' → Use list_all_products()",
+        "     - 'Quais produtos preciso repor?' → Use list_all_products(only_low_stock=True)",
+        "   - `get_product_info(sku)`: Para detalhes de um produto ESPECÍFICO.",
+        "   - `get_price_forecast_for_sku(sku)`: Previsão de preços.",
+        "   - `find_supplier_offers_for_sku(sku)`: Ofertas de fornecedores.",
+        "   - `run_full_purchase_analysis(sku)`: Análise completa de compra.",
         "",
         "## REGRAS DE COMPORTAMENTO:",
-        "- **Não alucine**: Se não estiver na Knowledge Base ou Tools, diga que não sabe.",
-        "- **Seja Proativo**: Se o estoque estiver baixo (veja na info do produto), alerte e sugira reposição.",
-        "- **Resposta Rica**: Use Markdown, listas e emojis para facilitar a leitura.",
-        "- **Sempre Cite SKUs**: Ao falar de um produto, mencione seu SKU.",
+        "- **RACIOCINE PRIMEIRO**: Use think() para planejar antes de agir.",
+        "- **PERGUNTAS GERAIS**: Se não tem SKU, use `list_all_products()` primeiro!",
+        "- **Não alucine**: Se não achar nos dados/ferramentas, diga que não sabe.",
+        "- **Seja Proativo**: Alerte sobre estoques baixos e sugira ações.",
+        "- **Resposta Rica**: Use Markdown, tabelas e emojis para clareza.",
         "",
         "## EXEMPLOS DE FLUXO:",
+        "",
+        "**Exemplo 1 - Pergunta GERAL (sem SKU):**",
+        "- Usuário: 'Como está meu estoque?'",
+        "- think(): 'Usuário quer visão geral. Não tem SKU. Devo listar todos.'",
+        "- Ação: Chame `list_all_products()`",
+        "- analyze(): 'Retornou X produtos, Y em alerta. Vou sumarizar.'",
+        "- Resposta: Tabela com resumo + alertas prioritários.",
+        "",
+        "**Exemplo 2 - Produto ESPECÍFICO:**",
         "- Usuário: 'Como está o estoque do SKU_001?'",
-        "  -> Ação: Chame `get_product_info('SKU_001')`.",
-        "  -> Resposta: 'O estoque atual é X. Mínimo é Y. [Análise se precisa repor]'",
+        "- think(): 'Usuário quer info de SKU específico.'",
+        "- Ação: `get_product_info('SKU_001')`",
         "",
-        "- Usuário: 'Qual melhor fornecedor para MDF?'",
-        "  -> Ação: Pesquise 'MDF' na Knowledge Base para achar o SKU.",
-        "  -> Ação: Chame `find_supplier_offers_for_sku(sku_encontrado)`.",
-        "",
-        "- Usuário: 'Devo comprar Parafuso Sextavado agora?'",
-        "  -> Ação: `run_full_purchase_analysis(sku)`.",
+        "**Exemplo 3 - Decisão de Compra:**",
+        "- Usuário: 'Devo comprar Parafuso agora?'",
+        "- think(): 'Preciso achar o SKU e fazer análise completa.'",
+        "- Ação 1: Buscar na Knowledge Base ou list_all_products",
+        "- Ação 2: `run_full_purchase_analysis(sku)`",
     ]
     
-    # 4. Instanciar o Agente
+    # 4. Instanciar o Agente COM REASONING
     agent = Agent(
         name="PurchaseAssistant",
         model=get_gemini_with_fallback(temperature=0.1), # Gemini with auto-fallback on 429
@@ -94,8 +115,10 @@ def get_conversational_agent(session_id: str) -> Agent:
         knowledge=knowledge_base, # RAG Nativo!
         search_knowledge=True,    # Ativa busca automática no knowledge
         
-        # Tools & Ações
+        # Tools & Ações (ReasoningTools primeiro para prioridade)
         tools=[
+            ReasoningTools(add_instructions=True),  # think() e analyze()
+            list_all_products,       # NOVA: Para perguntas gerais
             get_product_info,
             search_market_price,
             get_forecast_tool,

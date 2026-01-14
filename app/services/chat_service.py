@@ -116,30 +116,17 @@ def handle_natural_conversation(session: Session, session_id: int, user_question
     try:
         print(f"🤖 Agente Conversacional processando: '{user_question}'")
         
-        # Busca histórico de mensagens da sessão (para contexto)
-        history = get_chat_history(session, session_id)
+        # NOTA: O histórico de conversa é gerenciado automaticamente pelo Agno
+        # através de add_history_to_context=True e SqliteDb storage.
+        # NÃO devemos injetar histórico manualmente no prompt, pois isso causa
+        # erro na API do Gemini: "function call turn comes immediately after a user turn"
+        # O Agno já mantém o histórico formatado corretamente para o Gemini.
         
-        # Formata histórico para o agente (apenas últimas 5 mensagens para não sobrecarregar)
-        recent_history = history[-10:] if len(history) > 10 else history
-        context_text = "\n".join([
-            f"{msg.sender.upper()}: {msg.content[:200]}..." if len(msg.content) > 200 else f"{msg.sender.upper()}: {msg.content}"
-            for msg in recent_history[:-1]  # Exclui a última (que é a pergunta atual)
-        ])
-        
-        # Monta mensagem com contexto
-        if context_text:
-            full_question = f"""HISTÓRICO DA CONVERSA (para referência):
-{context_text}
-
-PERGUNTA ATUAL DO USUÁRIO:
-{user_question}
-
-Responda a pergunta atual considerando o contexto da conversa. Se o usuário se referir a algo mencionado antes, use o histórico para entender."""
-        else:
-            full_question = user_question
-        
-        # Cria o agente conversacional com contexto da sessão
+        # Cria o agente conversacional com contexto da sessão (histórico gerenciado pelo Agno)
         agent = get_conversational_agent(session_id=str(session_id))
+        
+        # Usa apenas a pergunta do usuário - o Agno adiciona o histórico automaticamente
+        full_question = user_question
         
         # Executa o agente com contexto (ele decide automaticamente se delega ou não)
         print(f"🔧 DEBUG - Pergunta completa enviada ao agente:")
@@ -155,34 +142,73 @@ Responda a pergunta atual considerando o contexto da conversa. Se o usuário se 
                 {"type": "error", "error": "agent_returned_none"}
             )
         
-        # DEBUG: Verifica se ferramentas foram usadas
+        # DEBUG: Verifica detalhes da resposta
+        print(f"🔧 DEBUG - Tipo response: {type(response)}")
+        print(f"🔧 DEBUG - response.content: '{response.content if hasattr(response, 'content') else 'N/A'}' (tipo: {type(response.content) if hasattr(response, 'content') else 'N/A'})")
+        
+        # Verifica se há tools executadas
+        if hasattr(response, 'tools') and response.tools:
+            print(f"🔧 DEBUG - Tools executadas: {len(response.tools)}")
+            for t in response.tools:
+                print(f"   - {getattr(t, 'tool_name', 'unknown')}: {str(getattr(t, 'result', ''))[:100]}")
+        
         if hasattr(response, 'messages') and response.messages:
             print(f"🔧 DEBUG - Mensagens do agente: {len(response.messages)}")
             for idx, msg in enumerate(response.messages):
+                msg_role = getattr(msg, 'role', 'unknown')
+                msg_content = getattr(msg, 'content', None)
+                msg_content_preview = str(msg_content)[:200] if msg_content else 'None'
+                print(f"   [{idx}] role={msg_role}, content={msg_content_preview}")
+                
+                # Verifica tool_calls
                 if hasattr(msg, 'tool_calls') and msg.tool_calls:
-                    print(f"   Mensagem {idx}: {len(msg.tool_calls)} tool calls")
+                    print(f"       🔧 tool_calls: {len(msg.tool_calls)}")
                     for tc in msg.tool_calls:
-                        # tool_calls pode ser dict ou objeto
-                        if isinstance(tc, dict):
-                            tool_name = tc.get('function', {}).get('name', 'unknown')
-                            tool_args = str(tc.get('function', {}).get('arguments', ''))[:100]
-                        else:
-                            tool_name = getattr(tc.function, 'name', 'unknown')
-                            tool_args = str(getattr(tc.function, 'arguments', ''))[:100]
-                        print(f"      - {tool_name}({tool_args}...)")
+                        if hasattr(tc, 'function'):
+                            print(f"          - {getattr(tc.function, 'name', 'unknown')}")
+                        elif isinstance(tc, dict):
+                            print(f"          - {tc.get('function', {}).get('name', 'unknown')}")
         
-        # Extrai conteúdo da resposta
-        if hasattr(response, 'content') and response.content:
-            agent_response = response.content
-        elif hasattr(response, 'messages') and response.messages:
-            # Tenta extrair do último message
-            last_msg = response.messages[-1]
-            if hasattr(last_msg, 'content') and last_msg.content:
-                agent_response = last_msg.content
-            else:
-                agent_response = str(response)
-        else:
-            agent_response = str(response) if response else "Não foi possível processar a resposta."
+        # Extrai conteúdo da resposta (Agno RunOutput)
+        agent_response = None
+        
+        # MÉTODO 1: get_content_as_string() - método oficial do Agno (mais confiável)
+        if hasattr(response, 'get_content_as_string'):
+            try:
+                content_str = response.get_content_as_string()
+                if content_str and isinstance(content_str, str) and len(content_str.strip()) > 0:
+                    agent_response = content_str
+                    print(f"✅ DEBUG - Resposta extraída via get_content_as_string()")
+            except Exception as e:
+                print(f"⚠️ DEBUG - get_content_as_string() falhou: {e}")
+        
+        # MÉTODO 2: response.content direto
+        if not agent_response:
+            if hasattr(response, 'content') and response.content and isinstance(response.content, str) and len(response.content.strip()) > 0:
+                agent_response = response.content
+                print(f"✅ DEBUG - Resposta extraída de response.content")
+        
+        # MÉTODO 3: Busca nas mensagens (model/assistant com content texto)
+        if not agent_response and hasattr(response, 'messages') and response.messages:
+            for msg in reversed(response.messages):
+                msg_role = getattr(msg, 'role', None)
+                # Converte enum para string se necessário
+                if hasattr(msg_role, 'value'):
+                    msg_role = msg_role.value
+                msg_role_str = str(msg_role).lower() if msg_role else ''
+                
+                msg_content = getattr(msg, 'content', None)
+                
+                # Assistant ou model message com conteúdo texto
+                if msg_role_str in ['assistant', 'model'] and msg_content and isinstance(msg_content, str) and len(msg_content.strip()) > 0:
+                    agent_response = msg_content
+                    print(f"✅ DEBUG - Resposta extraída de messages (role={msg_role_str})")
+                    break
+        
+        # MÉTODO 4: Fallback com mensagem padrão
+        if not agent_response:
+            agent_response = "Desculpe, não consegui formular uma resposta adequada. Por favor, reformule sua pergunta ou seja mais específico sobre o que deseja saber."
+            print(f"⚠️ DEBUG - Usando resposta padrão (nenhum método retornou conteúdo)")
         
         print(f"✅ Agente respondeu: {agent_response[:100]}...")
         print(f"🔧 DEBUG - Resposta completa tem {len(agent_response)} chars")

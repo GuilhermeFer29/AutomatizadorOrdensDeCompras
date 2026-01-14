@@ -15,7 +15,7 @@ from decimal import Decimal
 from typing import Dict, List, Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, Text
+from sqlalchemy import Column, ForeignKey, Integer, Text
 from sqlalchemy.dialects.mysql import JSON as MySQLJSON
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -261,7 +261,7 @@ class ChatMessage(TenantMixin, SQLModel, table=True):
     __tablename__ = "chat_messages"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    session_id: int = Field(foreign_key="chat_sessions.id")
+    session_id: int = Field(sa_column=Column(Integer, ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False))
     sender: str  # 'human', 'agent', 'system'
     content: str = Field(sa_column=Column(Text))  # TEXT para suportar respostas longas
     metadata_json: Optional[str] = Field(default=None, sa_column=Column(Text))  # TEXT para metadados grandes
@@ -275,7 +275,7 @@ class ChatContext(TenantMixin, SQLModel, table=True):
     __tablename__ = "chat_context"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    session_id: int = Field(foreign_key="chat_sessions.id")
+    session_id: int = Field(sa_column=Column(Integer, ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False))
     key: str  # ex: 'current_sku', 'last_intent', 'mentioned_products'
     value: str  # Valor em string (pode ser JSON serializado)
     atualizado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -286,7 +286,7 @@ class ChatAction(TenantMixin, SQLModel, table=True):
     __tablename__ = "chat_actions"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    message_id: int = Field(foreign_key="chat_messages.id")
+    message_id: int = Field(sa_column=Column(Integer, ForeignKey("chat_messages.id", ondelete="CASCADE"), nullable=False))
     action_type: str  # 'approve_purchase', 'view_details', 'adjust_quantity', etc
     action_data: str  # JSON com dados da ação
     status: str = Field(default="pending")  # pending, completed, cancelled

@@ -281,6 +281,101 @@ def run_full_purchase_analysis(sku: str, reason: str = "reposição de estoque")
     except Exception as e:
         return f"Erro na análise: {str(e)}"
 
+
+def list_all_products(category: str = None, only_low_stock: bool = False) -> str:
+    """
+    Lista todos os produtos do catálogo com informações de estoque e status.
+    
+    Use esta ferramenta quando o usuário perguntar sobre:
+    - "Como está meu estoque?" (sem SKU específico)
+    - "Quais produtos precisam de reposição?"
+    - "Liste todos os produtos"
+    - "Resumo geral do inventário"
+    
+    Args:
+        category: Filtrar por categoria (opcional). Ex: 'Eletrônicos', 'Ferramentas'
+        only_low_stock: Se True, retorna apenas produtos com estoque baixo/crítico
+    
+    Returns:
+        str: JSON com lista de produtos, totais e alertas
+    """
+    try:
+        with Session(engine) as session:
+            query = select(Produto)
+            if category:
+                query = query.where(Produto.categoria == category)
+            
+            produtos = session.exec(query).all()
+            
+            if not produtos:
+                return json.dumps({
+                    "total_produtos": 0,
+                    "mensagem": "Nenhum produto encontrado no catálogo."
+                }, ensure_ascii=False)
+            
+            produtos_list = []
+            alertas = []
+            total_valor_estoque = 0.0
+            
+            for p in produtos:
+                status = "OK"
+                if p.estoque_atual <= 0:
+                    status = "SEM_ESTOQUE"
+                elif p.estoque_atual <= p.estoque_minimo:
+                    status = "ALERTA_BAIXO"
+                elif p.estoque_atual <= p.estoque_minimo * 1.5:
+                    status = "ATENÇÃO"
+                
+                # Filtra se only_low_stock
+                if only_low_stock and status == "OK":
+                    continue
+                
+                preco_atual = float(p.precos[0].preco) if p.precos else 0.0
+                valor_estoque = preco_atual * p.estoque_atual
+                total_valor_estoque += valor_estoque
+                
+                produto_info = {
+                    "sku": p.sku,
+                    "nome": p.nome,
+                    "categoria": p.categoria or "Sem categoria",
+                    "estoque_atual": p.estoque_atual,
+                    "estoque_minimo": p.estoque_minimo,
+                    "preco_unitario": preco_atual,
+                    "valor_em_estoque": round(valor_estoque, 2),
+                    "status": status
+                }
+                produtos_list.append(produto_info)
+                
+                if status in ["SEM_ESTOQUE", "ALERTA_BAIXO"]:
+                    alertas.append({
+                        "sku": p.sku,
+                        "nome": p.nome,
+                        "status": status,
+                        "estoque_atual": p.estoque_atual,
+                        "estoque_minimo": p.estoque_minimo
+                    })
+            
+            # Resumo
+            total_ok = len([p for p in produtos_list if p["status"] == "OK"])
+            total_alerta = len([p for p in produtos_list if p["status"] in ["ALERTA_BAIXO", "ATENÇÃO"]])
+            total_critico = len([p for p in produtos_list if p["status"] == "SEM_ESTOQUE"])
+            
+            return json.dumps({
+                "total_produtos": len(produtos_list),
+                "resumo": {
+                    "estoque_ok": total_ok,
+                    "estoque_alerta": total_alerta,
+                    "estoque_critico": total_critico,
+                    "valor_total_estoque": round(total_valor_estoque, 2)
+                },
+                "alertas_prioritarios": alertas[:5],  # Top 5 alertas
+                "produtos": produtos_list
+            }, ensure_ascii=False)
+            
+    except Exception as e:
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
+
+
 def create_purchase_order_tool(sku: str, quantity: int, price_per_unit: float, supplier: str = "Agente de IA") -> str:
     """
     Cria uma ordem de compra no sistema.
