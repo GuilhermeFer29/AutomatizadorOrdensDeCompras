@@ -147,8 +147,16 @@ Responda a pergunta atual considerando o contexto da conversa. Se o usuário se 
         
         response = agent.run(full_question)
         
+        # Verifica se resposta é válida
+        if response is None:
+            print("❌ Agente retornou None - possível erro na API")
+            return (
+                "Desculpe, houve um erro ao processar sua pergunta. Por favor, tente novamente ou reformule a pergunta de forma mais simples.",
+                {"type": "error", "error": "agent_returned_none"}
+            )
+        
         # DEBUG: Verifica se ferramentas foram usadas
-        if hasattr(response, 'messages'):
+        if hasattr(response, 'messages') and response.messages:
             print(f"🔧 DEBUG - Mensagens do agente: {len(response.messages)}")
             for idx, msg in enumerate(response.messages):
                 if hasattr(msg, 'tool_calls') and msg.tool_calls:
@@ -164,10 +172,17 @@ Responda a pergunta atual considerando o contexto da conversa. Se o usuário se 
                         print(f"      - {tool_name}({tool_args}...)")
         
         # Extrai conteúdo da resposta
-        if hasattr(response, 'content'):
+        if hasattr(response, 'content') and response.content:
             agent_response = response.content
+        elif hasattr(response, 'messages') and response.messages:
+            # Tenta extrair do último message
+            last_msg = response.messages[-1]
+            if hasattr(last_msg, 'content') and last_msg.content:
+                agent_response = last_msg.content
+            else:
+                agent_response = str(response)
         else:
-            agent_response = str(response)
+            agent_response = str(response) if response else "Não foi possível processar a resposta."
         
         print(f"✅ Agente respondeu: {agent_response[:100]}...")
         print(f"🔧 DEBUG - Resposta completa tem {len(agent_response)} chars")
