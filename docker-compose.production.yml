@@ -1,0 +1,373 @@
+# ============================================================================
+# DOCKER COMPOSE - SaaS Multi-Tenant Production Stack
+# ============================================================================
+# 
+# ARQUITETURA:
+# - Frontend: React/Vite + Nginx
+# - API: FastAPI (100% Async)
+# - Worker: Celery + RabbitMQ
+# - Database: MySQL 8.0
+# - Cache: Redis (Result Backend + Cache)
+# - Message Broker: RabbitMQ (Celery Broker)
+# - Observability: Prometheus + Grafana
+#
+# NETWORKING:
+# - Todos os serviços usam nomes DNS do Docker (não localhost!)
+# - Network isolada "pmi-network" para comunicação interna
+#
+# REFERÊNCIAS:
+# - Celery + RabbitMQ: https://docs.celeryq.dev/en/stable/getting-started/backends-and-brokers/rabbitmq.html
+# - Docker Compose Networking: https://docs.docker.com/compose/networking/
+#
+# Autor: Sistema PMI | Atualizado: 2026-01-14
+# ============================================================================
+
+services:
+  # ==========================================================================
+  # FRONTEND (React + Nginx)
+  # ==========================================================================
+  frontend:
+    build:
+      context: ./FrontEnd
+      dockerfile: Dockerfile
+    image: pmi-frontend:latest
+    container_name: pmi-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - pmi-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ==========================================================================
+  # API (FastAPI - 100% Async)
+  # ==========================================================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: pmi-api:latest
+    container_name: pmi-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # ====== DATABASE (Async Driver) ======
+      # Conforme docs SQLAlchemy Async: https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html
+      DATABASE_URL: mysql+aiomysql://${MYSQL_USER}:${MYSQL_PASSWORD}@db:3306/${MYSQL_DATABASE}
+      ALLOW_DEFAULT_DB: "false"
+      
+      # ====== CELERY (RabbitMQ Broker) ======
+      # Conforme docs Celery: https://docs.celeryq.dev/en/stable/getting-started/backends-and-brokers/rabbitmq.html
+      CELERY_BROKER_URL: amqp://${RABBITMQ_DEFAULT_USER:-pmi}:${RABBITMQ_DEFAULT_PASS:-pmi_secret}@rabbitmq:5672/${RABBITMQ_DEFAULT_VHOST:-pmi}
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      
+      # ====== CACHE ======
+      CACHE_REDIS_URL: redis://redis:6379/1
+      
+      # ====== CHROMA (Vector DB) ======
+      CHROMA_PERSIST_DIRECTORY: /data/chroma
+      
+      # ====== OBSERVABILITY ======
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
+      
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Conforme docs FastAPI Deployment
+    command: >
+      uvicorn app.main:app 
+      --host 0.0.0.0 
+      --port 8000 
+      --workers 4
+      --loop uvloop
+      --http httptools
+      --access-log
+    volumes:
+      - ./app:/app/app:ro
+      - ./scripts:/app/scripts:ro
+      - ./data:/app/data
+      - chroma_db_data:/data/chroma
+      - ./models:/app/models
+    networks:
+      - pmi-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ==========================================================================
+  # CELERY WORKER (Background Tasks)
+  # ==========================================================================
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: pmi-api:latest
+    container_name: pmi-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # ====== DATABASE ======
+      DATABASE_URL: mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}@db:3306/${MYSQL_DATABASE}
+      
+      # ====== CELERY ======
+      # Conforme docs Celery + RabbitMQ
+      CELERY_BROKER_URL: amqp://${RABBITMQ_DEFAULT_USER:-pmi}:${RABBITMQ_DEFAULT_PASS:-pmi_secret}@rabbitmq:5672/${RABBITMQ_DEFAULT_VHOST:-pmi}
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      
+      # ====== ML ======
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    # Conforme docs Celery: https://docs.celeryq.dev/en/stable/userguide/workers.html
+    command: >
+      celery -A app.core.celery_app.celery_app worker 
+      --loglevel=info
+      --concurrency=4
+      --queues=default,ml,agents
+      --hostname=worker@%h
+    volumes:
+      - ./app:/app/app:ro
+      - ./scripts:/app/scripts:ro
+      - ./data:/app/data
+      - chroma_db_data:/data/chroma
+      - ./models:/app/models
+    networks:
+      - pmi-network
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # ==========================================================================
+  # CELERY BEAT (Scheduler)
+  # ==========================================================================
+  beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: pmi-api:latest
+    container_name: pmi-beat
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}@db:3306/${MYSQL_DATABASE}
+      CELERY_BROKER_URL: amqp://${RABBITMQ_DEFAULT_USER:-pmi}:${RABBITMQ_DEFAULT_PASS:-pmi_secret}@rabbitmq:5672/${RABBITMQ_DEFAULT_VHOST:-pmi}
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      worker:
+        condition: service_started
+    command: celery -A app.core.celery_app.celery_app beat --loglevel=info
+    volumes:
+      - ./app:/app/app:ro
+      - ./data:/app/data
+      - celerybeat_data:/app/celerybeat
+    networks:
+      - pmi-network
+
+  # ==========================================================================
+  # MYSQL DATABASE
+  # ==========================================================================
+  db:
+    image: mysql:8.0
+    container_name: pmi-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    # Configurações de produção
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --innodb-buffer-pool-size=256M
+      --max-connections=200
+      --host-cache-size=0
+    networks:
+      - pmi-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ==========================================================================
+  # RABBITMQ (Message Broker - Celery)
+  # ==========================================================================
+  # Conforme docs Celery + RabbitMQ:
+  # https://docs.celeryq.dev/en/stable/getting-started/backends-and-brokers/rabbitmq.html
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: pmi-rabbitmq
+    restart: unless-stopped
+    hostname: pmi-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-pmi}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-pmi_secret}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_DEFAULT_VHOST:-pmi}
+      # Performance tuning
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit disk_free_limit 536870912"
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - pmi-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ==========================================================================
+  # REDIS (Cache + Celery Result Backend)
+  # ==========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: pmi-redis
+    restart: unless-stopped
+    # Configurações de produção
+    command: >
+      redis-server 
+      --appendonly yes 
+      --maxmemory 512mb 
+      --maxmemory-policy allkeys-lru
+      --save 60 1000
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - pmi-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ==========================================================================
+  # PROMETHEUS (Métricas)
+  # ==========================================================================
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: pmi-prometheus
+    restart: unless-stopped
+    ports:
+      - "9095:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    networks:
+      - pmi-network
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # ==========================================================================
+  # GRAFANA (Dashboards)
+  # ==========================================================================
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: pmi-grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s:%(http_port)s/grafana"
+      GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - pmi-network
+    depends_on:
+      - prometheus
+
+# ==========================================================================
+# NETWORKS
+# ==========================================================================
+# Conforme docs Docker Compose Networking:
+# https://docs.docker.com/compose/networking/
+networks:
+  pmi-network:
+    driver: bridge
+    name: pmi-network
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.28.0.0/16
+
+# ==========================================================================
+# VOLUMES
+# ==========================================================================
+volumes:
+  mysql_data:
+    name: pmi-mysql-data
+  chroma_db_data:
+    name: pmi-chroma-data
+  rabbitmq_data:
+    name: pmi-rabbitmq-data
+  redis_data:
+    name: pmi-redis-data
+  prometheus_data:
+    name: pmi-prometheus-data
+  grafana_data:
+    name: pmi-grafana-data
+  celerybeat_data:
+    name: pmi-celerybeat-data

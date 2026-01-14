@@ -125,6 +125,11 @@ def handle_natural_conversation(session: Session, session_id: int, user_question
         # Cria o agente conversacional com contexto da sessão (histórico gerenciado pelo Agno)
         agent = get_conversational_agent(session_id=str(session_id))
         
+        # DEBUG: Mostra ferramentas registradas no agente
+        if hasattr(agent, 'tools') and agent.tools:
+            tool_names = [getattr(t, 'name', str(t)[:30]) for t in agent.tools]
+            print(f"🔧 DEBUG - Ferramentas do agente: {tool_names}")
+        
         # Usa apenas a pergunta do usuário - o Agno adiciona o histórico automaticamente
         full_question = user_question
         
@@ -141,6 +146,14 @@ def handle_natural_conversation(session: Session, session_id: int, user_question
                 "Desculpe, houve um erro ao processar sua pergunta. Por favor, tente novamente ou reformule a pergunta de forma mais simples.",
                 {"type": "error", "error": "agent_returned_none"}
             )
+        
+        # DEBUG: Verifica status da resposta
+        if hasattr(response, 'status'):
+            print(f"🔧 DEBUG - Status da resposta: {response.status}")
+        if hasattr(response, 'is_paused') and response.is_paused:
+            print(f"⚠️ DEBUG - Resposta está PAUSADA (aguardando confirmação?)")
+        if hasattr(response, 'is_cancelled') and response.is_cancelled:
+            print(f"⚠️ DEBUG - Resposta foi CANCELADA")
         
         # DEBUG: Verifica detalhes da resposta
         print(f"🔧 DEBUG - Tipo response: {type(response)}")
