@@ -1,1159 +1,1192 @@
-# 📚 DOCUMENTAÇÃO COMPLETA DO PROJETO
+# 📚 DOCUMENTAÇÃO TÉCNICA END-TO-END
 
-## 🎯 Automação Inteligente de Ordens de Compra para PMI
+## Sistema de Automação Inteligente de Ordens de Compra para PMI
 
-**Sistema completo de IA multi-agente para análise e recomendação inteligente de compras industriais.**
-
----
-
-## 📋 Índice
-
-1. [Visão Geral](#visão-geral)
-2. [Arquitetura do Sistema](#arquitetura-do-sistema)
-3. [Stack Tecnológico](#stack-tecnológico)
-4. [Estrutura do Projeto](#estrutura-do-projeto)
-5. [Backend (API FastAPI)](#backend-api-fastapi)
-6. [Frontend (React + Vite)](#frontend-react--vite)
-7. [Sistema Multi-Agente](#sistema-multi-agente)
-8. [Machine Learning](#machine-learning)
-9. [RAG (Retrieval-Augmented Generation)](#rag-retrieval-augmented-generation)
-10. [Banco de Dados](#banco-de-dados)
-11. [Configuração e Instalação](#configuração-e-instalação)
-12. [API Endpoints](#api-endpoints)
-13. [Fluxos de Trabalho](#fluxos-de-trabalho)
-14. [Scripts Utilitários](#scripts-utilitários)
-15. [Testes](#testes)
-16. [Deploy com Docker](#deploy-com-docker)
-17. [Variáveis de Ambiente](#variáveis-de-ambiente)
-18. [Troubleshooting](#troubleshooting)
-19. [**Funcionalidades Recentes (v1.1.0)**](#funcionalidades-recentes-v110)
+**Versão:** 1.2.0 | **Data:** 14/01/2026 | **Status:** ✅ Produção
 
 ---
 
-## 🎯 Visão Geral
+# 📋 ÍNDICE COMPLETO
 
-### Objetivo do Projeto
-
-Este sistema foi desenvolvido para automatizar e otimizar o processo de tomada de decisão em compras industriais para pequenas e médias indústrias (PMI). Utilizando inteligência artificial generativa, machine learning e uma arquitetura multi-agente, o sistema é capaz de:
-
-- **Analisar demanda** e prever necessidades de reposição
-- **Comparar fornecedores** considerando preço, confiabilidade e prazo
-- **Recomendar compras** com justificativas detalhadas
-- **Conversar naturalmente** com usuários para responder dúvidas
-
-### Principais Funcionalidades
-
-| Funcionalidade | Descrição |
-|---------------|-----------|
-| 🤖 Chat Inteligente | Interface conversacional com IA para consultas |
-| 📊 Dashboard Analítico | Visualização de métricas e previsões |
-| 📦 Catálogo de Produtos | Gestão completa de produtos e estoque |
-| 📋 Ordens de Compra | Criação e aprovação automatizada |
-| 🔮 Previsões ML | Previsão de demanda com AutoARIMA |
-| 🔍 RAG | Busca semântica no catálogo de produtos |
-| 🚚 Fornecedores | Gestão de fornecedores e ofertas |
-| 📝 Auditoria | Log de decisões dos agentes |
-| 💬 Histórico de Chat | Navegação entre conversas anteriores |
-| 🔄 Fallback de Modelos | Alternância automática entre modelos Gemini |
+1. [Visão Geral do Sistema](#1-visão-geral-do-sistema)
+2. [Arquitetura Técnica](#2-arquitetura-técnica)
+3. [Modelos de Dados (12 Entidades)](#3-modelos-de-dados)
+4. [Sistema Multi-Agente](#4-sistema-multi-agente)
+5. [Ferramentas dos Agentes (Tools)](#5-ferramentas-dos-agentes)
+6. [Serviços de Backend (17 Services)](#6-serviços-de-backend)
+7. [API REST Completa (50+ Endpoints)](#7-api-rest-completa)
+8. [Machine Learning](#8-machine-learning)
+9. [RAG - Retrieval Augmented Generation](#9-rag)
+10. [Sistema de Tarefas Assíncronas](#10-tarefas-assíncronas)
+11. [Frontend React](#11-frontend)
+12. [Infraestrutura Docker](#12-infraestrutura-docker)
+13. [Fluxos End-to-End](#13-fluxos-end-to-end)
+14. [Configurações e Variáveis](#14-configurações)
+15. [Guia de Troubleshooting](#15-troubleshooting)
 
 ---
 
-## 🏗️ Arquitetura do Sistema
+# 1. VISÃO GERAL DO SISTEMA
+
+## 1.1 Objetivo
+
+Sistema de IA desenvolvido para **automatizar decisões de compra** em pequenas e médias indústrias (PMI), utilizando:
+
+- **Agentes de IA colaborativos** (Multi-Agent System)
+- **Machine Learning** para previsão de demanda e preços
+- **RAG** (Retrieval-Augmented Generation) para conhecimento de produtos
+- **Chat inteligente** com linguagem natural
+
+## 1.2 Capacidades
+
+| Capacidade | Descrição | Tecnologia |
+|------------|-----------|------------|
+| 🤖 Chat IA | Conversa natural sobre produtos e compras | Agno + Gemini 2.5 |
+| 📊 Previsão ML | Demanda e preços futuros | StatsForecast + LightGBM |
+| 🔍 Busca Semântica | Encontrar produtos por descrição | ChromaDB + Embeddings |
+| 📋 Ordens Automáticas | Criação e aprovação de compras | Workflow multi-etapas |
+| 📈 Dashboard | KPIs, alertas e métricas | React + Recharts |
+| 📝 Auditoria | Log de todas as decisões IA | Trilha completa |
+
+---
+
+# 2. ARQUITETURA TÉCNICA
+
+## 2.1 Diagrama de Alto Nível
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              FRONTEND (React)                               │
-│                    Vite + TypeScript + TailwindCSS + shadcn/ui              │
+│                         FRONTEND (React + Vite)                              │
+│                    TypeScript + TailwindCSS + shadcn/ui                      │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│  📊 Dashboard  │  🤖 Agents Chat  │  📦 Catalog  │  📋 Orders  │  🔐 Auth   │
+│  Dashboard  │  Chat IA  │  Catálogo  │  Ordens  │  Fornecedores │  Auditoria│
 └─────────────────────────────────────────────────────────────────────────────┘
-                                       ↓ HTTP/WebSocket
+                              ↓ HTTP REST / WebSocket
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              BACKEND (FastAPI)                              │
+│                         BACKEND (FastAPI)                                    │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│  📡 Routers    │  🔧 Services    │  🤖 Agents     │  🧠 ML        │  🔐 Auth│
-│  - dashboard   │  - chat_service │  - conversational│ prediction   │ security│
-│  - ml_router   │  - rag_service  │  - supply_team   │ training     │ JWT     │
-│  - agent_router│  - product      │  - tools         │ model_manager│         │
-│  - auth_router │  - order        │  - knowledge     │              │         │
+│  ROUTERS (16)     │  SERVICES (17)    │  AGENTS (5)      │  ML (4)          │
+│  ├ api_chat       │  ├ chat_service   │  ├ conversational│  ├ prediction    │
+│  ├ api_product    │  ├ rag_service    │  ├ supply_team   │  ├ training      │
+│  ├ api_order      │  ├ ml_service     │  ├ tools.py      │  └ model_manager │
+│  ├ ml_router      │  ├ dashboard      │  └ llm_config    │                  │
+│  └ ...            │  └ ...            │                  │                  │
 └─────────────────────────────────────────────────────────────────────────────┘
-                      ↓                    ↓                    ↓
-┌──────────────────────┐  ┌─────────────────────┐  ┌────────────────────────────┐
-│     MySQL 8.0        │  │     ChromaDB        │  │        Redis               │
-│   Banco Principal    │  │    Vector Store     │  │   Broker/Pub-Sub           │
-└──────────────────────┘  └─────────────────────┘  └────────────────────────────┘
-                                                              ↓
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              CELERY WORKERS                                  │
-│            Processamento Assíncrono de Tasks (ML, Análises)                  │
-└─────────────────────────────────────────────────────────────────────────────┘
+        ↓                      ↓                      ↓
+┌──────────────┐    ┌──────────────────┐    ┌───────────────────────┐
+│   MySQL 8.0  │    │    ChromaDB      │    │        Redis          │
+│ 12 Tabelas   │    │  Vector Store    │    │   Broker + Pub/Sub    │
+└──────────────┘    └──────────────────┘    └───────────────────────┘
+                                                       ↓
+                    ┌──────────────────────────────────────────────┐
+                    │              CELERY WORKERS                   │
+                    │   Tasks: ML Training, Agent Analysis          │
+                    └──────────────────────────────────────────────┘
 ```
 
----
-
-## 🛠️ Stack Tecnológico
+## 2.2 Stack Tecnológico Detalhado
 
 ### Backend
 
-| Tecnologia | Versão | Descrição |
-|------------|--------|-----------|
-| **Python** | 3.11+ | Linguagem principal |
-| **FastAPI** | Latest | Framework web assíncrono |
-| **SQLModel** | Latest | ORM moderno (SQLAlchemy + Pydantic) |
-| **Agno** | 2.1.3+ | Framework de agentes IA |
-| **LangChain** | Latest | Orquestração de LLM para RAG |
-| **ChromaDB** | Latest | Vector database para embeddings |
-| **Celery** | Latest | Task queue assíncrona |
-| **Redis** | 7+ | Message broker e cache |
-| **MySQL** | 8.0 | Banco de dados principal |
-
-### Frontend
-
-| Tecnologia | Versão | Descrição |
-|------------|--------|-----------|
-| **React** | 18.3+ | Biblioteca UI |
-| **TypeScript** | 5.8+ | Tipagem estática |
-| **Vite** | 7.1+ | Build tool |
-| **TailwindCSS** | 3.4+ | Framework CSS |
-| **shadcn/ui** | Latest | Componentes UI |
-| **Recharts** | 3.2+ | Gráficos |
-| **React Query** | 5.8+ | State management |
+| Componente | Tecnologia | Versão | Função |
+|------------|------------|--------|--------|
+| Framework Web | FastAPI | 0.100+ | API REST assíncrona |
+| ORM | SQLModel | 0.0.14+ | Mapeamento objeto-relacional |
+| Validação | Pydantic | 2.0+ | Schemas e validação |
+| Task Queue | Celery | 5.3+ | Processamento assíncrono |
+| Broker | Redis | 7+ | Mensageria e cache |
+| Banco | MySQL | 8.0 | Persistência principal |
+| Logging | structlog | - | Logs estruturados |
 
 ### IA/ML
 
-| Tecnologia | Versão | Descrição |
-|------------|--------|-----------|
-| **Google Gemini** | 2.5 Flash | LLM principal |
-| **Google AI Embeddings** | text-embedding-004 | Geração de embeddings |
-| **StatsForecast** | Latest | Previsão estatística |
-| **AutoARIMA** | Latest | Modelo de série temporal |
-| **Tavily** | Latest | Web search para agentes |
+| Componente | Tecnologia | Função |
+|------------|------------|--------|
+| Framework Agentes | Agno | Orquestração multi-agente |
+| LLM Principal | Gemini 2.5 Flash | Reasoning e geração |
+| Embeddings | text-embedding-004 | Vetorização semântica |
+| Vector Store | ChromaDB | Armazenamento vetorial |
+| RAG | LangChain | Pipeline de retrieval |
+| Time Series | StatsForecast | Previsão de demanda |
+| Previsão Preço | LightGBM | Gradient boosting |
+| Timezone | pytz | America/Sao_Paulo |
+
+### Frontend
+
+| Componente | Tecnologia | Versão |
+|------------|------------|--------|
+| Framework | React | 18+ |
+| Build | Vite | 5+ |
+| Linguagem | TypeScript | 5+ |
+| Estilização | TailwindCSS | 3+ |
+| Componentes | shadcn/ui | - |
+| Gráficos | Recharts | - |
+| HTTP | Axios | - |
+| Estado | Context API | - |
 
 ---
 
-## 📁 Estrutura do Projeto
+# 3. MODELOS DE DADOS
+
+## 3.1 Diagrama ER
 
 ```
-📦 Automação Inteligente de Ordens de Compra/
-├── 📂 app/                          # Backend FastAPI
-│   ├── 📂 agents/                   # Sistema Multi-Agente
-│   │   ├── __init__.py
-│   │   ├── conversational_agent.py  # Agente principal (Gerente)
-│   │   ├── supply_chain_team.py     # Time de especialistas
-│   │   ├── tools.py                 # Ferramentas dos agentes
-│   │   ├── knowledge.py             # Base de conhecimento RAG
-│   │   └── llm_config.py            # Configuração LLMs
-│   ├── 📂 core/                     # Configurações centrais
-│   │   ├── database.py              # Conexão MySQL
-│   │   ├── security.py              # Autenticação JWT
-│   │   ├── celery_app.py            # Configuração Celery
-│   │   └── retry_config.py          # Retry logic
-│   ├── 📂 ml/                       # Machine Learning
-│   │   ├── prediction.py            # Previsões StatsForecast
-│   │   ├── training.py              # Treino de modelos
-│   │   └── model_manager.py         # Gerência de modelos
-│   ├── 📂 models/                   # Modelos de dados
-│   │   └── models.py                # SQLModel entities
-│   ├── 📂 routers/                  # API Endpoints
-│   │   ├── dashboard_router.py      # Dashboard HTML/JSON
-│   │   ├── ml_router.py             # Endpoints ML
-│   │   ├── agent_router.py          # Endpoints agentes
-│   │   ├── auth_router.py           # Autenticação
-│   │   ├── api_chat_router.py       # Chat API
-│   │   ├── api_product_router.py    # Produtos API
-│   │   ├── api_order_router.py      # Ordens API
-│   │   └── rag_router.py            # RAG sync endpoints
-│   ├── 📂 services/                 # Lógica de negócio
-│   │   ├── chat_service.py          # Serviço de chat
-│   │   ├── rag_service.py           # Serviço RAG
-│   │   ├── rag_sync_service.py      # Sincronização RAG
-│   │   ├── hybrid_query_service.py  # Queries híbridas
-│   │   ├── product_service.py       # Serviço produtos
-│   │   ├── order_service.py         # Serviço ordens
-│   │   └── websocket_manager.py     # WebSocket handling
-│   ├── 📂 tasks/                    # Celery Tasks
-│   │   └── supply_chain_tasks.py
-│   ├── 📂 tests/                    # Testes unitários
-│   └── main.py                      # Entry point FastAPI
-├── 📂 FrontEnd/                     # Interface React
-│   ├── 📂 src/
-│   │   ├── 📂 components/           # Componentes React
-│   │   │   ├── 📂 dashboard/        # Widgets dashboard
-│   │   │   ├── 📂 layout/           # Layout comum
-│   │   │   └── 📂 ui/               # shadcn/ui components
-│   │   ├── 📂 pages/                # Páginas da aplicação
-│   │   │   ├── Dashboard.tsx        # Dashboard principal
-│   │   │   ├── Agents.tsx           # Chat com agentes
-│   │   │   ├── Orders.tsx           # Gestão de ordens
-│   │   │   ├── Catalog.tsx          # Catálogo produtos
-│   │   │   ├── Login.tsx            # Login
-│   │   │   └── Register.tsx         # Registro
-│   │   ├── 📂 hooks/                # React hooks customizados
-│   │   ├── 📂 services/             # API calls
-│   │   ├── 📂 types/                # TypeScript types
-│   │   ├── App.tsx                  # Entry point React
-│   │   └── main.tsx                 # Bootstrap
-│   ├── package.json
-│   ├── vite.config.ts
-│   ├── tailwind.config.ts
-│   └── Dockerfile
-├── 📂 scripts/                      # Scripts utilitários
-│   ├── seed_database.py             # Popular banco
-│   ├── generate_realistic_data.py   # Dados sintéticos
-│   ├── sync_vectors.py              # Sincronizar ChromaDB
-│   ├── train_all_phases.py          # Treinar modelos
-│   └── start_pipeline.py            # Pipeline completo
-├── 📂 migrations/                   # Migrations SQL
-│   └── add_supplier_market_features.sql
-├── 📂 data/                         # Dados (gitignored)
-│   └── chroma/                      # Vector store
-├── docker-compose.yml               # Orquestração Docker
-├── Dockerfile                       # Build API
-├── requirements.txt                 # Dependências Python
-├── .env                             # Variáveis ambiente (gitignored)
-└── README.md                        # Documentação resumida
+┌─────────────┐       ┌──────────────────┐       ┌─────────────┐
+│  Produto    │───1:N─│  VendasHistoricas│       │ Fornecedor  │
+│  (produtos) │       │                  │       │(fornecedores)│
+├─────────────┤       ├──────────────────┤       ├─────────────┤
+│ id          │       │ id               │       │ id          │
+│ nome        │       │ produto_id (FK)  │       │ nome        │
+│ sku (UK)    │       │ data_venda       │       │ cep         │
+│ categoria   │       │ quantidade       │       │ confiabilidade│
+│ estoque_atual│      │ receita          │       │ prazo_entrega│
+│ estoque_minimo│     └──────────────────┘       └─────────────┘
+└─────────────┘              │                          │
+      │                      │                          │
+      │1:N                   │                          │1:N
+      ↓                      │                          ↓
+┌──────────────────┐         │              ┌───────────────────┐
+│ PrecosHistoricos │         │              │   OfertaProduto   │
+├──────────────────┤         │              ├───────────────────┤
+│ id               │         │              │ id                │
+│ produto_id (FK)  │         │              │ produto_id (FK)   │
+│ fornecedor       │         │              │ fornecedor_id (FK)│
+│ preco            │         │              │ preco_ofertado    │
+│ coletado_em      │         │              │ estoque_disponivel│
+└──────────────────┘         │              │ validade_oferta   │
+      │                      │              └───────────────────┘
+      │1:N                   │
+      ↓                      │
+┌──────────────────┐         │
+│  ModeloPredicao  │         │
+├──────────────────┤         │
+│ id               │         │
+│ produto_id (FK)  │←────────┘
+│ modelo_tipo      │
+│ metricas (JSON)  │
+│ treinado_em      │
+└──────────────────┘
 ```
 
----
+## 3.2 Entidades Detalhadas
 
-## 🔧 Backend (API FastAPI)
+### Produto (`produtos`)
 
-### Entry Point (`app/main.py`)
-
-O arquivo principal configura a aplicação FastAPI com:
-
-```python
-# Principais configurações
-app = FastAPI(
-    title="Automação Inteligente de Ordens de Compra",
-    description="API para plataforma preditiva de cadeia de suprimentos",
-    version="0.1.0",
-    lifespan=lifespan,  # Gerencia startup/shutdown
-)
-
-# Lifespan events
-# - Cria tabelas no banco
-# - Inicializa RAG (ChromaDB)
-# - Conecta ao Redis para WebSocket
-
-# CORS configurado para desenvolvimento
-app.add_middleware(CORSMiddleware, allow_origins=["*"], ...)
-
-# Routers registrados
-# - /dashboard - Dashboard HTML
-# - /ml - Endpoints Machine Learning
-# - /agents - Interação com agentes
-# - /api/chat - Chat conversacional
-# - /api/products - CRUD produtos
-# - /api/orders - Ordens de compra
-# - /auth - Login/Register
-# - /rag - Sincronização RAG
-```
-
-### Routers Principais
-
-#### Dashboard Router (`/dashboard`)
-
-| Endpoint | Método | Descrição |
-|----------|--------|-----------|
-| `/dashboard/` | GET | Renderiza dashboard HTML |
-| `/dashboard/report` | GET | Gera relatório global |
-
-#### ML Router (`/ml`)
-
-| Endpoint | Método | Descrição |
-|----------|--------|-----------|
-| `/ml/forecast/{sku}` | GET | Previsão para produto |
-| `/ml/train` | POST | Treinar modelo |
-| `/ml/metrics` | GET | Métricas do modelo |
-
-#### Agent Router (`/agents`)
-
-| Endpoint | Método | Descrição |
-|----------|--------|-----------|
-| `/agents/` | GET | Listar agentes |
-| `/agents/status` | GET | Status do time |
-
-#### Chat Router (`/api/chat`)
-
-| Endpoint | Método | Descrição |
-|----------|--------|-----------|
-| `/api/chat/sessions` | POST | Nova sessão |
-| `/api/chat/sessions/{id}/messages` | POST | Enviar mensagem |
-| `/api/chat/sessions/{id}/history` | GET | Histórico |
-
-#### Products Router (`/api/products`)
-
-| Endpoint | Método | Descrição |
-|----------|--------|-----------|
-| `/api/products/` | GET | Listar produtos |
-| `/api/products/{id}` | GET | Detalhes produto |
-| `/api/products/` | POST | Criar produto |
-| `/api/products/{id}` | PUT | Atualizar produto |
-
-#### Orders Router (`/api/orders`)
-
-| Endpoint | Método | Descrição |
-|----------|--------|-----------|
-| `/api/orders/` | GET | Listar ordens |
-| `/api/orders/` | POST | Criar ordem |
-| `/api/orders/{id}/approve` | POST | Aprovar ordem |
-| `/api/orders/{id}/reject` | POST | Rejeitar ordem |
-
-#### Auth Router (`/auth`)
-
-| Endpoint | Método | Descrição |
-|----------|--------|-----------|
-| `/auth/login` | POST | Login (JWT) |
-| `/auth/register` | POST | Registro |
-| `/auth/me` | GET | Usuário atual |
-
----
-
-## 💻 Frontend (React + Vite)
-
-### Páginas da Aplicação
-
-#### 1. Login (`/login`)
-- Formulário de autenticação
-- Integração com JWT
-- Redirecionamento automático
-
-#### 2. Dashboard (`/`)
-- **Cartões de Métricas**: Estoque, vendas, alertas
-- **Gráficos**: Previsões de demanda
-- **Alertas**: Produtos com estoque baixo
-
-#### 3. Agents (`/agents`)
-- **Chat Interativo**: Conversa com IA
-- **Histórico**: Mensagens anteriores
-- **Markdown**: Renderização rica
-
-#### 4. Orders (`/orders`)
-- **Lista de Ordens**: Todas as ordens de compra
-- **Status**: Pendente, Aprovada, Rejeitada
-- **Ações**: Aprovar/Rejeitar ordens
-
-#### 5. Catalog (`/catalog`)
-- **Lista de Produtos**: Catálogo completo
-- **Busca**: Filtro por nome/SKU
-- **Detalhes**: Modal com informações
-
-### Componentes Principais
-
-```tsx
-// Estrutura de componentes
-📂 components/
-├── 📂 dashboard/
-│   ├── DashboardStats.tsx     # Cartões de estatísticas
-│   ├── ForecastChart.tsx      # Gráfico de previsões
-│   └── AlertsWidget.tsx       # Widget de alertas
-├── 📂 layout/
-│   ├── MainLayout.tsx         # Layout principal
-│   └── Sidebar.tsx            # Menu lateral
-└── 📂 ui/                     # shadcn/ui (~50 componentes)
-```
-
-### Autenticação Frontend
-
-```tsx
-// ProtectedRoute component
-const ProtectedRoute = ({ element }) => {
-  const token = localStorage.getItem("token");
-  return token ? element : <Navigate to="/login" replace />;
-};
-
-// Rotas protegidas
-<Routes>
-  <Route path="/login" element={<Login />} />
-  <Route path="/*" element={<ProtectedRoute element={<MainLayout>...</MainLayout>} />} />
-</Routes>
-```
-
----
-
-## 🤖 Sistema Multi-Agente
-
-### Arquitetura de Agentes
-
-O sistema utiliza o framework **Agno** para criar uma hierarquia de agentes especializados:
-
-```
-┌────────────────────────────────────────────────────────────────────┐
-│                    AGENTE CONVERSACIONAL (Gerente)                  │
-│                                                                     │
-│  Responsabilidades:                                                │
-│  • Interface com usuário                                           │
-│  • Delegação inteligente                                           │
-│  • Respostas rápidas para perguntas simples                        │
-└────────────────────────────────────────────────────────────────────┘
-                              ↓ Delega
-┌────────────────────────────────────────────────────────────────────┐
-│                    TIME DE ESPECIALISTAS (4 agentes)               │
-├─────────────────┬────────────────┬──────────────────┬──────────────┤
-│  1️⃣ ANALISTA   │  2️⃣ PESQUISADOR │  3️⃣ ANALISTA    │  4️⃣ GERENTE  │
-│     DEMANDA     │     MERCADO     │    LOGÍSTICA    │    COMPRAS   │
-├─────────────────┼────────────────┼──────────────────┼──────────────┤
-│ • Avalia        │ • Busca        │ • Avalia         │ • Consolida  │
-│   estoque       │   ofertas      │   fornecedores   │   análises   │
-│ • Previsão      │ • Tendências   │ • Custo total    │ • Decisão    │
-│   de demanda    │   de mercado   │   aquisição      │   final      │
-└─────────────────┴────────────────┴──────────────────┴──────────────┘
-```
-
-### Agente Conversacional (`conversational_agent.py`)
-
-```python
-def get_conversational_agent(session_id: str) -> Agent:
-    """Cria o Agente Conversacional usando arquitetura Agno Pura."""
-    
-    agent = Agent(
-        name="PurchaseAssistant",
-        model=get_gemini_for_decision_making(),  # Gemini 2.5 Flash
-        
-        # Base de Conhecimento (RAG)
-        knowledge=load_knowledge_base(),
-        search_knowledge=True,
-        
-        # Ferramentas disponíveis
-        tools=[
-            get_product_info,           # Info do produto
-            get_price_forecast_for_sku, # Previsão ML
-            find_supplier_offers,       # Ofertas fornecedores
-            run_full_purchase_analysis, # Delegação ao time
-            create_purchase_order_tool, # Criar ordem
-        ],
-        
-        # Memória persistente
-        db=SqliteDb(db_file="data/agent_memory.db"),
-        session_id=session_id,
-        add_history_to_context=True,
-        num_history_messages=5,
-    )
-    
-    return agent
-```
-
-### Ferramentas dos Agentes (`tools.py`)
-
-| Ferramenta | Descrição | Retorno |
-|------------|-----------|---------|
-| `get_product_info(sku)` | Informações do produto | JSON com estoque, preço, etc |
-| `get_price_forecast_for_sku(sku, days)` | Previsão de preços | JSON com tendência |
-| `find_supplier_offers_for_sku(sku)` | Ofertas de fornecedores | JSON com lista de ofertas |
-| `run_full_purchase_analysis(sku, reason)` | Análise completa pelo time | Recomendação em Markdown |
-| `create_purchase_order_tool(sku, qty, price, supplier)` | Criar ordem de compra | JSON com ID da ordem |
-| `search_market_price(sku)` | Preço de mercado | Preço atual |
-
-### Time de Especialistas (`supply_chain_team.py`)
-
-```python
-def create_supply_chain_team() -> Team:
-    """Cria o time de análise de cadeia de suprimentos."""
-    
-    # 1. Analista de Demanda
-    demand_analyst = Agent(
-        name="DemandAnalyst",
-        model=get_gemini_for_fast_agents(),
-        instructions=ANALISTA_DEMANDA_PROMPT,
-        # Saída: {need_restock: bool, justification: str}
-    )
-    
-    # 2. Pesquisador de Mercado
-    market_researcher = Agent(
-        name="MarketResearcher",
-        model=get_gemini_for_fast_agents(),
-        tools=[
-            find_supplier_offers_for_sku,
-            search_market_trends_for_product,
-            get_price_forecast_for_sku,
-        ],
-        # Saída: {offers: [], market_trends: str}
-    )
-    
-    # 3. Analista de Logística
-    logistics_analyst = Agent(
-        name="LogisticsOptimizer",
-        model=get_gemini_for_fast_agents(),
-        tools=[compute_distance],
-        # Saída: {best_supplier: str, total_cost: float}
-    )
-    
-    # 4. Gerente de Compras
-    purchase_manager = Agent(
-        name="PurchaseManager",
-        model=get_gemini_for_decision_making(),
-        # Saída: {decision: approve|reject, rationale: str}
-    )
-    
-    return Team(
-        agents=[demand_analyst, market_researcher, logistics_analyst, purchase_manager],
-        mode="coordinate",
-        leader=purchase_manager,
-    )
-```
-
----
-
-## 🧠 Machine Learning
-
-### Módulo de Previsão (`app/ml/prediction.py`)
-
-O sistema utiliza **StatsForecast** com **AutoARIMA** para previsões de demanda:
-
-```python
-def predict_prices_for_product(sku: str, days_ahead: int = 14) -> Dict[str, Any]:
-    """
-    Gera previsão de demanda usando StatsForecast (AutoARIMA).
-    
-    Features:
-    - Sem necessidade de GPU
-    - Auto-tuning de hiperparâmetros
-    - Cross-validation para métricas
-    - Fallback para Naive se ARIMA falhar
-    """
-    # 1. Carregar histórico de vendas
-    df = _load_history_as_dataframe(session, sku)
-    
-    # 2. Configurar modelos
-    models = [
-        AutoARIMA(season_length=7),  # Sazonalidade semanal
-        Naive()  # Fallback
-    ]
-    
-    sf = StatsForecast(models=models, freq='D', n_jobs=1)
-    
-    # 3. Treinar e prever
-    sf.fit(df)
-    forecast_df = sf.predict(h=days_ahead)
-    
-    # 4. Retornar resultados
-    return {
-        "sku": sku,
-        "dates": dates,
-        "prices": values,  # "prices" por compatibilidade
-        "model_used": "StatsForecast_AutoARIMA",
-        "metrics": {"mape": mape, "rmse": rmse, "mae": mae}
-    }
-```
-
-### Métricas Calculadas
-
-| Métrica | Descrição |
-|---------|-----------|
-| **MAPE** | Mean Absolute Percentage Error |
-| **RMSE** | Root Mean Square Error |
-| **MAE** | Mean Absolute Error |
-
----
-
-## 🔍 RAG (Retrieval-Augmented Generation)
-
-### Arquitetura RAG (`app/services/rag_service.py`)
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         PIPELINE RAG                            │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  1. INDEXAÇÃO                                                   │
-│     Produtos (MySQL) → Embeddings → ChromaDB                    │
-│                                                                 │
-│  2. CONSULTA                                                    │
-│     Pergunta → Embedding → Busca Vetorial → Contexto            │
-│                                                                 │
-│  3. GERAÇÃO                                                     │
-│     Contexto + Prompt → Gemini 2.5 → Resposta                   │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Configuração
-
-```python
-# Embeddings (Google AI)
-google_embeddings = GoogleGenerativeAIEmbeddings(
-    model="models/text-embedding-004"
-)
-
-# Vector Store (ChromaDB)
-vector_store = Chroma(
-    collection_name="product_catalog",
-    embedding_function=google_embeddings,
-    persist_directory=CHROMA_PERSIST_DIR,
-)
-
-# LLM (Gemini 2.5 Flash)
-llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash",
-    temperature=0.1,  # Baixa para respostas factuais
-)
-```
-
-### Funções Principais
-
-| Função | Descrição |
-|--------|-----------|
-| `index_product_catalog(session)` | Indexa todos os produtos |
-| `query_product_catalog_with_google_rag(query)` | Consulta RAG |
-| `get_relevant_context(query, session)` | Obtém contexto relevante |
-
----
-
-## 🗄️ Banco de Dados
-
-### Modelos SQLModel (`app/models/models.py`)
-
-#### Produto
 ```python
 class Produto(SQLModel, table=True):
     __tablename__ = "produtos"
     
-    id: Optional[int] = Field(primary_key=True)
-    nome: str = Field(index=True, max_length=255)
-    sku: str = Field(unique=True, max_length=50)
-    categoria: Optional[str]
-    estoque_atual: int = 0
-    estoque_minimo: int = 0
+    id: Optional[int]           # PK auto-incremento
+    nome: str                   # Nome do produto
+    sku: str                    # SKU único (ex: "MEC-001")
+    categoria: Optional[str]    # Categoria (ex: "Ferramentas")
+    estoque_atual: int          # Quantidade em estoque (≥0)
+    estoque_minimo: int         # Ponto de reposição (≥0)
+    criado_em: datetime         # Data de criação (UTC)
+    atualizado_em: datetime     # Última atualização (UTC)
     
     # Relacionamentos
-    vendas: List["VendasHistoricas"] = Relationship(back_populates="produto")
-    precos: List["PrecosHistoricos"] = Relationship(back_populates="produto")
+    vendas: List[VendasHistoricas]
+    precos: List[PrecosHistoricos]
+    modelos_predicao: List[ModeloPredicao]
 ```
 
-#### VendasHistoricas
+**Campos de negócio:**
+- `estoque_atual >= estoque_minimo` → Status "OK"
+- `estoque_atual < estoque_minimo` → Status "ALERTA" (precisa repor)
+
+### VendasHistoricas (`vendas_historicas`)
+
 ```python
 class VendasHistoricas(SQLModel, table=True):
-    __tablename__ = "vendas_historicas"
-    
-    id: Optional[int] = Field(primary_key=True)
-    produto_id: int = Field(foreign_key="produtos.id")
-    data_venda: datetime
-    quantidade: int
-    receita: Decimal
+    id: Optional[int]
+    produto_id: int             # FK para produtos
+    data_venda: datetime        # Data da venda
+    quantidade: int             # Unidades vendidas (≥0)
+    receita: Decimal            # Valor total (≥0.00)
+    criado_em: datetime
 ```
 
-#### Fornecedor
+**Uso:** Base para cálculo de demanda média e previsões ML.
+
+### PrecosHistoricos (`precos_historicos`)
+
+```python
+class PrecosHistoricos(SQLModel, table=True):
+    id: Optional[int]
+    produto_id: int             # FK para produtos
+    fornecedor: Optional[str]   # Nome do fornecedor
+    preco: Decimal              # Preço coletado
+    moeda: str                  # ISO (padrão: "BRL")
+    coletado_em: datetime       # Data da coleta
+    is_synthetic: bool          # Se foi gerado por ML
+```
+
+### Fornecedor (`fornecedores`)
+
 ```python
 class Fornecedor(SQLModel, table=True):
-    __tablename__ = "fornecedores"
-    
-    id: Optional[int] = Field(primary_key=True)
-    nome: str
-    confiabilidade: float = 0.9  # 0.0 a 1.0
-    prazo_entrega_dias: int = 7
+    id: Optional[int]
+    nome: str                   # Nome da empresa
+    cep: Optional[str]          # CEP para cálculo logístico
+    latitude: Optional[float]   # Coordenadas
+    longitude: Optional[float]
+    confiabilidade: float       # Score 0.0 a 1.0
+    prazo_entrega_dias: int     # Dias para entrega (1-60)
 ```
 
-#### OfertaProduto
+### OfertaProduto (`ofertas_produtos`)
+
 ```python
 class OfertaProduto(SQLModel, table=True):
-    __tablename__ = "ofertas_produtos"
-    
-    id: Optional[int] = Field(primary_key=True)
-    produto_id: int
-    fornecedor_id: int
-    preco_ofertado: Decimal
-    estoque_disponivel: int
+    id: Optional[int]
+    produto_id: int             # FK para produtos
+    fornecedor_id: int          # FK para fornecedores
+    preco_ofertado: Decimal     # Preço unitário
+    estoque_disponivel: int     # Qtd disponível no fornecedor
+    validade_oferta: datetime   # Expiração da oferta
 ```
 
-#### OrdemDeCompra
+### OrdemDeCompra (`ordens_de_compra`)
+
 ```python
 class OrdemDeCompra(SQLModel, table=True):
-    __tablename__ = "ordens_de_compra"
-    
-    id: Optional[int] = Field(primary_key=True)
-    produto_id: int
-    fornecedor_id: int
-    quantidade: int
-    preco_unitario: Decimal
-    status: str = "pending"  # pending, approved, rejected
+    id: Optional[int]
+    produto_id: int             # FK para produtos
+    fornecedor_id: int          # FK para fornecedores
+    quantidade: int             # Quantidade a comprar
+    valor: Decimal              # Valor total
+    status: str                 # pending|approved|cancelled|rejected
+    origem: str                 # "Automática" ou "Manual"
+    autoridade_nivel: int       # 1=Operacional, 2=Gerencial, 3=Diretoria
+    aprovado_por: Optional[str] # Nome do aprovador
     data_criacao: datetime
-    data_aprovacao: Optional[datetime]
-    justificativa: Optional[str]
+    data_aprovacao: datetime
+    justificativa: str          # Razão da decisão
 ```
 
-#### User (Autenticação)
+### User (`users`)
+
 ```python
 class User(SQLModel, table=True):
-    __tablename__ = "users"
+    id: Optional[int]
+    email: str                  # Email único (login)
+    hashed_password: str        # Senha hasheada (bcrypt)
+    is_active: bool             # Conta ativa
+    full_name: Optional[str]    # Nome completo
+```
+
+### ModeloPredicao (`modelos_predicao`)
+
+```python
+class ModeloPredicao(SQLModel, table=True):
+    id: Optional[int]
+    produto_id: int             # FK para produtos
+    modelo_tipo: str            # "LightGBM", "AutoARIMA", etc
+    versao: str                 # Versão do modelo
+    caminho_modelo: str         # Path do arquivo .pkl
+    metricas: Dict              # JSON com MAPE, RMSE, etc
+    treinado_em: datetime
+```
+
+### ModeloGlobal (`modelos_globais`)
+
+```python
+class ModeloGlobal(SQLModel, table=True):
+    id: Optional[int]
+    modelo_tipo: str            # Tipo do modelo agregado
+    versao: str
+    holdout_dias: int           # Dias reservados para validação
+    caminho_modelo: str
+    caminho_relatorio: str      # Path do relatório HTML
+    metricas: Dict
+    treinado_em: datetime
+```
+
+### Agente (`agentes`)
+
+```python
+class Agente(SQLModel, table=True):
+    id: Optional[int]
+    nome: str                   # Nome único (ex: "SupplyChainTeam")
+    descricao: str              # O que faz
+    status: str                 # active|inactive
+    ultima_execucao: datetime   # Última vez que rodou
+```
+
+### AuditoriaDecisao (`auditoria_decisoes`)
+
+```python
+class AuditoriaDecisao(SQLModel, table=True):
+    id: Optional[int]
+    agente_nome: str            # Qual agente tomou a decisão
+    sku: str                    # Produto analisado
+    acao: str                   # approve|reject|recommend
+    decisao: str                # JSON com detalhes
+    raciocinio: str             # Explicação completa
+    contexto: str               # JSON com dados usados
+    usuario_id: str             # Quem solicitou
+    data_decisao: datetime
+    ip_origem: str
+```
+
+### Chat (3 tabelas)
+
+```python
+# ChatSession - Uma conversa
+class ChatSession(SQLModel, table=True):
+    id: Optional[int]
+    criado_em: datetime
+
+# ChatMessage - Mensagens da conversa
+class ChatMessage(SQLModel, table=True):
+    id: Optional[int]
+    session_id: int             # FK para chat_sessions
+    sender: str                 # 'human' | 'agent' | 'system'
+    content: str                # TEXT (respostas longas)
+    metadata_json: str          # JSON com dados extras
+    criado_em: datetime
+
+# ChatContext - Estado da conversa
+class ChatContext(SQLModel, table=True):
+    id: Optional[int]
+    session_id: int             # FK para chat_sessions
+    key: str                    # Ex: 'current_sku'
+    value: str                  # Valor serializado
+    atualizado_em: datetime
+```
+
+---
+
+# 4. SISTEMA MULTI-AGENTE
+
+## 4.1 Arquitetura Agno
+
+O sistema utiliza o framework **Agno** para orquestrar múltiplos agentes de IA:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    AGNO FRAMEWORK                           │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌─────────────────┐     ┌───────────────────────────────┐  │
+│  │  Conversational │     │      Supply Chain Team        │  │
+│  │     Agent       │────▶│  ┌─────────────────────────┐  │  │
+│  │                 │     │  │   AnalistaDemanda       │  │  │
+│  │  - RAG Search   │     │  │   (Previsão demanda)    │  │  │
+│  │  - Intent Det.  │     │  ├─────────────────────────┤  │  │
+│  │  - Tool Calling │     │  │   ComparadorFornecedor  │  │  │
+│  └─────────────────┘     │  │   (Preços e ofertas)    │  │  │
+│                          │  ├─────────────────────────┤  │  │
+│                          │  │   AnalistaLogistico     │  │  │
+│                          │  │   (Custos e prazos)     │  │  │
+│                          │  ├─────────────────────────┤  │  │
+│                          │  │   DecisionMaker         │  │  │
+│                          │  │   (Decisão final)       │  │  │
+│                          │  └─────────────────────────┘  │  │
+│                          └───────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## 4.2 Agente Conversacional
+
+**Arquivo:** `app/agents/conversational_agent.py`
+
+**Função:** Interface de chat inteligente com capacidade de:
+- Responder perguntas sobre produtos (via RAG)
+- Delegar análises complexas ao SupplyChainTeam
+- Manter contexto da conversa (memória SQLite)
+
+**Funções principais:**
+
+| Função | Descrição |
+|--------|-----------|
+| `get_conversational_agent(session_id)` | Cria instância do agente |
+| `extract_entities(message)` | Extrai SKU e intenção da mensagem |
+| `save_session_context(session, key, value)` | Salva contexto |
+| `format_agent_response(result)` | Formata resultado para Markdown |
+
+**Configuração do Agente:**
+
+```python
+agent = Agent(
+    name="PurchaseAssistant",
+    model=get_llm_model(),           # Gemini 2.5 Flash
+    instructions=instructions,        # Prompt sistema
+    knowledge=load_knowledge_base(),  # RAG ChromaDB
+    search_knowledge=True,            # Busca automática
+    tools=[                           # 7 ferramentas disponíveis
+        get_product_info,
+        search_market_price,
+        get_forecast_tool,
+        get_price_forecast_for_sku,
+        find_supplier_offers_for_sku,
+        run_full_purchase_analysis,
+        create_purchase_order_tool
+    ],
+    db=SqliteDb(db_file="data/agent_memory.db"),
+    markdown=True,
+)
+```
+
+## 4.3 Supply Chain Team
+
+**Arquivo:** `app/agents/supply_chain_team.py`
+
+**Função:** Equipe de 4 agentes especializados que colaboram para tomar decisões de compra.
+
+### Agentes do Time
+
+| Agente | Papel | Output |
+|--------|-------|--------|
+| **AnalistaDemanda** | Analisa previsão de demanda | JSON com need_restock, justification |
+| **ComparadorFornecedor** | Compara ofertas de fornecedores | JSON com ofertas e melhor opção |
+| **AnalistaLogistico** | Avalia custos logísticos | JSON com custos, prazos |
+| **DecisionMaker** | Decisão final integrada | JSON com decisão (approve/reject) |
+
+### Fluxo de Colaboração
+
+```
+┌─────────────────────┐
+│   Inquiry Input     │  "Preciso comprar 50 unidades do MEC-001"
+└─────────┬───────────┘
+          ▼
+┌─────────────────────┐
+│  AnalistaDemanda    │  Analisa se precisa repor estoque
+└─────────┬───────────┘
+          ▼
+┌─────────────────────┐
+│ ComparadorFornecedor│  Busca melhores ofertas
+└─────────┬───────────┘
+          ▼
+┌─────────────────────┐
+│  AnalistaLogistico  │  Calcula custos totais
+└─────────┬───────────┘
+          ▼
+┌─────────────────────┐
+│    DecisionMaker    │  Toma decisão final
+└─────────┬───────────┘
+          ▼
+┌─────────────────────┐
+│    JSON Output      │  { "decision": "approve", "quantity": 50, ... }
+└─────────────────────┘
+```
+
+### Funções principais
+
+| Função | Descrição |
+|--------|-----------|
+| `create_supply_chain_team()` | Cria o Team Agno |
+| `run_supply_chain_analysis(inquiry, max_retries)` | Executa análise completa |
+| `execute_supply_chain_team(sku, reason)` | Wrapper de compatibilidade |
+| `parse_team_json(output_text)` | Extrai JSON da resposta |
+| `is_output_rate_limited(output)` | Detecta erro 429 |
+
+---
+
+# 5. FERRAMENTAS DOS AGENTES
+
+## 5.1 Lista Completa de Tools
+
+**Arquivo:** `app/agents/tools.py`
+
+| Tool | Assinatura | Descrição |
+|------|------------|-----------|
+| `get_product_info` | `(product_sku: str) -> str` | Busca info do produto no BD |
+| `search_market_price` | `(product_sku: str) -> str` | Scraping de preço externo |
+| `get_forecast_tool` | `(product_sku: str) -> str` | Previsão de demanda |
+| `get_price_forecast_for_sku` | `(sku: str, days_ahead: int) -> str` | Previsão de preço ML |
+| `find_supplier_offers_for_sku` | `(sku: str) -> str` | Ofertas de fornecedores |
+| `run_full_purchase_analysis` | `(sku: str, reason: str) -> str` | Análise completa |
+| `create_purchase_order_tool` | `(sku, qty, price, supplier) -> str` | Cria ordem de compra |
+
+## 5.2 Detalhamento das Tools
+
+### get_product_info
+
+```python
+def get_product_info(product_sku: str) -> str:
+    """
+    Busca informações detalhadas de um produto no banco de dados.
     
-    id: Optional[int] = Field(primary_key=True)
-    email: str = Field(unique=True, index=True)
-    hashed_password: str
-    is_active: bool = True
-    full_name: Optional[str]
+    Returns: JSON com:
+    - sku, nome, categoria
+    - estoque_atual, estoque_minimo
+    - preco_atual (último preço)
+    - status_reposicao ("OK" ou "ALERTA")
+    """
 ```
 
-### Diagrama ER
-
-```
-┌─────────────┐       ┌──────────────────┐       ┌────────────────┐
-│  produtos   │───────│ vendas_historicas │       │  fornecedores  │
-├─────────────┤       ├──────────────────┤       ├────────────────┤
-│ id (PK)     │◄──────│ produto_id (FK)  │       │ id (PK)        │
-│ nome        │       │ data_venda       │       │ nome           │
-│ sku         │       │ quantidade       │       │ confiabilidade │
-│ categoria   │       │ receita          │       │ prazo_entrega  │
-│ estoque_*   │       └──────────────────┘       └────────────────┘
-└─────────────┘                                          │
-       │                                                 │
-       │         ┌─────────────────┐                     │
-       │         │ ofertas_produtos│                     │
-       └────────►├─────────────────┤◄────────────────────┘
-                 │ produto_id (FK) │
-                 │ fornecedor_id   │
-                 │ preco_ofertado  │
-                 └─────────────────┘
-                          │
-       ┌──────────────────┴──────────────────┐
-       │          ordens_de_compra           │
-       ├─────────────────────────────────────┤
-       │ id (PK)                             │
-       │ produto_id (FK)                     │
-       │ fornecedor_id (FK)                  │
-       │ quantidade                          │
-       │ status (pending/approved/rejected)  │
-       └─────────────────────────────────────┘
+**Exemplo de retorno:**
+```json
+{
+  "sku": "MEC-001",
+  "nome": "Rolamento 6205-2RS",
+  "estoque_atual": 45,
+  "estoque_minimo": 20,
+  "categoria": "Mecânica",
+  "preco_atual": 23.50,
+  "status_reposicao": "OK"
+}
 ```
 
----
+### get_forecast_tool
 
-## ⚙️ Configuração e Instalação
-
-### Pré-requisitos
-
-- Docker & Docker Compose
-- Node.js 18+ (para desenvolvimento frontend)
-- Python 3.11+ (para desenvolvimento local)
-
-### Setup Rápido (Docker)
-
-```bash
-# 1. Clonar repositório
-git clone <repository-url>
-cd "Automação Inteligente de Ordens de Compra"
-
-# 2. Configurar variáveis de ambiente
-cp .env.example .env
-# Editar .env com suas credenciais
-
-# 3. Subir containers
-docker compose up -d
-
-# 4. Verificar logs
-docker compose logs -f api
-
-# 5. Acessar aplicação
-# Frontend: http://localhost:3000
-# API: http://localhost:8000
-# Docs: http://localhost:8000/docs
+```python
+def get_forecast_tool(product_sku: str) -> str:
+    """
+    Obtém previsão de demanda futura.
+    
+    Usa timezone: America/Sao_Paulo (UTC-3)
+    
+    Returns: JSON com:
+    - sku
+    - forecast: [{"date": "2026-01-15", "demand": 110}, ...]
+    - average_demand
+    - generated_at
+    """
 ```
 
-### Setup Desenvolvimento (Local)
+### find_supplier_offers_for_sku
 
-#### Backend
-
-```bash
-# 1. Criar virtualenv
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# ou: venv\Scripts\activate  # Windows
-
-# 2. Instalar dependências
-pip install -r requirements.txt
-
-# 3. Configurar .env
-export GOOGLE_API_KEY=your_key
-export DATABASE_URL=mysql+mysqlconnector://user:pass@localhost:3306/db
-
-# 4. Rodar migrações
-python scripts/create_tables.py
-
-# 5. Popular banco
-python scripts/seed_database.py
-
-# 6. Sincronizar RAG
-python scripts/sync_vectors.py
-
-# 7. Iniciar servidor
-uvicorn app.main:app --reload --port 8000
+```python
+def find_supplier_offers_for_sku(sku: str) -> str:
+    """
+    Busca ofertas de fornecedores cadastradas.
+    
+    Returns: JSON com:
+    - ofertas: lista de {fornecedor, preco, prazo, confiabilidade}
+    - melhor_oferta: a mais vantajosa
+    - total_ofertas: quantidade
+    """
 ```
 
-#### Frontend
+### create_purchase_order_tool
 
-```bash
-cd FrontEnd
-
-# 1. Instalar dependências
-npm install
-# ou: bun install
-
-# 2. Configurar API
-echo "VITE_API_URL=http://localhost:8000" > .env.local
-
-# 3. Iniciar dev server
-npm run dev
+```python
+def create_purchase_order_tool(
+    sku: str,
+    quantity: int,
+    price_per_unit: float,
+    supplier: str = "Agente de IA"
+) -> str:
+    """
+    Cria uma ordem de compra no sistema.
+    
+    Returns: JSON com:
+    - success: true/false
+    - order_id: ID da ordem criada
+    - message: detalhes
+    """
 ```
 
 ---
 
-## 🔑 Variáveis de Ambiente
+# 6. SERVIÇOS DE BACKEND
 
-### Backend (.env)
+## 6.1 Lista de Services (17)
+
+| Serviço | Arquivo | Função |
+|---------|---------|--------|
+| chat_service | chat_service.py | Processamento de mensagens |
+| rag_service | rag_service.py | RAG com LangChain |
+| rag_sync_service | rag_sync_service.py | Sincronização produtos→ChromaDB |
+| ml_service | ml_service.py | Previsões ML |
+| dashboard_service | dashboard_service.py | KPIs e alertas |
+| agent_service | agent_service.py | Execução de agentes |
+| order_service | order_service.py | CRUD de ordens |
+| product_service | product_service.py | CRUD de produtos |
+| scraping_service | scraping_service.py | Busca preços externos |
+| chroma_client | chroma_client.py | Singleton ChromaDB |
+| hybrid_query_service | hybrid_query_service.py | Query híbrida SQL+RAG |
+| redis_events | redis_events.py | Pub/Sub Redis |
+| websocket_manager | websocket_manager.py | Conexões WebSocket |
+| sales_ingestion_service | sales_ingestion_service.py | Ingestão de vendas |
+| sql_query_tool | sql_query_tool.py | NL→SQL |
+| task_service | task_service.py | Status de tasks Celery |
+
+## 6.2 Serviços Principais
+
+### chat_service.py
+
+**Funções:**
+
+| Função | Descrição |
+|--------|-----------|
+| `get_or_create_chat_session(session, session_id)` | Obtém ou cria sessão |
+| `get_chat_history(session, session_id)` | Retorna histórico |
+| `add_chat_message(session, sender, content, metadata)` | Adiciona mensagem |
+| `process_user_message(session, session_id, message)` | **Principal:** processa msg |
+| `handle_natural_conversation(session, question, entities)` | Conversa via Agno |
+| `handle_supply_chain_analysis(session, entities)` | Dispara análise async |
+
+**Fluxo de process_user_message:**
+
+```
+1. Salva mensagem do usuário
+2. Extrai entidades (SKU, intent)
+3. Salva SKU no contexto
+4. DECISÃO:
+   - intent in [analise_compra, forecast, logistics] + sku? 
+     → handle_supply_chain_analysis (async)
+   - Senão → handle_natural_conversation (RAG)
+5. Salva resposta do agente
+6. Retorna resposta
+```
+
+### rag_service.py
+
+**Funções:**
+
+| Função | Descrição |
+|--------|-----------|
+| `get_vector_store()` | Retorna ChromaDB LangChain |
+| `index_product_catalog(db_session)` | Indexa todos produtos |
+| `create_rag_chain()` | Cria chain RAG completa |
+| `query_product_catalog_with_google_rag(query, k)` | Busca semântica |
+
+**Pipeline RAG:**
+
+```
+Query → Embeddings → ChromaDB → Top-K Docs → Prompt → Gemini → Resposta
+```
+
+### dashboard_service.py
+
+**Funções:**
+
+| Função | Retorno |
+|--------|---------|
+| `get_dashboard_kpis(session)` | economy, automatedOrders, stockLevel, modelAccuracy |
+| `get_dashboard_alerts(session)` | Lista de alertas (error, warning, success) |
+| `get_dashboard_summary(session)` | KPIs + Alertas combinados |
+
+**Cálculo de KPIs:**
+
+| KPI | Fórmula |
+|-----|---------|
+| economy | Σ(preço_médio - melhor_oferta) × quantidade_comprada |
+| automatedOrders | COUNT ordens WHERE origem='Automática' AND status='approved' |
+| stockLevel | Crítico (<10%), Atenção (<30%), Saudável (≥30%) |
+| modelAccuracy | 100 - AVG(MAPE) dos modelos treinados |
+
+---
+
+# 7. API REST COMPLETA
+
+## 7.1 Visão Geral
+
+| Prefixo | Módulo | Endpoints |
+|---------|--------|-----------|
+| `/api/chat` | api_chat_router | 7 |
+| `/api/products` | api_product_router | 8 |
+| `/api/orders` | api_order_router | 5 |
+| `/api/suppliers` | api_supplier_router | 8 |
+| `/api/audit` | api_audit_router | 3 |
+| `/api/agents` | api_agent_router | 3 |
+| `/api/rag` | rag_router | 3 |
+| `/api/dashboard` | api_dashboard_router | 2 |
+| `/ml` | ml_router | 9 |
+| `/auth` | auth_router | 3 |
+| **Total** | | **~50** |
+
+## 7.2 Endpoints Detalhados
+
+### Chat (`/api/chat`)
+
+```http
+GET  /sessions              # Lista sessões (limit=20)
+POST /sessions              # Cria nova sessão
+DELETE /sessions/{id}       # Deleta sessão e mensagens
+GET  /sessions/{id}/messages # Histórico da sessão
+POST /sessions/{id}/messages # Envia mensagem (processa com IA)
+POST /sessions/{id}/actions  # Executa ação de botão
+WS   /ws/{session_id}        # WebSocket real-time
+```
+
+### Produtos (`/api/products`)
+
+```http
+GET    /                    # Lista produtos (search, category)
+GET    /{id}                # Detalhes do produto
+GET    /{sku}/price-history # Histórico de preços (limit=30)
+POST   /                    # Criar produto
+PUT    /{id}                # Atualizar produto
+DELETE /{id}                # Deletar produto
+POST   /{id}/ingest-price   # Ingere preço manualmente
+GET    /categories          # Lista categorias únicas
+```
+
+### Ordens (`/api/orders`)
+
+```http
+GET  /                      # Lista ordens (search, status)
+POST /                      # Criar ordem manualmente
+PUT  /{id}/approve          # Aprovar ordem
+PUT  /{id}/reject           # Rejeitar ordem
+GET  /{id}                  # Detalhes da ordem
+```
+
+### Fornecedores (`/api/suppliers`)
+
+```http
+GET    /                    # Lista fornecedores
+GET    /{id}                # Detalhes
+GET    /{id}/offers         # Ofertas do fornecedor
+POST   /                    # Criar fornecedor
+PUT    /{id}                # Atualizar
+DELETE /{id}                # Deletar
+POST   /{id}/offers         # Adicionar oferta
+GET    /product/{sku}       # Fornecedores por produto
+```
+
+### ML (`/ml`)
+
+```http
+POST /train/all/async       # Treinar todos (Celery)
+POST /train/{sku}/async     # Treinar um produto (Celery)
+POST /train/{sku}           # Treinar síncrono
+GET  /predict/{sku}         # Previsão (target, days_ahead)
+GET  /models                # Lista modelos treinados
+GET  /models/{sku}          # Detalhes do modelo
+GET  /models/{sku}/targets  # Targets disponíveis
+DELETE /models/{sku}        # Remove modelo
+GET  /tasks/{task_id}       # Status da task Celery
+```
+
+### RAG (`/api/rag`)
+
+```http
+POST /sync                  # Sincroniza produtos → ChromaDB
+GET  /status                # Status do índice
+POST /query                 # Busca semântica
+```
+
+### Auditoria (`/api/audit`)
+
+```http
+GET /decisions              # Log de decisões (limit=100)
+GET /decisions/{id}         # Detalhes da decisão
+GET /stats                  # Estatísticas agregadas
+```
+
+---
+
+# 8. MACHINE LEARNING
+
+## 8.1 Previsão de Demanda
+
+**Arquivo:** `app/services/ml_service.py`
+
+**Função:** `get_forecast(product_sku, days_ahead, session)`
+
+**Algoritmo:**
+1. Calcula demanda média dos últimos 30 dias
+2. Aplica fator de dia da semana (seg-sex: 1.1x, sáb-dom: 0.8x)
+3. Gera previsões para N dias futuros
+
+**Timezone:** America/Sao_Paulo (UTC-3)
+
+```python
+# Exemplo de output
+{
+  "sku": "MEC-001",
+  "forecast": [
+    {"date": "2026-01-15", "demand": 55},
+    {"date": "2026-01-16", "demand": 60},
+    {"date": "2026-01-17", "demand": 44}  # Sábado
+  ],
+  "average_demand": 50.0,
+  "generated_at": "2026-01-14 16:00:00 -03"
+}
+```
+
+## 8.2 Previsão de Preço
+
+**Função:** `predict_prices_for_product(sku, days_ahead, session)`
+
+**Algoritmo:**
+1. Obtém preço atual do banco
+2. Aplica tendência linear com variação controlada (±1%/dia)
+3. Limita variação total a ±5%
+
+```python
+# Exemplo de output
+{
+  "sku": "MEC-001",
+  "predictions": [
+    {"date": "2026-01-15", "price": 101.00},
+    {"date": "2026-01-16", "price": 99.00},
+    ...
+  ],
+  "current_price": 100.0,
+  "trend": "estável",
+  "generated_at": "2026-01-14 16:00:00 -03"
+}
+```
+
+## 8.3 Treinamento de Modelos
+
+**Arquivo:** `app/ml/training.py`
+
+**Tasks Celery:**
+- `train_all_products_task` - Treina todos
+- `train_product_model_task` - Treina um SKU
+
+**Parâmetros:**
+- `optimize`: Se True, usa Optuna para hiperparâmetros
+- `n_trials`: Número de iterações Optuna (10-200)
+
+---
+
+# 9. RAG (Retrieval-Augmented Generation)
+
+## 9.1 Arquitetura
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                       RAG PIPELINE                          │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌──────────┐    ┌─────────────┐    ┌──────────────────┐   │
+│  │ Produtos │───▶│  Embeddings │───▶│     ChromaDB     │   │
+│  │  (MySQL) │    │ text-embed. │    │  (Vector Store)  │   │
+│  └──────────┘    │    -004     │    └────────┬─────────┘   │
+│                  └─────────────┘             │             │
+│                                              │             │
+│  ┌──────────┐    ┌─────────────┐    ┌───────▼──────────┐   │
+│  │  Query   │───▶│  Embedding  │───▶│    Retriever     │   │
+│  │ (usuário)│    │             │    │   (top-k=5)      │   │
+│  └──────────┘    └─────────────┘    └───────┬──────────┘   │
+│                                              │             │
+│                                              ▼             │
+│                                    ┌──────────────────┐    │
+│                                    │     Prompt       │    │
+│                                    │   + Contexto     │    │
+│                                    └───────┬──────────┘    │
+│                                            │              │
+│                                            ▼              │
+│                                    ┌──────────────────┐    │
+│                                    │   Gemini 2.5     │    │
+│                                    │     Flash        │    │
+│                                    └───────┬──────────┘    │
+│                                            ▼              │
+│                                    ┌──────────────────┐    │
+│                                    │    Resposta      │    │
+│                                    └──────────────────┘    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## 9.2 Sincronização
+
+**Função:** `index_product_catalog(db_session)`
+
+**Processo:**
+1. Carrega todos produtos do MySQL
+2. Cria documentos estruturados com metadados
+3. Gera embeddings com Google AI
+4. Persiste no ChromaDB em `/data/chroma`
+
+**Formato do documento:**
+
+```
+Produto: Rolamento 6205-2RS
+SKU: MEC-001
+Categoria: Mecânica
+Estoque: 45 unidades
+Estoque Mínimo: 20 unidades
+Preço: R$ 23.50
+```
+
+## 9.3 Consulta
+
+**Função:** `query_product_catalog_with_google_rag(query, k=20)`
+
+**Retorna:** Resposta em linguagem natural baseada nos documentos recuperados.
+
+---
+
+# 10. TAREFAS ASSÍNCRONAS
+
+## 10.1 Celery Workers
+
+**Arquivo:** `app/core/celery_app.py`
+
+**Broker:** Redis (`redis://broker:6379/0`)
+
+**Tasks registradas:**
+
+| Task | Arquivo | Função |
+|------|---------|--------|
+| `execute_agent_analysis` | agent_tasks.py | Executa SupplyChainTeam |
+| `train_all_products_task` | ml_tasks.py | Treina todos modelos |
+| `train_product_model_task` | ml_tasks.py | Treina um modelo |
+| `retrain_global_model_task` | ml_tasks.py | Retreina modelo global |
+
+## 10.2 execute_agent_analysis_task
+
+**Fluxo completo:**
+
+```
+1. Recebe (sku, session_id)
+2. Chama execute_supply_chain_analysis(sku)
+3. Salva resultado em auditoria_decisoes
+4. Se session_id:
+   a. Formata resposta com format_agent_response()
+   b. Salva mensagem no chat
+   c. Publica no Redis para WebSocket
+5. Retorna resultado
+```
+
+---
+
+# 11. FRONTEND
+
+## 11.1 Estrutura
+
+```
+FrontEnd/src/
+├── components/           # Componentes reutilizáveis
+│   ├── ui/              # shadcn/ui components
+│   ├── Sidebar.tsx      # Menu lateral
+│   ├── Header.tsx       # Cabeçalho
+│   └── ...
+├── pages/               # Páginas da aplicação
+│   ├── Dashboard.tsx    # KPIs e alertas
+│   ├── Agents.tsx       # Chat com IA
+│   ├── Catalog.tsx      # Catálogo de produtos
+│   ├── Orders.tsx       # Ordens de compra
+│   ├── Suppliers.tsx    # Fornecedores
+│   ├── AuditLog.tsx     # Log de auditoria
+│   ├── Settings.tsx     # Configurações
+│   ├── Login.tsx        # Autenticação
+│   └── Register.tsx     # Cadastro
+├── contexts/            # React Context
+│   └── AuthContext.tsx  # Estado de autenticação
+├── lib/                 # Utilitários
+│   └── api.ts          # Cliente Axios
+└── App.tsx             # Rotas principais
+```
+
+## 11.2 Páginas
+
+| Página | Rota | Descrição |
+|--------|------|-----------|
+| Dashboard | `/` | KPIs, gráficos, alertas de estoque |
+| Agentes | `/agents` | Chat IA com histórico de sessões |
+| Catálogo | `/catalog` | Lista produtos, estoque, preços |
+| Ordens | `/orders` | Lista/aprova/rejeita ordens |
+| Fornecedores | `/suppliers` | CRUD fornecedores e ofertas |
+| Auditoria | `/audit` | Log de decisões dos agentes |
+| Configurações | `/settings` | Configurações do sistema |
+
+---
+
+# 12. INFRAESTRUTURA DOCKER
+
+## 12.1 Serviços
+
+```yaml
+# docker-compose.yml
+
+services:
+  api:
+    build: .
+    ports: ["8000:8000"]
+    depends_on: [db, broker]
+    volumes: [".:/app", "chroma_data:/data/chroma"]
+    
+  frontend:
+    build: ./FrontEnd
+    ports: ["5173:5173"]
+    
+  db:
+    image: mysql:8.0
+    ports: ["3306:3306"]
+    volumes: ["mysql_data:/var/lib/mysql"]
+    
+  broker:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    
+  worker:
+    build: .
+    command: celery -A app.core.celery_app worker -l INFO
+    depends_on: [api, broker]
+    
+  beat:
+    build: .
+    command: celery -A app.core.celery_app beat -l INFO
+    depends_on: [worker]
+```
+
+## 12.2 Volumes
+
+| Volume | Caminho | Conteúdo |
+|--------|---------|----------|
+| mysql_data | /var/lib/mysql | Banco de dados |
+| chroma_data | /data/chroma | Índice vetorial |
+| models | /app/models | Modelos ML treinados |
+
+---
+
+# 13. FLUXOS END-TO-END
+
+## 13.1 Fluxo de Chat com Análise
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ USUÁRIO digita: "Analise compra do produto MEC-001"                 │
+└─────────────────────────┬───────────────────────────────────────────┘
+                          ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ FRONTEND (Agents.tsx)                                               │
+│ POST /api/chat/sessions/1/messages { content: "..." }               │
+└─────────────────────────┬───────────────────────────────────────────┘
+                          ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ BACKEND (api_chat_router.py)                                        │
+│ post_chat_message() → chat_service.process_user_message()           │
+└─────────────────────────┬───────────────────────────────────────────┘
+                          ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ CHAT SERVICE                                                         │
+│ 1. add_chat_message() - salva msg usuário                           │
+│ 2. extract_entities() - {sku: "MEC-001", intent: "analise_compra"}  │
+│ 3. intent == "analise_compra" → handle_supply_chain_analysis()      │
+└─────────────────────────┬───────────────────────────────────────────┘
+                          ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ HANDLE SUPPLY CHAIN ANALYSIS                                         │
+│ execute_agent_analysis_task.delay(sku="MEC-001", session_id=1)      │
+│ Retorna: "🔍 Iniciando análise completa..."                         │
+└─────────────────────────┬───────────────────────────────────────────┘
+                          ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ CELERY WORKER (agent_tasks.py)                                       │
+│ execute_agent_analysis_task()                                        │
+│ 1. execute_supply_chain_analysis(sku)                               │
+└─────────────────────────┬───────────────────────────────────────────┘
+                          ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ AGENT SERVICE → SUPPLY CHAIN TEAM                                    │
+│ 1. AnalistaDemanda analisa demanda                                  │
+│ 2. ComparadorFornecedor busca ofertas                               │
+│ 3. AnalistaLogistico calcula custos                                 │
+│ 4. DecisionMaker toma decisão final                                 │
+│ Output: {need_restock: true, justification: "...", decision: "..."}│
+└─────────────────────────┬───────────────────────────────────────────┘
+                          ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ CELERY WORKER (continuação)                                          │
+│ 1. Salva em auditoria_decisoes                                      │
+│ 2. format_agent_response() → Markdown                               │
+│ 3. add_chat_message() - salva resposta                              │
+│ 4. redis_events.publish_chat_message_sync()                         │
+└─────────────────────────┬───────────────────────────────────────────┘
+                          ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ REDIS PUB/SUB                                                        │
+│ Canal: chat:session:1                                               │
+│ Mensagem: { session_id: 1, content: "## Análise...", ... }          │
+└─────────────────────────┬───────────────────────────────────────────┘
+                          ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ WEBSOCKET (main.py listener)                                         │
+│ Recebe mensagem → websocket_manager.send_message(1, data)           │
+└─────────────────────────┬───────────────────────────────────────────┘
+                          ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ FRONTEND (WebSocket client)                                          │
+│ Recebe mensagem → Atualiza estado → Renderiza card de análise       │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+# 14. CONFIGURAÇÕES
+
+## 14.1 Variáveis de Ambiente
 
 ```bash
-# === OBRIGATÓRIAS ===
+# .env
 
-# Google AI (Gemini 2.5)
-GOOGLE_API_KEY=your_google_api_key
-
-# Database (MySQL)
-DATABASE_URL=mysql+mysqlconnector://user:password@db:3306/app_db
-MYSQL_ROOT_PASSWORD=root_password
+# ============ BANCO DE DADOS ============
+MYSQL_ROOT_PASSWORD=change_me
 MYSQL_DATABASE=app_db
 MYSQL_USER=app_user
 MYSQL_PASSWORD=app_password
+DATABASE_URL=mysql+pymysql://app_user:app_password@db:3306/app_db
 
-# Redis
+# ============ GOOGLE AI ============
+GOOGLE_API_KEY=AIzaSy...sua_chave
+GOOGLE_GEMINI_MODEL=gemini-2.5-flash
+
+# ============ REDIS ============
 REDIS_URL=redis://broker:6379/0
 
-# === OPCIONAIS ===
+# ============ LLM LOCAL (OPCIONAL) ============
+USE_LOCAL_LLM=false
+OLLAMA_HOST=http://ollama:11434
+OLLAMA_MODEL=qwen2.5:7b-instruct
 
-# Tavily (Web Search)
-TAVILY_API_KEY=your_tavily_key
-
-# JWT Security
-SECRET_KEY=your_secret_key_32_chars
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-
-# Celery
+# ============ CELERY ============
 CELERY_BROKER_URL=redis://broker:6379/0
 CELERY_RESULT_BACKEND=redis://broker:6379/0
 ```
 
-### Frontend (.env.local)
-
-```bash
-VITE_API_URL=http://localhost:8000
-```
-
 ---
 
-## 📜 Scripts Utilitários
+# 15. TROUBLESHOOTING
 
-### Scripts Disponíveis (`/scripts`)
+## 15.1 Erros Comuns
 
-| Script | Descrição | Comando |
-|--------|-----------|---------|
-| `seed_database.py` | Popular banco com produtos | `python scripts/seed_database.py [csv_path]` |
-| `generate_realistic_data.py` | Gerar dados sintéticos | `python scripts/generate_realistic_data.py` |
-| `sync_vectors.py` | Sincronizar ChromaDB | `python scripts/sync_vectors.py` |
-| `train_all_phases.py` | Treinar modelos ML | `python scripts/train_all_phases.py` |
-| `start_pipeline.py` | Executar pipeline completo | `python scripts/start_pipeline.py` |
-| `test_agent_flow.py` | Testar fluxo de agentes | `python scripts/test_agent_flow.py` |
-| `validate_timeseries.py` | Validar séries temporais | `python scripts/validate_timeseries.py` |
+| Erro | Causa | Solução |
+|------|-------|---------|
+| `GOOGLE_API_KEY not found` | Variável não configurada | Adicionar no .env |
+| `ChromaDB instance conflict` | Múltiplas conexões | Usar singleton |
+| `Gemini 429 Rate Limit` | Muitas requisições | Aguardar ou usar fallback |
+| `Agent returned None` | Falha na API | Verificar logs, retry |
+| `function call turn order` | Histórico corrompido | Limpar sessão de chat |
+| `Data too long for column` | Texto excede VARCHAR | Alterar para TEXT |
 
-### Execução via Docker
-
-```bash
-# Popular banco
-docker compose exec api python scripts/seed_database.py
-
-# Sincronizar RAG
-docker compose exec api python scripts/sync_vectors.py
-
-# Treinar modelos
-docker compose exec api python scripts/train_all_phases.py
-```
-
----
-
-## 🧪 Testes
-
-### Estrutura de Testes
-
-```
-📂 app/tests/
-├── test_agents.py        # Testes de agentes
-├── test_ml.py            # Testes de ML
-├── test_rag.py           # Testes de RAG
-├── test_routers.py       # Testes de endpoints
-└── test_services.py      # Testes de serviços
-```
-
-### Executar Testes
+## 15.2 Comandos Úteis
 
 ```bash
-# Todos os testes
-pytest
-
-# Com cobertura
-pytest --cov=app
-
-# Testes específicos
-pytest app/tests/test_agents.py -v
-```
-
----
-
-## 🐳 Deploy com Docker
-
-### Serviços Docker Compose
-
-| Serviço | Porta | Descrição |
-|---------|-------|-----------|
-| `frontend` | 3000 | React + Nginx |
-| `api` | 8000 | FastAPI |
-| `worker` | - | Celery Worker |
-| `beat` | - | Celery Beat |
-| `db` | 3306 | MySQL 8.0 |
-| `broker` | 6380 | Redis |
-
-### Comandos Úteis
-
-```bash
-# Iniciar todos os serviços
-docker compose up -d
-
 # Ver logs
 docker compose logs -f api
+docker compose logs -f worker
 
-# Reconstruir imagem
-docker compose build api
+# Reiniciar serviço
+docker compose restart api
 
-# Acessar container
-docker compose exec api bash
+# Limpar sessões de chat
+docker compose exec api python3 -c "
+from sqlmodel import Session, create_engine
+from sqlalchemy import text
+engine = create_engine('mysql+pymysql://app_user:app_password@db:3306/app_db')
+with Session(engine) as s:
+    s.exec(text('SET FOREIGN_KEY_CHECKS=0'))
+    s.exec(text('DELETE FROM chat_context'))
+    s.exec(text('DELETE FROM chat_messages'))
+    s.exec(text('DELETE FROM chat_sessions'))
+    s.exec(text('SET FOREIGN_KEY_CHECKS=1'))
+    s.commit()
+print('OK')
+"
 
-# Parar tudo
-docker compose down
+# Popular dados demo
+docker compose exec api python scripts/seed_demo.py
 
-# Limpar volumes
-docker compose down -v
+# Sincronizar RAG
+curl -X POST http://localhost:8000/api/rag/sync
+
+# Treinar todos modelos ML
+curl -X POST http://localhost:8000/ml/train/all/async
 ```
 
 ---
 
-## 🔧 Troubleshooting
-
-### Erro: "GOOGLE_API_KEY não encontrada"
-
-```bash
-# Verificar se está no .env
-cat .env | grep GOOGLE_API_KEY
-
-# Definir manualmente
-export GOOGLE_API_KEY=your_key
-```
-
-### Erro: "Conexão com banco recusada"
-
-```bash
-# Verificar se MySQL está rodando
-docker compose logs db
-
-# Aguardar healthcheck
-docker compose ps  # Status deve ser "healthy"
-```
-
-### Erro: "ChromaDB instance conflict"
-
-```bash
-# Limpar dados do ChromaDB
-rm -rf data/chroma
-
-# Resincronizar
-python scripts/sync_vectors.py
-```
-
-### Erro: "Rate limit exceeded" (Google API)
-
-```bash
-# Verificar quotas em:
-# https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas
-
-# Usar modelo menor temporariamente
-# Em llm_config.py, mudar para:
-# model="gemini-2.0-flash"
-```
-
-### Frontend não conecta na API
-
-```bash
-# Verificar CORS
-# Em app/main.py, allow_origins deve incluir http://localhost:3000
-
-# Verificar URL da API
-# Em FrontEnd/.env.local:
-VITE_API_URL=http://localhost:8000
-```
-
----
-
-## 📊 Métricas e Monitoramento
-
-### Health Check
-
-```bash
-# Verificar saúde da API
-curl http://localhost:8000/health
-# {"status": "ok"}
-```
-
-### Endpoints de Status
-
-| Endpoint | Descrição |
-|----------|-----------|
-| `/health` | Status da API |
-| `/agents/status` | Status dos agentes |
-| `/ml/metrics` | Métricas dos modelos |
-| `/rag/status` | Status do ChromaDB |
-
----
-
-## 🚀 Próximos Passos
-
-1. ✅ **CONCLUÍDO**: Arquitetura multi-agente implementada
-2. ✅ **CONCLUÍDO**: Sistema RAG com ChromaDB
-3. ✅ **CONCLUÍDO**: Previsões com StatsForecast
-4. 🧪 **EM TESTE**: Fluxos end-to-end
-5. 📊 **PLANEJADO**: Monitoramento de métricas em produção
-6. 🔒 **PLANEJADO**: Rate limiting e segurança avançada
-7. 📈 **PLANEJADO**: Dashboard analítico avançado
-
----
-
-## 🆕 Funcionalidades Recentes (v1.1.0)
-
-### 1. Sistema de Fallback Automático de Modelos Gemini
-
-O sistema agora possui fallback automático entre modelos quando ocorrem erros de rate limit (429):
-
-```
-Cadeia de Fallback:
-gemini-2.5-flash → gemini-2.5-flash-lite → gemini-3-flash
-```
-
-**Arquivos:**
-- `app/agents/gemini_fallback.py` - Gerenciador de fallback
-- `app/agents/supply_chain_team.py` - Integração com fallback
-
-**Comportamento:**
-- Detecta automaticamente erros 429 (Rate Limit Exceeded)
-- Alterna para o próximo modelo na cadeia
-- Implementa retry com backoff exponencial
-- Cooldown de 5 minutos antes de tentar voltar ao modelo primário
-
----
-
-### 2. Histórico de Chat
-
-O chat agora mantém histórico de conversas anteriores com navegação lateral.
-
-**Backend:**
-| Endpoint | Método | Descrição |
-|----------|--------|-----------|
-| `/api/chat/sessions` | GET | Lista sessões de chat |
-| `/api/chat/sessions/{id}` | DELETE | Apaga uma sessão |
-
-**Frontend (Agents.tsx):**
-- Sidebar com lista de conversas anteriores
-- Botão "Nova Conversa"
-- Botão de apagar (🗑️) em cada conversa
-- Sessão só é criada quando o usuário envia a primeira mensagem
-- Mensagem de boas-vindas quando não há sessão ativa
-
----
-
-### 3. Página de Fornecedores
-
-Nova página completa para gestão de fornecedores (`/suppliers`).
-
-**Backend (api_supplier_router.py):**
-| Endpoint | Método | Descrição |
-|----------|--------|-----------|
-| `/api/suppliers/` | GET | Lista todos |
-| `/api/suppliers/{id}` | GET | Detalhes |
-| `/api/suppliers/{id}/offers` | GET | Ofertas do fornecedor |
-| `/api/suppliers/` | POST | Criar novo |
-| `/api/suppliers/{id}` | PUT | Atualizar |
-| `/api/suppliers/{id}` | DELETE | Remover |
-
-**Frontend (Suppliers.tsx):**
-- Listagem de fornecedores com estatísticas
-- Cards com indicador de confiabilidade
-- Modal para ver ofertas de produtos
-- Modal de cadastro com slider de confiabilidade
-- Busca por nome
-
----
-
-### 4. Log de Auditoria
-
-Nova página para visualizar decisões dos agentes (`/audit`).
-
-**Backend (api_audit_router.py):**
-| Endpoint | Método | Descrição |
-|----------|--------|-----------|
-| `/api/audit/decisions/` | GET | Lista decisões |
-| `/api/audit/decisions/{id}` | GET | Detalhes completos |
-| `/api/audit/stats/` | GET | Estatísticas |
-
-**Frontend (AuditLog.tsx):**
-- Tabela com histórico de decisões
-- Filtro por SKU
-- Modal com detalhes (raciocínio completo, contexto)
-- Estatísticas: total de decisões, agentes ativos, SKUs analisados
-
-**Integração:**
-- Todas as análises de agentes são salvas automaticamente na tabela `AuditoriaDecisao`
-- Resultados aparecem na página de Auditoria após execução
-
----
-
-### 5. Melhorias no Menu de Navegação
-
-**Sidebar atualizado:**
-| Item | Rota | Ícone |
-|------|------|-------|
-| Dashboard | `/` | LayoutDashboard |
-| Agentes | `/agents` | Bot |
-| Ordens | `/orders` | ClipboardList |
-| Catálogo | `/catalog` | Package |
-| Fornecedores | `/suppliers` | Truck |
-| Auditoria | `/audit` | FileText |
-| Configurações | `/settings` | Settings2 |
-
----
-
-### 6. Tabela de Auditoria (Banco de Dados)
-
-A tabela `auditoria_decisoes` foi ajustada para suportar textos longos:
-
-```sql
-ALTER TABLE auditoria_decisoes 
-  MODIFY COLUMN decisao TEXT,
-  MODIFY COLUMN raciocinio TEXT,
-  MODIFY COLUMN contexto TEXT;
-```
-
----
-
-## �📚 Referências
-
-- [Agno Framework](https://docs.agno.com/) - Framework de agentes
-- [FastAPI](https://fastapi.tiangolo.com/) - Framework web
-- [LangChain](https://python.langchain.com/) - Orquestração LLM
-- [ChromaDB](https://docs.trychroma.com/) - Vector database
-- [Google Gemini](https://ai.google.dev/) - LLM principal
-- [StatsForecast](https://nixtla.github.io/statsforecast/) - Previsões estatísticas
-- [SQLModel](https://sqlmodel.tiangolo.com/) - ORM moderno
-
----
-
-**Versão da Documentação**: 1.1.0  
-**Última Atualização**: 29/12/2025  
-**Status do Projeto**: ✅ Pronto para Produção
-
----
-
-*Documentação gerada automaticamente com base na análise completa do código-fonte.*
+**Documentação Completa End-to-End**
+*Gerada em: 14/01/2026*
+*Versão: 1.2.0*

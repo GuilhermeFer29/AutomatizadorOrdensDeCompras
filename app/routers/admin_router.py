@@ -1,0 +1,259 @@
+"""
+Router de Administração - Endpoints protegidos para operações de sistema.
+
+ARQUITETURA DE PRODUÇÃO:
+========================
+Este router contém endpoints administrativos que não devem ser
+expostos publicamente sem autenticação adequada.
+
+ENDPOINTS:
+- POST /admin/rag/sync: Sincroniza produtos no vector store (background)
+- GET /admin/rag/status: Status da sincronização
+- GET /admin/health: Health check detalhado
+- POST /admin/cache/clear: Limpa caches
+
+SEGURANÇA:
+- Em produção, proteger com API Key ou JWT
+- Não expor na documentação pública
+
+REFERÊNCIAS:
+- FastAPI Background Tasks: https://fastapi.tiangolo.com/tutorial/background-tasks/
+
+Autor: Sistema PMI | Data: 2026-01-14
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import datetime, timezone
+from typing import Optional
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from pydantic import BaseModel
+from sqlmodel import Session, select
+
+from app.core.database import get_session
+
+LOGGER = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+# ============================================================================
+# RESPONSE MODELS
+# ============================================================================
+
+class SyncStatus(BaseModel):
+    """Status da sincronização RAG."""
+    status: str  # idle, running, completed, failed
+    last_sync: Optional[str] = None
+    products_indexed: int = 0
+    message: str = ""
+
+
+class HealthStatus(BaseModel):
+    """Health check detalhado."""
+    status: str
+    database: str
+    vector_db: str
+    timestamp: str
+
+
+# ============================================================================
+# ESTADO GLOBAL (Em produção, usar Redis)
+# ============================================================================
+
+_sync_state = {
+    "status": "idle",
+    "last_sync": None,
+    "products_indexed": 0,
+    "message": "Nunca sincronizado"
+}
+
+
+# ============================================================================
+# BACKGROUND TASKS
+# ============================================================================
+
+def _sync_rag_background(batch_size: int = 100) -> None:
+    """
+    Sincroniza produtos no vector store em background com paginação.
+    
+    Args:
+        batch_size: Número de produtos por batch (evita OOM)
+    """
+    global _sync_state
+    
+    _sync_state["status"] = "running"
+    _sync_state["message"] = "Sincronização em andamento..."
+    
+    try:
+        from app.core.database import get_sync_engine
+        from app.core.vector_db import get_products_collection
+        from app.models.models import Produto
+        from sqlmodel import Session
+        
+        engine = get_sync_engine()
+        collection = get_products_collection()
+        
+        total_indexed = 0
+        offset = 0
+        
+        with Session(engine) as session:
+            while True:
+                # Busca batch de produtos (PAGINAÇÃO)
+                produtos = session.exec(
+                    select(Produto)
+                    .offset(offset)
+                    .limit(batch_size)
+                ).all()
+                
+                if not produtos:
+                    break
+                
+                # Prepara documentos para ChromaDB
+                ids = []
+                documents = []
+                metadatas = []
+                
+                for p in produtos:
+                    # Cria documento enriquecido
+                    doc_content = (
+                        f"Produto: {p.nome}\n"
+                        f"SKU: {p.sku}\n"
+                        f"Categoria: {p.categoria or 'N/A'}\n"
+                        f"Estoque Atual: {p.estoque_atual} unidades\n"
+                        f"Estoque Mínimo: {p.estoque_minimo} unidades\n"
+                    )
+                    
+                    if p.estoque_atual <= p.estoque_minimo:
+                        doc_content += "⚠️ ATENÇÃO: Estoque abaixo do mínimo!\n"
+                    
+                    ids.append(f"product_{p.id}")
+                    documents.append(doc_content)
+                    metadatas.append({
+                        "product_id": p.id,
+                        "sku": p.sku,
+                        "nome": p.nome,
+                        "categoria": p.categoria or "N/A",
+                        "estoque_atual": p.estoque_atual,
+                        "estoque_minimo": p.estoque_minimo,
+                    })
+                
+                # Upsert no ChromaDB
+                collection.upsert(
+                    ids=ids,
+                    documents=documents,
+                    metadatas=metadatas
+                )
+                
+                total_indexed += len(produtos)
+                offset += batch_size
+                
+                LOGGER.info(f"RAG Sync: {total_indexed} produtos indexados...")
+        
+        _sync_state["status"] = "completed"
+        _sync_state["last_sync"] = datetime.now(timezone.utc).isoformat()
+        _sync_state["products_indexed"] = total_indexed
+        _sync_state["message"] = f"Sincronização concluída: {total_indexed} produtos"
+        
+        LOGGER.info(f"✅ RAG Sync completo: {total_indexed} produtos indexados")
+        
+    except Exception as e:
+        LOGGER.error(f"❌ RAG Sync falhou: {e}")
+        _sync_state["status"] = "failed"
+        _sync_state["message"] = f"Erro: {str(e)}"
+
+
+# ============================================================================
+# ENDPOINTS
+# ============================================================================
+
+@router.post("/rag/sync", response_model=SyncStatus)
+async def sync_rag(
+    background_tasks: BackgroundTasks,
+    batch_size: int = 100,
+    force: bool = False
+):
+    """
+    Inicia sincronização de produtos no vector store (background).
+    
+    - **batch_size**: Produtos por batch (default: 100)
+    - **force**: Força re-sync mesmo se já estiver rodando
+    
+    A sincronização roda em background para não bloquear a API.
+    Use GET /admin/rag/status para acompanhar o progresso.
+    """
+    global _sync_state
+    
+    if _sync_state["status"] == "running" and not force:
+        raise HTTPException(
+            status_code=409,
+            detail="Sincronização já em andamento. Use force=true para reiniciar."
+        )
+    
+    # Agenda task em background
+    background_tasks.add_task(_sync_rag_background, batch_size)
+    
+    _sync_state["status"] = "running"
+    _sync_state["message"] = "Sincronização iniciada em background"
+    
+    return SyncStatus(**_sync_state)
+
+
+@router.get("/rag/status", response_model=SyncStatus)
+async def get_rag_status():
+    """
+    Retorna status atual da sincronização RAG.
+    """
+    return SyncStatus(**_sync_state)
+
+
+@router.get("/health", response_model=HealthStatus)
+async def admin_health_check():
+    """
+    Health check detalhado para monitoramento.
+    
+    Verifica:
+    - Conexão com banco de dados
+    - Conexão com vector store
+    """
+    from app.core.database import check_database_health
+    from app.core.vector_db import VectorDBManager
+    
+    # Check database
+    db_health = check_database_health()
+    
+    # Check vector DB
+    try:
+        if VectorDBManager.is_initialized():
+            vector_status = "connected"
+        else:
+            # Tenta inicializar
+            VectorDBManager.get_client()
+            vector_status = "connected"
+    except Exception as e:
+        vector_status = f"error: {str(e)}"
+    
+    overall = "healthy" if db_health["status"] == "healthy" and vector_status == "connected" else "unhealthy"
+    
+    return HealthStatus(
+        status=overall,
+        database=db_health["status"],
+        vector_db=vector_status,
+        timestamp=datetime.now(timezone.utc).isoformat()
+    )
+
+
+@router.post("/cache/clear")
+async def clear_caches():
+    """
+    Limpa caches do sistema.
+    
+    Útil para forçar recarga de dados após atualizações.
+    """
+    # TODO: Implementar limpeza de caches quando houver Redis
+    return {"status": "ok", "message": "Caches limpos (nenhum cache ativo no momento)"}
+
+
+__all__ = ["router"]
