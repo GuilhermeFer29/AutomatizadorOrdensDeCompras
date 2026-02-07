@@ -1,10 +1,12 @@
 """Tests for API endpoints."""
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
 from fastapi.testclient import TestClient
 from sqlmodel import Session
-from app.models.models import Produto, PrecosHistoricos, ChatSession, ChatMessage
+
+from app.models.models import ChatMessage, ChatSession, PrecosHistoricos, Produto
+
 
 def test_read_products_empty(client: TestClient):
     """Test reading products when db is empty."""
@@ -34,7 +36,7 @@ def test_read_products_with_data(client: TestClient, session: Session):
     product = Produto(sku="EXISTING-SKU", nome="Existing Product", estoque_atual=10, estoque_minimo=5, categoria="Test")
     session.add(product)
     session.commit()
-    
+
     response = client.get("/api/products/")
     assert response.status_code == 200
     data = response.json()
@@ -46,13 +48,13 @@ def test_get_product_price_history(client: TestClient, session: Session):
     product = Produto(sku="HistSKU", nome="Hist Product", estoque_atual=10, categoria="Test")
     session.add(product)
     session.commit()
-    
+
     # Add history
     price = PrecosHistoricos(produto_id=product.id, preco=100.0)
     session.add(price)
     session.commit()
-    
-    response = client.get(f"/api/products/HistSKU/price-history")
+
+    response = client.get("/api/products/HistSKU/price-history")
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 1
@@ -73,7 +75,7 @@ def test_post_chat_message(mock_process, client: TestClient, session: Session):
     chat_session = ChatSession()
     session.add(chat_session)
     session.commit()
-    
+
     # Mock return of process_user_message
     mock_response = ChatMessage(
         session_id=chat_session.id,
@@ -82,12 +84,12 @@ def test_post_chat_message(mock_process, client: TestClient, session: Session):
         metadata_json='{"type": "text"}'
     )
     mock_process.return_value = mock_response
-    
+
     response = client.post(
         f"/api/chat/sessions/{chat_session.id}/messages",
         json={"content": "Hello agent"}
     )
-    
+
     assert response.status_code == 200
     data = response.json()
     assert data["content"] == "Hello, I am a mock agent."

@@ -1,6 +1,5 @@
 """Tests for authentication endpoints."""
 
-import pytest
 from fastapi.testclient import TestClient
 
 
@@ -31,7 +30,7 @@ def test_register_duplicate_email(client: TestClient):
             "full_name": "First User"
         }
     )
-    
+
     # Second registration with same email
     response = client.post(
         "/auth/register",
@@ -56,7 +55,7 @@ def test_login_success(client: TestClient):
             "full_name": "Login Test"
         }
     )
-    
+
     # Login using form data (OAuth2PasswordRequestForm expects form data)
     response = client.post(
         "/auth/login",
@@ -95,7 +94,7 @@ def test_login_wrong_password(client: TestClient):
             "full_name": "Wrong Pass Test"
         }
     )
-    
+
     # Try login with wrong password using form data
     response = client.post(
         "/auth/login",

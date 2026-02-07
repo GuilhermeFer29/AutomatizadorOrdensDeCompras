@@ -5,15 +5,16 @@ NOTA: Em produção, este serviço se conectaria a APIs externas ou faria web sc
 Por ora, retorna o preço atual do produto do banco de dados como fallback.
 """
 
-from typing import Optional
+
 from sqlmodel import Session, select
-from app.models.models import Produto
+
+from app.models.models import PrecosHistoricos, Produto
 
 
-def scrape_and_save_price(product_id: int, session: Session = None) -> Optional[float]:
+def scrape_and_save_price(product_id: int, session: Session = None) -> float | None:
     """
     Obtém o preço de um produto. Em produção, faria scraping externo.
-    
+
     Atualmente retorna o preço do banco de dados como fallback.
 
     Args:
@@ -25,17 +26,23 @@ def scrape_and_save_price(product_id: int, session: Session = None) -> Optional[
     """
     if session:
         produto = session.get(Produto, product_id)
-        if produto and produto.preco_atual:
-            return float(produto.preco_atual)
-    
+        if produto:
+            latest_price = session.exec(
+                select(PrecosHistoricos)
+                .where(PrecosHistoricos.produto_id == produto.id)
+                .order_by(PrecosHistoricos.coletado_em.desc())
+            ).first()
+            if latest_price:
+                return float(latest_price.preco)
+
     # Fallback: se não tiver sessão ou produto, retorna None
     return None
 
 
-def get_market_price_for_sku(sku: str, session: Session = None) -> Optional[float]:
+def get_market_price_for_sku(sku: str, session: Session = None) -> float | None:
     """
     Busca preço de mercado para um SKU específico.
-    
+
     Em produção, consultaria APIs de e-commerce ou faria web scraping.
     Atualmente retorna o preço atual do produto com pequena variação.
 
@@ -48,10 +55,16 @@ def get_market_price_for_sku(sku: str, session: Session = None) -> Optional[floa
     """
     if session:
         produto = session.exec(select(Produto).where(Produto.sku == sku)).first()
-        if produto and produto.preco_atual:
-            # Simula variação de mercado de ±5%
-            import random
-            variation = random.uniform(0.95, 1.05)
-            return round(float(produto.preco_atual) * variation, 2)
-    
+        if produto:
+            latest_price = session.exec(
+                select(PrecosHistoricos)
+                .where(PrecosHistoricos.produto_id == produto.id)
+                .order_by(PrecosHistoricos.coletado_em.desc())
+            ).first()
+            if latest_price:
+                # Simula variação de mercado de ±5%
+                import random
+                variation = random.uniform(0.95, 1.05)
+                return round(float(latest_price.preco) * variation, 2)
+
     return None

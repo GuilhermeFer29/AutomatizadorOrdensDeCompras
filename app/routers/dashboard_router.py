@@ -2,23 +2,24 @@
 
 from __future__ import annotations
 
+import html
+import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
-import json
 import pandas as pd
 import structlog
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import HTMLResponse
 from sqlmodel import Session, select
 
+from app.core.cache import cache_response
 from app.core.config import DEFAULT_HORIZON_DAYS, ROOT_DIR
 from app.core.database import engine
+from app.core.security import get_current_user
 from app.ml.prediction import predict_prices_for_product
 from app.models.models import PrecosHistoricos, Produto
-from app.core.cache import cache_response
 
 LOGGER = structlog.get_logger(__name__)
 router = APIRouter(tags=["dashboard"])
@@ -28,13 +29,14 @@ router = APIRouter(tags=["dashboard"])
 @router.get("/dashboard", response_class=HTMLResponse)
 @cache_response(namespace="dashboard")
 def render_dashboard(
-  produto_id: Optional[int] = Query(default=None),
-  busca: Optional[str] = Query(default=None, alias="q"),
+  produto_id: int | None = Query(default=None),
+  busca: str | None = Query(default=None, alias="q"),
+  current_user=Depends(get_current_user),
 ) -> HTMLResponse:
   """Render the dashboard with historical prices, forecast curve and metrics."""
 
   termo_busca = (busca or "").strip()
-  aviso_busca: Optional[str] = None
+  aviso_busca: str | None = None
 
   with Session(engine) as session:
     produtos_catalogo = list(session.exec(select(Produto).order_by(Produto.nome)))
@@ -67,7 +69,7 @@ def render_dashboard(
   if history_frame.empty:
     LOGGER.info("dashboard.no_history", produto_id=produto.id)
     chart_payload = _empty_chart_payload()
-    metricas: Dict[str, float] = {}
+    metricas: dict[str, float] = {}
     treinado_em = None
   else:
     chart_payload, metricas, treinado_em = _build_product_chart_payload(
@@ -93,7 +95,7 @@ def render_dashboard(
 
 
 @router.get("/dashboard/global/report")
-def download_global_report() -> HTMLResponse:
+def download_global_report(current_user=Depends(get_current_user)) -> HTMLResponse:
   """Retorna instruções para gerar relatório com o modelo global."""
 
   content = (
@@ -103,7 +105,7 @@ def download_global_report() -> HTMLResponse:
   return HTMLResponse(content, status_code=200)
 
 
-def _select_produto(produtos: List[Produto], produto_id: Optional[int]) -> Produto:
+def _select_produto(produtos: list[Produto], produto_id: int | None) -> Produto:
     """Return the requested product if available, otherwise default to the first entry."""
 
     if produto_id is None:
@@ -116,7 +118,7 @@ def _select_produto(produtos: List[Produto], produto_id: Optional[int]) -> Produ
     return produtos[0]
 
 
-def _filter_products(produtos: List[Produto], termo: str) -> List[Produto]:
+def _filter_products(produtos: list[Produto], termo: str) -> list[Produto]:
   """Filter products by name or SKU using the provided search term."""
 
   termo_lower = termo.lower()
@@ -128,7 +130,7 @@ def _filter_products(produtos: List[Produto], termo: str) -> List[Produto]:
   ]
 
 
-def _build_history_frame(precos: List[PrecosHistoricos]) -> pd.DataFrame:
+def _build_history_frame(precos: list[PrecosHistoricos]) -> pd.DataFrame:
   """Convert SQLModel records into a tidy pandas dataframe."""
   frame = pd.DataFrame(
     {
@@ -140,7 +142,7 @@ def _build_history_frame(precos: List[PrecosHistoricos]) -> pd.DataFrame:
   return frame
 
 
-def _empty_chart_payload() -> Dict[str, List[Optional[float]]]:
+def _empty_chart_payload() -> dict[str, list[float | None]]:
   return {
     "labels": [],
     "real_history": [],
@@ -149,7 +151,7 @@ def _empty_chart_payload() -> Dict[str, List[Optional[float]]]:
   }
 
 
-def _load_global_forecast(produtos: list[Produto]) -> Optional[GlobalDashboardContext]:
+def _load_global_forecast(produtos: list[Produto]) -> GlobalDashboardContext | None:
   """Carrega e agrega as previsões de preços para todos os produtos do catálogo."""
   if not produtos:
     return None
@@ -169,14 +171,14 @@ def _load_global_forecast(produtos: list[Produto]) -> Optional[GlobalDashboardCo
     LOGGER.warning("dashboard.global.forecast_failure", reason="no_forecasts_available")
     return None
 
-  labels: List[str] = []
-  forecast_values: List[Optional[float]] = []
+  labels: list[str] = []
+  forecast_values: list[float | None] = []
 
   base_date = datetime.now().date()
   for day_offset in range(DEFAULT_HORIZON_DAYS):
     label = (base_date + timedelta(days=day_offset + 1)).strftime("%Y-%m-%d")
-    aggregated: List[float] = []
-    for sku, sku_forecasts in forecasts_by_sku.items():
+    aggregated: list[float] = []
+    for _sku, sku_forecasts in forecasts_by_sku.items():
       if day_offset < len(sku_forecasts):
         aggregated.append(sku_forecasts[day_offset])
     if aggregated:
@@ -205,10 +207,10 @@ def _load_global_forecast(produtos: list[Produto]) -> Optional[GlobalDashboardCo
 
 
 def _create_empty_forecast_payload(
-  labels: List[str], 
-  real_series: List[Optional[float]],
-  synthetic_series: List[Optional[float]],
-) -> Dict[str, List[Optional[float]]]:
+  labels: list[str],
+  real_series: list[float | None],
+  synthetic_series: list[float | None],
+) -> dict[str, list[float | None]]:
   """Create payload with no forecast data."""
 
   return {
@@ -221,17 +223,17 @@ def _create_empty_forecast_payload(
 
 def _extract_history_data(
   history_frame: pd.DataFrame,
-) -> Tuple[List[str], List[Optional[float]], List[Optional[float]]]:
+) -> tuple[list[str], list[float | None], list[float | None]]:
   """Extrai e formata dados históricos para o gráfico."""
   labels = history_frame["ds"].dt.strftime("%Y-%m-%d").tolist()
-  real_series: List[Optional[float]] = (
-    history_frame.where(history_frame["is_synthetic"] == False)["y"]
+  real_series: list[float | None] = (
+    history_frame.where(~history_frame["is_synthetic"])["y"]
     .round(4)
     .where(pd.notna, None)
     .tolist()
   )
-  synthetic_series: List[Optional[float]] = (
-    history_frame.where(history_frame["is_synthetic"] == True)["y"]
+  synthetic_series: list[float | None] = (
+    history_frame.where(history_frame["is_synthetic"])["y"]
     .round(4)
     .where(pd.notna, None)
     .tolist()
@@ -241,7 +243,7 @@ def _extract_history_data(
 
 def _build_product_chart_payload(
   *, produto: Produto, history_frame: pd.DataFrame, horizon: int
-) -> Tuple[Dict[str, List[Optional[float]]], Dict[str, float], datetime]:
+) -> tuple[dict[str, list[float | None]], dict[str, float], datetime]:
   labels, real_series, synthetic_series = _extract_history_data(history_frame)
   if not labels:
     return _empty_chart_payload(), {}, datetime.now()
@@ -255,14 +257,14 @@ def _build_product_chart_payload(
     LOGGER.warning("dashboard.forecast_failure", produto_id=produto.id, error=str(exc))
     return _create_empty_forecast_payload(labels, real_series, synthetic_series), {}, datetime.now()
   future_labels = _future_labels(labels[-1], len(forecast_values))
-  forecast_map = {label: round(value, 4) for label, value in zip(future_labels, forecast_values)}
+  forecast_map = {label: round(value, 4) for label, value in zip(future_labels, forecast_values, strict=False)}
 
   chart_payload = _merge_history_and_forecast(labels, real_series, synthetic_series, forecast_map)
   metricas, treinado_em, _ = _fetch_global_metadata()
   return chart_payload, metricas, treinado_em
 
 
-def _future_labels(start_label: str, horizon: int) -> List[str]:
+def _future_labels(start_label: str, horizon: int) -> list[str]:
   start_date = datetime.strptime(start_label, "%Y-%m-%d").date()
   return [
     (start_date + timedelta(days=index + 1)).strftime("%Y-%m-%d")
@@ -271,11 +273,11 @@ def _future_labels(start_label: str, horizon: int) -> List[str]:
 
 
 def _merge_history_and_forecast(
-  labels: List[str], 
-  real_series: List[Optional[float]], 
-  synthetic_series: List[Optional[float]],
-  forecast_data: Dict[str, float]
-) -> Dict[str, List[Optional[float]]]:
+  labels: list[str],
+  real_series: list[float | None],
+  synthetic_series: list[float | None],
+  forecast_data: dict[str, float]
+) -> dict[str, list[float | None]]:
   """Merge historical data with forecast predictions."""
 
   # A previsão começa um dia depois do último dado histórico
@@ -294,7 +296,7 @@ def _merge_history_and_forecast(
   }
 
 
-def _fetch_global_metadata() -> Tuple[Dict[str, float], Optional[datetime], int]:
+def _fetch_global_metadata() -> tuple[dict[str, float], datetime | None, int]:
   metadata_path = ROOT_DIR / "models" / "global_lgbm_metadata.json"
   if not metadata_path.is_file():
     return {}, None, 0
@@ -308,7 +310,7 @@ def _fetch_global_metadata() -> Tuple[Dict[str, float], Optional[datetime], int]
   metrics = {key: float(value) for key, value in (payload.get("metrics", {}) or {}).items()}
 
   trained_at_raw = payload.get("trained_at")
-  trained_at: Optional[datetime]
+  trained_at: datetime | None
   try:
     trained_at = datetime.fromisoformat(trained_at_raw) if trained_at_raw else None
   except ValueError:
@@ -325,7 +327,7 @@ def _render_template(template_data: TemplateData) -> str:
   return _build_html_template(prepared_data)
 
 
-def _build_html_template(template_data: Dict[str, str]) -> str:
+def _build_html_template(template_data: dict[str, str]) -> str:
   """Build the complete HTML template."""
   return f"""
 <!DOCTYPE html>
@@ -370,7 +372,7 @@ def _get_css_styles() -> str:
   """
 
 
-def _build_header_section(template_data: Dict[str, str]) -> str:
+def _build_header_section(template_data: dict[str, str]) -> str:
   """Build the header section of the HTML."""
   return f"""
   <header>
@@ -396,7 +398,7 @@ def _build_header_section(template_data: Dict[str, str]) -> str:
   """
 
 
-def _build_main_section(template_data: Dict[str, str]) -> str:
+def _build_main_section(template_data: dict[str, str]) -> str:
   """Build the main content section."""
   global_section = ""
   if template_data.get("global_available") == "true":
@@ -430,7 +432,7 @@ def _build_footer_section() -> str:
   """
 
 
-def _build_chart_script(template_data: Dict[str, str]) -> str:
+def _build_chart_script(template_data: dict[str, str]) -> str:
   """Build the Chart.js configuration script."""
   return f"""
   <script>
@@ -543,41 +545,41 @@ def _build_chart_script(template_data: Dict[str, str]) -> str:
 class GlobalDashboardContext:
   """Context data for the global aggregated model."""
 
-  chart_payload: Dict[str, List[Optional[float]]]
-  metricas: Dict[str, float]
-  treinado_em: Optional[datetime]
+  chart_payload: dict[str, list[float | None]]
+  metricas: dict[str, float]
+  treinado_em: datetime | None
   holdout_dias: int
-  report_path: Optional[str]
+  report_path: str | None
 
 
 @dataclass
 class TemplateData:
     """Data class to encapsulate template rendering parameters."""
 
-    produtos: List[Produto]
+    produtos: list[Produto]
     produto_selecionado: Produto
-    chart_payload: Dict[str, List[Optional[float]]]
-    metricas: Dict[str, float]
-    treinado_em: Optional[datetime]
-    aviso: Optional[str]
+    chart_payload: dict[str, list[float | None]]
+    metricas: dict[str, float]
+    treinado_em: datetime | None
+    aviso: str | None
     busca: str
-    aviso_busca: Optional[str]
-    global_context: Optional[GlobalDashboardContext]
+    aviso_busca: str | None
+    global_context: GlobalDashboardContext | None
 
 
-def _prepare_template_data(template_data: TemplateData) -> Dict[str, str]:
+def _prepare_template_data(template_data: TemplateData) -> dict[str, str]:
   """Prepare all template data for rendering."""
 
-  prepared: Dict[str, str] = {
-    "produto_nome": template_data.produto_selecionado.nome,
+  prepared: dict[str, str] = {
+    "produto_nome": html.escape(template_data.produto_selecionado.nome or ""),
     "options_html": _build_product_options(template_data.produtos, template_data.produto_selecionado),
     "chart_json": json.dumps(template_data.chart_payload, ensure_ascii=False),
     "metricas_html": _format_metrics(template_data.metricas),
     "treino_texto": _format_training_date(template_data.treinado_em),
-    "aviso_html": f"<p class='warning'>{template_data.aviso}</p>" if template_data.aviso else "",
-    "search_value": template_data.busca,
+    "aviso_html": f"<p class='warning'>{html.escape(template_data.aviso)}</p>" if template_data.aviso else "",
+    "search_value": html.escape(template_data.busca),
     "search_notice_html": (
-      f"<p class='search-notice'>{template_data.aviso_busca}</p>" if template_data.aviso_busca else ""
+      f"<p class='search-notice'>{html.escape(template_data.aviso_busca)}</p>" if template_data.aviso_busca else ""
     ),
   }
 
@@ -612,17 +614,17 @@ def _prepare_template_data(template_data: TemplateData) -> Dict[str, str]:
   return prepared
 
 
-def _build_product_options(produtos: List[Produto], produto_selecionado: Produto) -> str:
+def _build_product_options(produtos: list[Produto], produto_selecionado: Produto) -> str:
   """Build HTML options for product selection."""
   return "\n".join([
     f'<option value="{produto.id}"'
     f" {'selected' if produto.id == produto_selecionado.id else ''}>"
-    f"{produto.nome}</option>"
+    f"{html.escape(produto.nome or '')}</option>"
     for produto in produtos
   ])
 
 
-def _format_metrics(metricas: Dict[str, float]) -> str:
+def _format_metrics(metricas: dict[str, float]) -> str:
   """Format metrics for display."""
   return " | ".join([
     f"MSE: {metricas.get('mse', float('nan')):.4f}" if "mse" in metricas else "MSE: N/D",
@@ -630,10 +632,10 @@ def _format_metrics(metricas: Dict[str, float]) -> str:
   ])
 
 
-def _format_training_date(treinado_em: Optional[datetime]) -> str:
+def _format_training_date(treinado_em: datetime | None) -> str:
   """Format training date for display."""
   return (
-    treinado_em.strftime("%d/%m/%Y %H:%M UTC") 
-    if treinado_em 
+    treinado_em.strftime("%d/%m/%Y %H:%M UTC")
+    if treinado_em
     else "Treinamento ainda não executado"
   )

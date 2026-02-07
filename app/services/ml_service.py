@@ -5,7 +5,7 @@ NOTA: Este módulo gera previsões baseadas em dados reais do histórico de vend
 Em produção, integraria com modelos de ML treinados (Prophet, AutoARIMA, etc).
 """
 from datetime import datetime, timedelta
-from typing import Optional
+
 import pytz
 from sqlmodel import Session, select
 
@@ -26,13 +26,13 @@ def get_forecast(product_sku: str, days_ahead: int = 3, session: Session = None)
         dict: Previsão de demanda com datas futuras reais.
     """
     now = datetime.now(BR_TZ)
-    
+
     # Tenta obter dados reais de histórico
     average_demand = _get_average_daily_demand(product_sku, session)
-    
+
     # Gera previsões para os próximos dias
     forecast = []
-    
+
     for i in range(1, days_ahead + 1):
         future_date = now + timedelta(days=i)
         # Variação baseada no dia da semana (seg-sex maior demanda)
@@ -42,7 +42,7 @@ def get_forecast(product_sku: str, days_ahead: int = 3, session: Session = None)
             "date": future_date.strftime("%Y-%m-%d"),
             "demand": demand
         })
-    
+
     return {
         "sku": product_sku,
         "forecast": forecast,
@@ -54,30 +54,33 @@ def get_forecast(product_sku: str, days_ahead: int = 3, session: Session = None)
 def _get_average_daily_demand(sku: str, session: Session = None) -> float:
     """
     Calcula a demanda média diária baseada no histórico de vendas.
-    
+
     Args:
         sku: SKU do produto.
         session: Sessão do banco de dados.
-    
+
     Returns:
         float: Demanda média diária estimada.
     """
     if session:
-        from app.models.models import HistoricoVenda
-        
-        # Busca últimos 30 dias de vendas
-        thirty_days_ago = datetime.now(BR_TZ) - timedelta(days=30)
-        vendas = session.exec(
-            select(HistoricoVenda)
-            .where(HistoricoVenda.sku == sku)
-            .where(HistoricoVenda.data >= thirty_days_ago)
-        ).all()
-        
-        if vendas:
-            total = sum(v.quantidade for v in vendas)
-            days = len(set(v.data.date() for v in vendas)) or 1
-            return round(total / days, 1)
-    
+        from app.models.models import Produto, VendasHistoricas
+
+        # Resolve SKU para produto_id
+        produto = session.exec(select(Produto).where(Produto.sku == sku)).first()
+        if produto:
+            # Busca últimos 30 dias de vendas
+            thirty_days_ago = datetime.now(BR_TZ) - timedelta(days=30)
+            vendas = session.exec(
+                select(VendasHistoricas)
+                .where(VendasHistoricas.produto_id == produto.id)
+                .where(VendasHistoricas.data_venda >= thirty_days_ago)
+            ).all()
+
+            if vendas:
+                total = sum(v.quantidade for v in vendas)
+                days = len(set(v.data_venda.date() for v in vendas)) or 1
+                return round(total / days, 1)
+
     # Fallback: demanda média estimada
     return 50.0
 
@@ -95,13 +98,13 @@ def predict_prices_for_product(sku: str, days_ahead: int = 7, session: Session =
         dict: Previsão de preço com datas futuras reais.
     """
     now = datetime.now(BR_TZ)
-    
+
     # Obtém preço atual do produto
     current_price = _get_current_price(sku, session) or 100.0
-    
+
     # Gera previsões de preço para os próximos dias
     predictions = []
-    
+
     for i in range(1, days_ahead + 1):
         future_date = now + timedelta(days=i)
         # Tendência suave (±1% por dia, máximo ±5%)
@@ -111,7 +114,7 @@ def predict_prices_for_product(sku: str, days_ahead: int = 7, session: Session =
             "date": future_date.strftime("%Y-%m-%d"),
             "price": price
         })
-    
+
     # Determina tendência geral
     if predictions[-1]["price"] > current_price:
         trend = "alta"
@@ -119,7 +122,7 @@ def predict_prices_for_product(sku: str, days_ahead: int = 7, session: Session =
         trend = "baixa"
     else:
         trend = "estável"
-    
+
     return {
         "sku": sku,
         "predictions": predictions,
@@ -129,21 +132,27 @@ def predict_prices_for_product(sku: str, days_ahead: int = 7, session: Session =
     }
 
 
-def _get_current_price(sku: str, session: Session = None) -> Optional[float]:
+def _get_current_price(sku: str, session: Session = None) -> float | None:
     """
     Obtém o preço atual de um produto do banco de dados.
-    
+
     Args:
         sku: SKU do produto.
         session: Sessão do banco de dados.
-    
+
     Returns:
         float: Preço atual ou None se não encontrado.
     """
     if session:
-        from app.models.models import Produto
+        from app.models.models import PrecosHistoricos, Produto
         produto = session.exec(select(Produto).where(Produto.sku == sku)).first()
-        if produto and produto.preco_atual:
-            return float(produto.preco_atual)
-    
+        if produto:
+            latest_price = session.exec(
+                select(PrecosHistoricos)
+                .where(PrecosHistoricos.produto_id == produto.id)
+                .order_by(PrecosHistoricos.coletado_em.desc())
+            ).first()
+            if latest_price:
+                return float(latest_price.preco)
+
     return None

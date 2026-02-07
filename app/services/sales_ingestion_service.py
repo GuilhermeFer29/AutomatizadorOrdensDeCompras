@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 from decimal import Decimal
-from typing import BinaryIO, Dict, List, Optional, Set
+from typing import BinaryIO
 
 import pandas as pd
 from pandas import DataFrame
@@ -43,7 +43,7 @@ def load_sales_dataframe(source: BinaryIO) -> DataFrame:
     return dataframe
 
 
-def ingest_sales_dataframe(dataframe: DataFrame, session: Optional[Session] = None) -> List[int]:
+def ingest_sales_dataframe(dataframe: DataFrame, session: Session | None = None) -> list[int]:
     """Persist all rows from the dataframe into the database.
 
     Parameters
@@ -66,8 +66,8 @@ def ingest_sales_dataframe(dataframe: DataFrame, session: Optional[Session] = No
         session = Session(engine)
         managed_session = True
 
-    touched_products: Set[int] = set()
-    products_cache: Dict[str, Produto] = {}
+    touched_products: set[int] = set()
+    products_cache: dict[str, Produto] = {}
 
     try:
         for record in dataframe.to_dict(orient="records"):
@@ -114,7 +114,7 @@ def ingest_sales_dataframe(dataframe: DataFrame, session: Optional[Session] = No
     return sorted(touched_products)
 
 
-def _get_or_create_product(record: Dict[str, object], session: Session) -> Produto:
+def _get_or_create_product(record: dict[str, object], session: Session) -> Produto:
     """Retrieve an existing product by SKU or create a new record."""
 
     sku = str(record["sku"]).strip()
@@ -139,7 +139,7 @@ def _get_or_create_product(record: Dict[str, object], session: Session) -> Produ
     return produto
 
 
-def _maybe_update_product(produto: Produto, record: Dict[str, object]) -> None:
+def _maybe_update_product(produto: Produto, record: dict[str, object]) -> None:
     """Update mutable product attributes when present in the record."""
 
     categoria = record.get("categoria")

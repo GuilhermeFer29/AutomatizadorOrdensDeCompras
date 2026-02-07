@@ -22,7 +22,6 @@ from functools import lru_cache
 from celery import Celery
 from celery.schedules import crontab
 
-
 # ============================================================================
 # CONFIGURAÇÃO DE BROKERS
 # ============================================================================
@@ -30,21 +29,21 @@ from celery.schedules import crontab
 def _get_broker_url() -> str:
     """
     Retorna URL do RabbitMQ.
-    
+
     Formato: amqp://user:password@host:port/vhost
     """
     # Tenta variável específica do Celery primeiro
     broker_url = os.getenv("CELERY_BROKER_URL")
     if broker_url:
         return broker_url
-    
+
     # Constrói a partir das variáveis do RabbitMQ
     user = os.getenv("RABBITMQ_DEFAULT_USER", "pmi")
     password = os.getenv("RABBITMQ_DEFAULT_PASS", "pmi_secret")
     host = os.getenv("RABBITMQ_HOST", "rabbitmq")
     port = os.getenv("RABBITMQ_PORT", "5672")
     vhost = os.getenv("RABBITMQ_DEFAULT_VHOST", "pmi")
-    
+
     return f"amqp://{user}:{password}@{host}:{port}/{vhost}"
 
 
@@ -63,7 +62,7 @@ def _get_result_backend() -> str:
 def create_celery_app() -> Celery:
     """
     Cria e configura a aplicação Celery.
-    
+
     Configuração otimizada para produção:
     - RabbitMQ como broker (persistent, reliable)
     - Redis como result backend (fast, temporary)
@@ -72,10 +71,10 @@ def create_celery_app() -> Celery:
     """
     broker_url = _get_broker_url()
     backend_url = _get_result_backend()
-    
+
     print(f"🐰 Celery Broker: {broker_url.replace(os.getenv('RABBITMQ_DEFAULT_PASS', 'pmi_secret'), '***')}")
     print(f"📦 Result Backend: {backend_url}")
-    
+
     celery_app = Celery(
         "pmi_worker",
         broker=broker_url,
@@ -95,26 +94,26 @@ def create_celery_app() -> Celery:
             "app.tasks.agent_tasks.*": {"queue": "agents"},
             "app.tasks.ml_tasks.*": {"queue": "ml"},
         },
-        
+
         # Performance & Reliability
         worker_prefetch_multiplier=1,  # Distribui tarefas de forma justa
         task_acks_late=True,           # ACK após execução (retry em crash)
         task_reject_on_worker_lost=True,
-        
+
         # Timeouts
         task_soft_time_limit=300,      # 5 min soft limit
         task_time_limit=600,           # 10 min hard limit
         result_expires=3600,           # Results expiram em 1 hora
-        
+
         # Serialization
         task_serializer="json",
         accept_content=["json"],
         result_serializer="json",
-        
+
         # Timezone
         timezone="America/Sao_Paulo",
         enable_utc=True,
-        
+
         # Worker
         worker_disable_rate_limits=True,
         worker_send_task_events=True,  # Para monitoring

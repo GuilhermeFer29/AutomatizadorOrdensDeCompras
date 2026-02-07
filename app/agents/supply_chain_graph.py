@@ -4,16 +4,17 @@ Supply Chain Graph - LangGraph implementation conforme documentação oficial.
 Referência: https://docs.langchain.com/oss/python/langgraph/graph-api
 """
 
-from typing import TypedDict, Optional, Literal
-from langgraph.graph import StateGraph, END
-import json
+from typing import TypedDict
+
+from langgraph.graph import END, StateGraph
+
 
 # Define the state structure for the graph
 class PurchaseAnalysisState(TypedDict):
     product_sku: str
-    forecast: Optional[dict]
-    market_prices: Optional[dict]
-    recommendation: Optional[dict]
+    forecast: dict | None
+    market_prices: dict | None
+    recommendation: dict | None
 
 # Define nodes
 def demand_analyst_node(state: PurchaseAnalysisState) -> PurchaseAnalysisState:

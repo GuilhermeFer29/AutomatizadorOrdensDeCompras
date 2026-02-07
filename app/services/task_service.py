@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from celery.result import AsyncResult
 
 from app.core.celery_app import celery_app
-from app.tasks.ml_tasks import train_product_model_task, train_all_products_task
+from app.tasks.ml_tasks import train_all_products_task, train_product_model_task
 
 
 def trigger_train_product_model_task(sku: str, optimize: bool = False) -> AsyncResult:
@@ -20,10 +20,10 @@ def trigger_train_all_products_task(optimize: bool = False, limit: int = None) -
     return train_all_products_task.delay(optimize, limit)
 
 
-def get_task_status(task_id: str) -> Dict[str, Optional[Any]]:
+def get_task_status(task_id: str) -> dict[str, Any | None]:
     """Fetch the current state for a Celery task ID."""
     async_result = AsyncResult(task_id, app=celery_app)
-    result: Optional[Any]
+    result: Any | None
     if async_result.successful():
         result = async_result.result
     elif async_result.failed():

@@ -2,11 +2,11 @@
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session, create_engine, SQLModel
+from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.pool import StaticPool
 
-from app.main import create_application
 from app.core.database import get_session
+from app.main import create_application
 
 
 @pytest.fixture(name="session")
@@ -30,8 +30,8 @@ def client_fixture(session: Session):
 
     app = create_application()
     app.dependency_overrides[get_session] = get_session_override
-    
+
     with TestClient(app) as client:
         yield client
-    
+
     app.dependency_overrides.clear()

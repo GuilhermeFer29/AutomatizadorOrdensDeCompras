@@ -15,7 +15,7 @@ from decimal import Decimal
 from typing import Dict, List, Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, ForeignKey, Integer, Text
+from sqlalchemy import Column, ForeignKey, Integer, Text, UniqueConstraint
 from sqlalchemy.dialects.mysql import JSON as MySQLJSON
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -39,6 +39,7 @@ class Tenant(SQLModel, table=True):
     ativo: bool = Field(default=True)
     max_usuarios: int = Field(default=5)
     max_produtos: int = Field(default=100)
+    onboarding_completed: bool = Field(default=False)
     criado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     atualizado_em: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -121,7 +122,7 @@ class PrecosHistoricos(TenantMixin, SQLModel, table=True):
     produto: "Produto" = Relationship(back_populates="precos")
 
 
-# Modelo de Usuário para autenticação
+# Modelo de Usuario para autenticacao - SaaS Multi-Tenant
 class User(TenantMixin, SQLModel, table=True):
     __tablename__ = "users"
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -129,6 +130,8 @@ class User(TenantMixin, SQLModel, table=True):
     hashed_password: str
     is_active: bool = Field(default=True)
     full_name: Optional[str] = Field(default=None)
+    role: str = Field(default="operator", max_length=32)  # owner, admin, manager, operator, viewer
+    email_verified: bool = Field(default=False)
 
 
 class ModeloPredicao(TenantMixin, SQLModel, table=True):
@@ -241,9 +244,12 @@ class AuditoriaDecisao(TenantMixin, SQLModel, table=True):
 
 class Agente(TenantMixin, SQLModel, table=True):
     __tablename__ = "agentes"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "nome", name="uq_agente_tenant_nome"),
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    nome: str = Field(unique=True)
+    nome: str = Field(index=True)
     descricao: str
     status: str = Field(default="inactive")  # active, inactive
     ultima_execucao: Optional[datetime] = Field(default=None)

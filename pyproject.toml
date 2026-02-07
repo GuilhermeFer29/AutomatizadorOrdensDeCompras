@@ -1,0 +1,46 @@
+[project]
+name = "pmi-automation"
+version = "2.1.0"
+description = "API SaaS Multi-Tenant para automacao de compras industriais com IA"
+requires-python = ">=3.11"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "S",   # flake8-bandit (security)
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "S101",  # assert used (ok in tests)
+    "S104",  # binding to all interfaces (ok for docker)
+    "B008",  # function calls in defaults (ok for FastAPI Depends())
+]
+
+[tool.ruff.lint.per-file-ignores]
+"app/tests/*" = ["S101", "S106"]
+"scripts/*" = ["S101", "S106"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+check_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["app/tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"

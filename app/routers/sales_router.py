@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
-
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
 
+from app.core.security import get_current_user
 from app.services.sales_ingestion_service import ingest_sales_dataframe, load_sales_dataframe
+
 # Nota: Treinamento de modelos agora é por produto via /ml/train/{sku}
 
 router = APIRouter(prefix="/vendas", tags=["vendas"])
@@ -16,7 +16,7 @@ router = APIRouter(prefix="/vendas", tags=["vendas"])
 class SalesUploadResponse(BaseModel):
     """Response returned after processing a CSV upload of sales data."""
 
-    produtos: List[int]
+    produtos: list[int]
     task_id: str
     mensagem: str
 
@@ -24,7 +24,8 @@ class SalesUploadResponse(BaseModel):
 @router.post("/upload", response_model=SalesUploadResponse, status_code=status.HTTP_202_ACCEPTED)
 async def upload_sales_csv(
     arquivo: UploadFile = File(...),
-    destinatario_email: Optional[str] = Form(default=None),
+    destinatario_email: str | None = Form(default=None),
+    current_user=Depends(get_current_user),
 ) -> SalesUploadResponse:
     """Persist a CSV file with sales data and trigger model retraining for affected products."""
 
@@ -60,7 +61,7 @@ async def upload_sales_csv(
 
 
 @router.post("/retrain/{produto_id}", status_code=status.HTTP_202_ACCEPTED)
-def retrain_model(produto_id: int) -> dict:
+def retrain_model(produto_id: int, current_user=Depends(get_current_user)) -> dict:
     """Endpoint descontinuado. Use /ml/train/{sku} para treinar modelos individuais."""
     return {
         "produto_id": produto_id,

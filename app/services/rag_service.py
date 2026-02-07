@@ -25,17 +25,16 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import List, Optional
 
+from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
-from langchain_chroma import Chroma
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from sqlmodel import Session
 
-from app.models.models import Produto, ChatMessage
+from app.models.models import ChatMessage, Produto
 
 LOGGER = logging.getLogger(__name__)
 
@@ -62,14 +61,14 @@ _validate_google_api_key()
 # LAZY LOADING (Evita instanciar no import)
 # ============================================================================
 
-_embeddings: Optional[GoogleGenerativeAIEmbeddings] = None
-_vector_store: Optional[Chroma] = None
+_embeddings: GoogleGenerativeAIEmbeddings | None = None
+_vector_store: Chroma | None = None
 
 
 def get_embeddings() -> GoogleGenerativeAIEmbeddings:
     """
     Retorna instância singleton dos embeddings Google AI.
-    
+
     Lazy loading: só instancia quando necessário.
     """
     global _embeddings
@@ -84,16 +83,16 @@ def get_embeddings() -> GoogleGenerativeAIEmbeddings:
 def get_vector_store() -> Chroma:
     """
     Retorna instância do vector store ChromaDB (LangChain).
-    
+
     Usa o singleton VectorDBManager para evitar conflitos de instância.
     """
     global _vector_store
     if _vector_store is None:
         from app.core.vector_db import get_vector_db_client
-        
+
         # Obtém cliente singleton
         client = get_vector_db_client()
-        
+
         # Cria wrapper LangChain usando o cliente existente
         _vector_store = Chroma(
             client=client,
@@ -101,7 +100,7 @@ def get_vector_store() -> Chroma:
             embedding_function=get_embeddings()
         )
         LOGGER.info("✅ LangChain Chroma conectado ao singleton")
-    
+
     return _vector_store
 
 
@@ -132,7 +131,7 @@ PERGUNTA:
 Resposta (use markdown para formatação):"""
 
 
-def _format_docs(docs: List[Document]) -> str:
+def _format_docs(docs: list[Document]) -> str:
     """Formata lista de documentos em texto único."""
     return "\n\n".join(doc.page_content for doc in docs)
 
@@ -140,10 +139,10 @@ def _format_docs(docs: List[Document]) -> str:
 def create_rag_chain(k: int = 20):
     """
     Cria a chain RAG completa usando LangChain LCEL.
-    
+
     Args:
         k: Número de documentos a recuperar
-        
+
     Returns:
         Runnable: Chain executável
     """
@@ -151,16 +150,16 @@ def create_rag_chain(k: int = 20):
     retriever = get_vector_store().as_retriever(
         search_kwargs={'k': k}
     )
-    
+
     # Prompt
     prompt = ChatPromptTemplate.from_template(RAG_PROMPT_TEMPLATE)
-    
+
     # LLM (Gemini 2.5 Flash - alta performance)
     llm = ChatGoogleGenerativeAI(
         model="gemini-2.5-flash",
         temperature=0.1  # Quase determinístico para respostas factuais
     )
-    
+
     # Chain LCEL
     rag_chain = (
         {"context": retriever | _format_docs, "question": RunnablePassthrough()}
@@ -168,7 +167,7 @@ def create_rag_chain(k: int = 20):
         | llm
         | StrOutputParser()
     )
-    
+
     return rag_chain
 
 
@@ -179,16 +178,16 @@ def create_rag_chain(k: int = 20):
 def query_product_catalog_with_google_rag(query: str, k: int = 20) -> str:
     """
     Interface principal para consultas RAG ao catálogo de produtos.
-    
+
     Esta é a função que deve ser chamada pelas ferramentas Agno.
-    
+
     Args:
         query: Pergunta em linguagem natural sobre produtos
         k: Número de documentos a recuperar (padrão: 20)
-        
+
     Returns:
         str: Resposta gerada pelo RAG baseada no contexto relevante
-        
+
     Example:
         >>> query_product_catalog_with_google_rag("Qual o estoque da Parafusadeira?")
         "A Parafusadeira (SKU_005) possui atualmente 45 unidades em estoque..."
@@ -210,15 +209,15 @@ def query_product_catalog_with_google_rag(query: str, k: int = 20) -> str:
 def index_product(product: Produto) -> None:
     """
     Indexa um único produto no vector store.
-    
+
     Args:
         product: Produto a indexar
     """
     vector_store = get_vector_store()
-    
+
     # Cria documento enriquecido
     estoque_status = "ESTOQUE BAIXO - CRÍTICO" if product.estoque_atual <= product.estoque_minimo else "Estoque normal"
-    
+
     content = (
         f"Produto: {product.nome}\n"
         f"SKU: {product.sku}\n"
@@ -227,11 +226,11 @@ def index_product(product: Produto) -> None:
         f"Estoque Mínimo: {product.estoque_minimo} unidades\n"
         f"Status: {estoque_status}\n"
     )
-    
+
     if product.estoque_atual <= product.estoque_minimo:
         diferenca = product.estoque_minimo - product.estoque_atual
         content += f"⚠️ ATENÇÃO: Faltam {diferenca} unidades para atingir o estoque mínimo.\n"
-    
+
     doc = Document(
         page_content=content,
         metadata={
@@ -244,42 +243,42 @@ def index_product(product: Produto) -> None:
             "estoque_baixo": product.estoque_atual <= product.estoque_minimo
         }
     )
-    
+
     vector_store.add_documents([doc], ids=[f"product_{product.id}"])
 
 
 def index_product_catalog(db_session: Session) -> int:
     """
     Indexa todo o catálogo de produtos (DEPRECADO: use /admin/rag/sync).
-    
+
     Esta função ainda funciona mas carrega TODOS os produtos na RAM.
     Para produção, use o endpoint /admin/rag/sync que faz paginação.
-    
+
     Args:
         db_session: Sessão do banco de dados
-        
+
     Returns:
         int: Número de produtos indexados
     """
     from sqlmodel import select
-    
+
     LOGGER.warning(
         "⚠️ index_product_catalog() está deprecado. "
         "Use POST /admin/rag/sync para indexação paginada."
     )
-    
+
     products = db_session.exec(select(Produto)).all()
-    
+
     if not products:
         LOGGER.warning("Nenhum produto encontrado para indexação")
         return 0
-    
+
     for product in products:
         try:
             index_product(product)
         except Exception as e:
             LOGGER.error(f"Erro ao indexar {product.sku}: {e}")
-    
+
     LOGGER.info(f"✅ {len(products)} produtos indexados")
     return len(products)
 
@@ -294,13 +293,13 @@ def index_chat_message(message: ChatMessage) -> None:
     """
     try:
         from app.core.vector_db import get_vector_db_client
-        
+
         client = get_vector_db_client()
         collection = client.get_or_create_collection(name="chat_history")
-        
+
         # Gera embedding
         embedding = get_embeddings().embed_query(message.content)
-        
+
         collection.add(
             ids=[f"msg_{message.id}"],
             embeddings=[embedding],
@@ -322,7 +321,7 @@ def get_relevant_context(query: str, db_session: Session) -> str:
     """
     try:
         response = query_product_catalog_with_google_rag(query)
-        
+
         if response and not response.startswith("❌"):
             return f"### Informações Relevantes do Catálogo:\n{response}"
         return ""

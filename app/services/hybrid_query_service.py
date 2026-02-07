@@ -8,17 +8,18 @@ ESTRATÉGIA:
 4. Perguntas complexas → Combina ambos
 """
 
-from typing import Dict, Any
-from sqlmodel import Session
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.prompts import ChatPromptTemplate
 import json
+from typing import Any
+
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_google_genai import ChatGoogleGenerativeAI
+from sqlmodel import Session
 
 
-def analyze_query_intent(user_question: str) -> Dict[str, Any]:
+def analyze_query_intent(user_question: str) -> dict[str, Any]:
     """
     Usa LLM para analisar a intenção da pergunta e decidir qual ferramenta usar.
-    
+
     Returns:
         {
             "query_type": "sql" | "rag" | "hybrid",
@@ -31,7 +32,7 @@ def analyze_query_intent(user_question: str) -> Dict[str, Any]:
         model="gemini-2.5-flash",
         temperature=0.1
     )
-    
+
     prompt = ChatPromptTemplate.from_template("""Você é um analisador de consultas de banco de dados.
 
 Analise a pergunta do usuário e determine:
@@ -60,7 +61,7 @@ Retorne um JSON com:
 }}
 
 Responda APENAS com o JSON, sem texto adicional.""")
-    
+
     try:
         response = llm.invoke(prompt.format(question=user_question))
         # Remove markdown code blocks se existirem
@@ -71,7 +72,7 @@ Responda APENAS com o JSON, sem texto adicional.""")
             content = content[3:]
         if content.endswith("```"):
             content = content[:-3]
-        
+
         return json.loads(content.strip())
     except Exception as e:
         print(f"⚠️ Erro ao analisar intent: {e}")
@@ -86,43 +87,43 @@ Responda APENAS com o JSON, sem texto adicional.""")
 def execute_hybrid_query(user_question: str, db_session: Session) -> str:
     """
     Executa consulta híbrida combinando SQL e RAG conforme necessário.
-    
+
     Args:
         user_question: Pergunta do usuário
         db_session: Sessão do banco de dados
-        
+
     Returns:
         Resposta formatada em linguagem natural
     """
     # 1. Analisa a intenção da pergunta
     intent = analyze_query_intent(user_question)
     print(f"🧠 Intent detectado: {intent.get('query_type')} - {intent.get('reasoning')}")
-    
+
     query_type = intent.get("query_type", "rag")
-    
+
     # 2. Executa análise de vendas históricas se necessário
     sales_data = None
     if query_type in ["sales_analysis", "hybrid"] or intent.get("time_filter", {}).get("month"):
         sales_data = execute_sales_analysis(intent, db_session)
         print(f"📈 Análise de vendas retornou {len(sales_data) if isinstance(sales_data, list) else 'dados'}")
-    
+
     # 3. Executa consulta SQL se necessário
     sql_results = None
     if query_type in ["sql", "hybrid"]:
         sql_results = execute_sql_query(intent, db_session)
         print(f"📊 SQL retornou {len(sql_results) if isinstance(sql_results, list) else 'dados'}")
-    
+
     # 4. Executa previsões ML se necessário
     ml_predictions = None
     if query_type in ["ml_prediction", "hybrid"] or intent.get("needs_prediction"):
         ml_predictions = execute_ml_predictions(intent, db_session, sales_data)
         print(f"🎯 ML Predictions retornou dados para {len(ml_predictions) if isinstance(ml_predictions, list) else 0} produtos")
-    
+
     # 5. Executa RAG se necessário
     rag_response = None
     if query_type in ["rag", "hybrid"]:
         from app.services.rag_service import query_product_catalog_with_google_rag
-        
+
         # Enriquece contexto com todos os dados disponíveis
         context_data = {}
         if sql_results:
@@ -131,36 +132,36 @@ def execute_hybrid_query(user_question: str, db_session: Session) -> str:
             context_data["vendas"] = sales_data
         if ml_predictions:
             context_data["previsoes"] = ml_predictions
-        
+
         if context_data:
             enhanced_query = f"{user_question}\n\nDados disponíveis: {json.dumps(context_data, ensure_ascii=False)}"
             rag_response = query_product_catalog_with_google_rag(enhanced_query)
         else:
             rag_response = query_product_catalog_with_google_rag(user_question)
-        
+
         print(f"🤖 RAG respondeu: {rag_response[:100]}...")
-    
+
     # 6. Combina resultados e gera resposta final
     return format_final_response(
-        user_question, 
-        sql_results, 
-        rag_response, 
+        user_question,
+        sql_results,
+        rag_response,
         intent,
         sales_data=sales_data,
         ml_predictions=ml_predictions
     )
 
 
-def execute_sql_query(intent: Dict[str, Any], db_session: Session) -> Any:
+def execute_sql_query(intent: dict[str, Any], db_session: Session) -> Any:
     """
     Executa consulta SQL baseada no intent analisado.
     """
     from app.services.sql_query_tool import (
-        query_products_with_filters,
+        get_products_sorted_by_stock,
         get_stock_statistics,
-        get_products_sorted_by_stock
+        query_products_with_filters,
     )
-    
+
     # Consulta produtos com estoque baixo
     if intent.get("needs_stock_filter") and intent.get("stock_filter_type") == "low":
         return query_products_with_filters(
@@ -169,16 +170,16 @@ def execute_sql_query(intent: Dict[str, Any], db_session: Session) -> Any:
             categoria=intent.get("category"),
             limit=50
         )
-    
+
     # Consulta produtos ordenados por estoque
     if intent.get("needs_sorting"):
         order = "asc" if intent.get("sort_by") == "stock_asc" else "desc"
         return get_products_sorted_by_stock(db_session, order=order, limit=20)
-    
+
     # Estatísticas gerais
     if "estatística" in intent.get("reasoning", "").lower() or "quantos" in intent.get("reasoning", "").lower():
         return get_stock_statistics(db_session)
-    
+
     # Fallback: retorna produtos com filtros gerais
     return query_products_with_filters(
         db_session,
@@ -188,26 +189,27 @@ def execute_sql_query(intent: Dict[str, Any], db_session: Session) -> Any:
     )
 
 
-def execute_sales_analysis(intent: Dict[str, Any], db_session: Session) -> Any:
+def execute_sales_analysis(intent: dict[str, Any], db_session: Session) -> Any:
     """
     Executa análise de vendas históricas baseada no intent.
     """
-    from sqlmodel import select, func
-    from app.models.models import VendasHistoricas, Produto
-    from datetime import datetime
-    
+
+    from sqlmodel import func, select
+
+    from app.models.models import Produto, VendasHistoricas
+
     time_filter = intent.get("time_filter", {})
     month = time_filter.get("month")
-    
+
     # Mapear nome do mês para número
     month_map = {
         "janeiro": 1, "fevereiro": 2, "março": 3, "abril": 4,
         "maio": 5, "junho": 6, "julho": 7, "agosto": 8,
         "setembro": 9, "outubro": 10, "novembro": 11, "dezembro": 12
     }
-    
+
     month_num = month_map.get(month.lower()) if month else None
-    
+
     try:
         # Query: produtos mais vendidos no mês específico
         query = (
@@ -220,11 +222,11 @@ def execute_sales_analysis(intent: Dict[str, Any], db_session: Session) -> Any:
             )
             .join(VendasHistoricas, Produto.id == VendasHistoricas.produto_id)
         )
-        
+
         # Filtrar por mês se especificado
         if month_num:
             query = query.where(func.extract('month', VendasHistoricas.data_venda) == month_num)
-        
+
         # Agrupar e ordenar
         query = (
             query
@@ -232,9 +234,9 @@ def execute_sales_analysis(intent: Dict[str, Any], db_session: Session) -> Any:
             .order_by(func.sum(VendasHistoricas.quantidade).desc())
             .limit(20)
         )
-        
+
         results = db_session.exec(query).all()
-        
+
         return [
             {
                 "sku": r.sku,
@@ -251,23 +253,24 @@ def execute_sales_analysis(intent: Dict[str, Any], db_session: Session) -> Any:
         return []
 
 
-def execute_ml_predictions(intent: Dict[str, Any], db_session: Session, sales_data: Any = None) -> Any:
+def execute_ml_predictions(intent: dict[str, Any], db_session: Session, sales_data: Any = None) -> Any:
     """
     Executa previsões ML para produtos relevantes.
     """
     from app.ml.prediction import predict_prices
-    
+
     try:
         # Se tem dados de vendas, pega top produtos
         if sales_data and len(sales_data) > 0:
             top_skus = [item["sku"] for item in sales_data[:5]]  # Top 5
         else:
             # Pega produtos aleatórios
-            from app.models.models import Produto
             from sqlmodel import select
+
+            from app.models.models import Produto
             results = db_session.exec(select(Produto.sku).limit(5)).all()
             top_skus = results
-        
+
         predictions = []
         for sku in top_skus:
             try:
@@ -283,7 +286,7 @@ def execute_ml_predictions(intent: Dict[str, Any], db_session: Session, sales_da
             except Exception as e:
                 print(f"⚠️ Erro ao prever {sku}: {e}")
                 continue
-        
+
         return predictions if predictions else None
     except Exception as e:
         print(f"❌ Erro nas previsões ML: {e}")
@@ -294,7 +297,7 @@ def format_final_response(
     question: str,
     sql_results: Any,
     rag_response: str,
-    intent: Dict[str, Any],
+    intent: dict[str, Any],
     sales_data: Any = None,
     ml_predictions: Any = None
 ) -> str:
@@ -304,19 +307,19 @@ def format_final_response(
     # Se tem dados de vendas + previsões, usa LLM avançado
     if sales_data or ml_predictions:
         return combine_advanced_response(question, sql_results, rag_response, sales_data, ml_predictions)
-    
+
     # Se só tem RAG, retorna direto
     if sql_results is None and rag_response:
         return rag_response
-    
+
     # Se só tem SQL, formata os dados
     if sql_results and not rag_response:
         return format_sql_results(sql_results, question)
-    
+
     # Se tem ambos, usa LLM para combinar
     if sql_results and rag_response:
         return combine_with_llm(question, sql_results, rag_response)
-    
+
     return "Desculpe, não consegui encontrar informações relevantes para sua pergunta."
 
 
@@ -333,21 +336,21 @@ def format_sql_results(results: Any, question: str) -> str:
             f"- Produtos com estoque baixo: {results['produtos_estoque_baixo']}\n"
             f"- Estoque total: {results['estoque_total_unidades']} unidades\n"
         )
-    
+
     # Se é lista de produtos
     if isinstance(results, list):
         if not results:
             return "Não encontrei produtos que atendam aos critérios da sua busca."
-        
+
         # Produtos com estoque baixo
         estoque_baixo = [p for p in results if p.get("estoque_baixo")]
         if estoque_baixo:
             total = len(estoque_baixo)
             limite = 10  # Limita a 10 produtos para não exceder tamanho da coluna
-            
-            response = f"## Produtos com Estoque Baixo\n\n"
+
+            response = "## Produtos com Estoque Baixo\n\n"
             response += f"Encontrei {total} produto(s) com estoque abaixo do mínimo.\n\n"
-            
+
             for p in estoque_baixo[:limite]:
                 diferenca = p.get("diferenca", 0)
                 response += (
@@ -355,30 +358,30 @@ def format_sql_results(results: Any, question: str) -> str:
                     f"  - Estoque: {p['estoque_atual']}/{p['estoque_minimo']} unidades\n"
                     f"  - Faltam: {abs(diferenca)} unidades\n\n"
                 )
-            
+
             if total > limite:
                 response += f"\n*Foram encontrados mais {total - limite} produto(s). Use filtros para refinar a busca.*\n"
-            
+
             return response
-        
+
         # Produtos gerais
         total = len(results)
         limite = 10
-        
-        response = f"## Produtos Encontrados\n\n"
+
+        response = "## Produtos Encontrados\n\n"
         response += f"Total: {total} produto(s)\n\n"
-        
+
         for p in results[:limite]:
             response += (
                 f"- **{p['nome']}** (SKU: {p['sku']})\n"
                 f"  - Estoque: {p['estoque_atual']} unidades\n\n"
             )
-        
+
         if total > limite:
             response += f"\n*Foram encontrados mais {total - limite} produto(s).*\n"
-        
+
         return response
-    
+
     return str(results)
 
 
@@ -396,7 +399,7 @@ def combine_advanced_response(
         model="gemini-2.5-flash",
         temperature=0.4  # Um pouco mais criativo para respostas naturais
     )
-    
+
     prompt = ChatPromptTemplate.from_template("""Você é um assistente inteligente especializado em gestão de compras industriais.
 
 Responda à pergunta do usuário de forma NATURAL, CONVERSACIONAL e BEM FORMATADA.
@@ -453,7 +456,7 @@ FORMATO ESPERADO:
 [Recomendação prática e acionável, 2-3 linhas]
 
 Resposta:""")
-    
+
     try:
         response = llm.invoke(prompt.format(
             question=question,
@@ -475,16 +478,16 @@ def format_sales_results(sales_data: list, question: str) -> str:
     """Formata resultados de vendas de forma visual com tabelas."""
     if not sales_data:
         return "Não encontrei dados de vendas para esse período."
-    
+
     # Cabeçalho
     response = "## Análise de Vendas\n\n"
     response += f"Encontrei {len(sales_data)} produto(s) com dados de vendas.\n\n"
-    
+
     # Tabela com top 10
     response += "### Principais Produtos\n\n"
     response += "| Posição | Produto | SKU | Vendas | Receita | Ticket Médio |\n"
     response += "|---------|---------|-----|--------|---------|-------------|\n"
-    
+
     for i, item in enumerate(sales_data[:10], 1):
         response += (
             f"| {i} | {item['nome'][:30]} | {item['sku']} | "
@@ -492,18 +495,18 @@ def format_sales_results(sales_data: list, question: str) -> str:
             f"R$ {item['receita_total']:,.2f} | "
             f"R$ {item['ticket_medio']:.2f} |\n"
         )
-    
+
     if len(sales_data) > 10:
         response += f"\n*Foram encontrados mais {len(sales_data) - 10} produtos além dos listados acima.*\n"
-    
+
     # Resumo
     total_vendas = sum(item['total_vendido'] for item in sales_data[:10])
     total_receita = sum(item['receita_total'] for item in sales_data[:10])
-    
-    response += f"\n### Resumo dos Top 10\n\n"
+
+    response += "\n### Resumo dos Top 10\n\n"
     response += f"- Total de unidades vendidas: {total_vendas:,}\n"
     response += f"- Receita total: R$ {total_receita:,.2f}\n"
-    
+
     return response
 
 
@@ -515,7 +518,7 @@ def combine_with_llm(question: str, sql_data: Any, rag_response: str) -> str:
         model="gemini-2.5-flash",
         temperature=0.3
     )
-    
+
     prompt = ChatPromptTemplate.from_template("""Você é um assistente especializado em produtos industriais.
 
 Combine as informações para responder de forma CLARA, OBJETIVA e BEM FORMATADA.
@@ -553,7 +556,7 @@ FORMATO:
 [Recomendação prática em 2-3 linhas]
 
 Resposta:""")
-    
+
     try:
         response = llm.invoke(prompt.format(
             question=question,

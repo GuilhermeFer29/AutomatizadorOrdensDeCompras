@@ -16,19 +16,20 @@ MODELOS NA CHAIN DE FALLBACK (em ordem de prioridade):
 
 Uso:
     from app.agents.gemini_fallback import get_model_with_fallback, run_with_fallback
-    
+
     # Obter modelo com fallback automático
     model = get_model_with_fallback(temperature=0.3)
-    
+
     # Executar função com retry e fallback
     result = run_with_fallback(agent.run, "Sua mensagem aqui")
 """
 
+import logging
 import os
 import time
-import logging
-from typing import Callable, Any, List, Optional
+from collections.abc import Callable
 from functools import wraps
+from typing import Any
 
 from agno.models.google import Gemini
 
@@ -60,86 +61,86 @@ MAX_BACKOFF_SECONDS = 8
 class GeminiFallbackManager:
     """
     Gerencia fallback automático entre modelos Gemini quando ocorrem erros de rate limit.
-    
+
     Mantém estado do modelo atual e histórico de erros para decisões inteligentes.
     """
-    
+
     _instance = None  # Singleton para manter estado global
-    
+
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False
         return cls._instance
-    
+
     def __init__(self):
         if self._initialized:
             return
-            
+
         self.model_chain = MODEL_FALLBACK_CHAIN.copy()
         self.current_index = 0
         self.api_key = os.getenv("GOOGLE_API_KEY")
         self.last_switch_time = 0
         self.error_counts = {model: 0 for model in self.model_chain}
         self._initialized = True
-        
+
         logger.info(f"🔄 GeminiFallbackManager inicializado com {len(self.model_chain)} modelos")
-    
+
     @property
     def current_model_id(self) -> str:
         """Retorna o ID do modelo atual."""
         return self.model_chain[self.current_index]
-    
+
     def get_model(self, temperature: float = 0.3) -> Gemini:
         """
         Retorna instância do modelo atual na chain de fallback.
-        
+
         Args:
             temperature: Temperatura para o modelo (0.0 = determinístico, 1.0 = criativo)
-            
+
         Returns:
             Gemini: Instância configurada do modelo atual
         """
         if not self.api_key:
             raise ValueError("GOOGLE_API_KEY não configurada")
-        
+
         model_id = self.current_model_id
         logger.info(f"🤖 Usando modelo: {model_id} (index {self.current_index}/{len(self.model_chain)-1})")
-        
+
         return Gemini(
             id=model_id,
             api_key=self.api_key,
             temperature=temperature,
         )
-    
+
     def switch_to_next_model(self) -> bool:
         """
         Alterna para o próximo modelo na chain de fallback.
-        
+
         Returns:
             bool: True se conseguiu alternar, False se não há mais modelos
         """
         if self.current_index >= len(self.model_chain) - 1:
             logger.error("❌ Todos os modelos na chain de fallback esgotaram quota!")
             return False
-        
+
         old_model = self.current_model_id
         self.current_index += 1
         new_model = self.current_model_id
         self.last_switch_time = time.time()
-        
+
         logger.warning(f"⚠️ Fallback: {old_model} -> {new_model} (rate limit)")
         print(f"⚠️ Modelo {old_model} com rate limit. Alternando para {new_model}")
-        
+
         return True
-    
+
     def reset_to_primary(self) -> None:
         """Reseta para o modelo primário (usar após período de cooldown)."""
         if self.current_index > 0:
             old_model = self.current_model_id
             self.current_index = 0
             logger.info(f"🔄 Resetando para modelo primário: {old_model} -> {self.current_model_id}")
-    
+
     def should_try_primary(self) -> bool:
         """
         Verifica se deve tentar voltar ao modelo primário.
@@ -148,17 +149,17 @@ class GeminiFallbackManager:
         # Se já está no primário, não precisa
         if self.current_index == 0:
             return False
-        
+
         # Cooldown de 5 minutos antes de tentar primário novamente
         cooldown_seconds = 300
         elapsed = time.time() - self.last_switch_time
-        
+
         if elapsed > cooldown_seconds:
             logger.info(f"⏰ Cooldown de {cooldown_seconds}s passou. Tentando modelo primário...")
             return True
-        
+
         return False
-    
+
     def record_error(self, model_id: str) -> None:
         """Registra erro para um modelo específico."""
         if model_id in self.error_counts:
@@ -171,7 +172,7 @@ class GeminiFallbackManager:
 # ============================================================================
 
 # Instância global do gerenciador
-_fallback_manager: Optional[GeminiFallbackManager] = None
+_fallback_manager: GeminiFallbackManager | None = None
 
 
 def get_fallback_manager() -> GeminiFallbackManager:
@@ -185,37 +186,37 @@ def get_fallback_manager() -> GeminiFallbackManager:
 def get_model_with_fallback(temperature: float = 0.3) -> Gemini:
     """
     Retorna modelo Gemini atual da chain de fallback.
-    
+
     Esta função é o ponto de entrada principal para obter um modelo.
     O modelo retornado depende do estado atual da chain de fallback.
-    
+
     Args:
         temperature: Temperatura do modelo (padrão: 0.3)
-        
+
     Returns:
         Gemini: Instância do modelo atual
     """
     manager = get_fallback_manager()
-    
+
     # Tentar voltar ao primário após cooldown
     if manager.should_try_primary():
         manager.reset_to_primary()
-    
+
     return manager.get_model(temperature)
 
 
 def is_rate_limit_error(exception: Exception) -> bool:
     """
     Verifica se uma exceção é um erro de rate limit (429).
-    
+
     Args:
         exception: Exceção a ser verificada
-        
+
     Returns:
         bool: True se é erro 429
     """
     error_msg = str(exception).lower()
-    
+
     # Checar por indicadores de rate limit
     rate_limit_indicators = [
         "429",
@@ -226,7 +227,7 @@ def is_rate_limit_error(exception: Exception) -> bool:
         "too many requests",
         "resourceexhausted",
     ]
-    
+
     return any(indicator in error_msg for indicator in rate_limit_indicators)
 
 
@@ -238,51 +239,51 @@ def run_with_fallback(
 ) -> Any:
     """
     Executa uma função com retry automático e fallback de modelo em caso de 429.
-    
+
     Esta função:
     1. Tenta executar a função passada
     2. Em caso de erro 429, faz retry com backoff exponencial
     3. Se esgotar retries, alterna para próximo modelo na chain
     4. Repete até sucesso ou esgotar todos os modelos
-    
+
     Args:
         func: Função a ser executada (ex: agent.run)
         *args: Argumentos posicionais para a função
         max_retries: Máximo de retries por modelo antes de fazer fallback
         **kwargs: Argumentos nomeados para a função
-        
+
     Returns:
         Resultado da função executada
-        
+
     Raises:
         Exception: Re-levanta a última exceção se todos os modelos falharem
     """
     manager = get_fallback_manager()
     last_exception = None
-    
+
     # Tentar voltar ao primário se cooldown passou
     if manager.should_try_primary():
         manager.reset_to_primary()
-    
+
     # Loop através dos modelos na chain
     while True:
         current_model = manager.current_model_id
-        
+
         # Retry loop para o modelo atual
         for retry in range(max_retries):
             try:
                 result = func(*args, **kwargs)
-                
+
                 # Sucesso! Resetar contador de erros do modelo
                 manager.error_counts[current_model] = 0
                 return result
-                
+
             except Exception as e:
                 last_exception = e
-                
+
                 if is_rate_limit_error(e):
                     manager.record_error(current_model)
-                    
+
                     if retry < max_retries - 1:
                         # Backoff exponencial antes de retry
                         backoff = min(
@@ -304,7 +305,7 @@ def run_with_fallback(
                     # Erro não relacionado a rate limit, re-levantar imediatamente
                     logger.error(f"❌ Erro não-related a rate limit: {e}")
                     raise
-        
+
         # Tentar próximo modelo na chain
         if not manager.switch_to_next_model():
             # Não há mais modelos, re-levantar última exceção
@@ -319,7 +320,7 @@ def run_with_fallback(
 def with_model_fallback(max_retries: int = MAX_RETRIES_PER_MODEL):
     """
     Decorator que adiciona retry com fallback automático a uma função.
-    
+
     Uso:
         @with_model_fallback(max_retries=3)
         def minha_funcao_com_llm(prompt):

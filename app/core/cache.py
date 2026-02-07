@@ -15,15 +15,15 @@ Autor: Sistema PMI | Data: 2026-01-14
 
 from __future__ import annotations
 
-import os
 import hashlib
 import logging
-from typing import Optional, Callable, Any
+import os
+from collections.abc import Callable
 
 from fastapi import Request, Response
 from fastapi_cache import FastAPICache
-from fastapi_cache.decorator import cache
 from fastapi_cache.backends.redis import RedisBackend
+from fastapi_cache.decorator import cache
 
 LOGGER = logging.getLogger(__name__)
 
@@ -43,30 +43,32 @@ CACHE_REDIS_URL = os.getenv("CACHE_REDIS_URL", "redis://redis:6379/1")
 def tenant_aware_key_builder(
     func: Callable,
     namespace: str = "",
-    request: Optional[Request] = None,
-    response: Optional[Response] = None,
+    request: Request | None = None,
+    response: Response | None = None,
     args: tuple = (),
-    kwargs: dict = {},
+    kwargs: dict | None = None,
 ) -> str:
     """
     Gera chave de cache incluindo tenant_id para isolamento.
-    
+
     Formato: {namespace}:{tenant_id}:{func_name}:{params_hash}
     """
+    if kwargs is None:
+        kwargs = {}
     from app.core.tenant import get_current_tenant_id
-    
+
     # Obtém tenant da request atual
     tenant_id = get_current_tenant_id()
     tenant_str = str(tenant_id) if tenant_id else "global"
-    
+
     # Hash dos parâmetros
     params = f"{args}:{kwargs}"
-    params_hash = hashlib.md5(params.encode()).hexdigest()[:8]
-    
+    params_hash = hashlib.sha256(params.encode()).hexdigest()[:8]
+
     # Monta chave
     prefix = namespace or "cache"
     func_name = func.__name__
-    
+
     return f"{prefix}:{tenant_str}:{func_name}:{params_hash}"
 
 
@@ -77,26 +79,26 @@ def tenant_aware_key_builder(
 async def init_cache() -> None:
     """
     Inicializa o cache Redis durante startup da aplicação.
-    
+
     Chamado no lifespan do FastAPI.
     """
     try:
         from redis import asyncio as aioredis
-        
+
         redis = aioredis.from_url(
             CACHE_REDIS_URL,
             encoding="utf8",
             decode_responses=True
         )
-        
+
         FastAPICache.init(
             RedisBackend(redis),
             prefix="pmi-cache",
             key_builder=tenant_aware_key_builder
         )
-        
+
         LOGGER.info(f"✅ Cache Redis inicializado: {CACHE_REDIS_URL}")
-        
+
     except Exception as e:
         LOGGER.warning(f"⚠️ Cache Redis não disponível: {e}")
 
@@ -108,11 +110,11 @@ async def init_cache() -> None:
 def cache_response(expire: int = CACHE_EXPIRE_SECONDS, namespace: str = ""):
     """
     Decorador para cachear resposta de endpoint.
-    
+
     Args:
         expire: TTL em segundos (default: 300)
         namespace: Prefixo opcional para a chave
-        
+
     Uso:
         @app.get("/products")
         @cache_response(expire=60, namespace="products")
@@ -133,30 +135,30 @@ def cache_response(expire: int = CACHE_EXPIRE_SECONDS, namespace: str = ""):
 async def invalidate_cache_pattern(pattern: str) -> int:
     """
     Invalida todas as chaves que correspondem ao padrão.
-    
+
     Args:
         pattern: Padrão glob (ex: "products:*")
-        
+
     Returns:
         Número de chaves removidas
     """
     try:
         from redis import asyncio as aioredis
-        
+
         redis = aioredis.from_url(CACHE_REDIS_URL)
-        
+
         # Busca chaves que correspondem ao padrão
         keys = []
         async for key in redis.scan_iter(f"pmi-cache:{pattern}"):
             keys.append(key)
-        
+
         if keys:
             count = await redis.delete(*keys)
             LOGGER.info(f"🗑️ Cache invalidado: {count} chaves removidas (pattern: {pattern})")
             return count
-        
+
         return 0
-        
+
     except Exception as e:
         LOGGER.warning(f"Erro ao invalidar cache: {e}")
         return 0
@@ -165,11 +167,11 @@ async def invalidate_cache_pattern(pattern: str) -> int:
 async def invalidate_tenant_cache(tenant_id: str, namespace: str = "*") -> int:
     """
     Invalida todo o cache de um tenant específico.
-    
+
     Args:
         tenant_id: UUID do tenant
         namespace: Namespace específico ou * para todos
-        
+
     Returns:
         Número de chaves removidas
     """
@@ -180,14 +182,14 @@ async def invalidate_tenant_cache(tenant_id: str, namespace: str = "*") -> int:
 async def invalidate_dashboard_cache() -> int:
     """
     Invalida cache do dashboard.
-    
+
     Chamado automaticamente após criar/atualizar:
     - Ordens de compra
     - Produtos
     - Vendas
     """
     from app.core.tenant import get_current_tenant_id
-    
+
     tenant_id = get_current_tenant_id()
     if tenant_id:
         return await invalidate_cache_pattern(f"dashboard:{tenant_id}:*")
@@ -197,7 +199,7 @@ async def invalidate_dashboard_cache() -> int:
 async def invalidate_products_cache() -> int:
     """Invalida cache de produtos."""
     from app.core.tenant import get_current_tenant_id
-    
+
     tenant_id = get_current_tenant_id()
     if tenant_id:
         return await invalidate_cache_pattern(f"products:{tenant_id}:*")

@@ -4,6 +4,7 @@ Gera uma massa de dados realista para testes e demonstração.
 """
 
 import sys
+import os
 import random
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -15,30 +16,34 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from sqlmodel import Session, select, delete, SQLModel
-from app.core.database import engine
+from sqlmodel import Session, select, delete, SQLModel, create_engine
 from app.models.models import (
     Produto, Fornecedor, OfertaProduto, PrecosHistoricos, 
     VendasHistoricas, OrdemDeCompra, AuditoriaDecisao, Agente
 )
 
-def clear_db(session: Session):
+# Criar engine dedicado para o seed (evita conflitos)
+DATABASE_URL = os.getenv("DATABASE_URL", "mysql+pymysql://app_user:app_password@db:3306/app_db")
+seed_engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+
+def clear_db():
     print("🗑️ Resetando esquema do banco de dados (SaaS)...")
-    SQLModel.metadata.drop_all(engine)
-    SQLModel.metadata.create_all(engine)
+    SQLModel.metadata.drop_all(seed_engine)
+    SQLModel.metadata.create_all(seed_engine)
     
     print("🏢 Criando Tenant padrão...")
     from app.models.models import Tenant
-    default_tenant = Tenant(
-        nome="PMI Standard", 
-        slug="standard", 
-        plano="pro",
-        ativo=True
-    )
-    session.add(default_tenant)
-    session.commit()
-    session.refresh(default_tenant)
-    return default_tenant
+    with Session(seed_engine) as session:
+        default_tenant = Tenant(
+            nome="PMI Standard", 
+            slug="standard", 
+            plano="pro",
+            ativo=True
+        )
+        session.add(default_tenant)
+        session.commit()
+        session.refresh(default_tenant)
+        return default_tenant.id
 
 def clear_data_only(session: Session):
     print("🧹 Limpando dados existentes...")
@@ -64,12 +69,11 @@ def seed_agentes(session: Session):
     session.commit()
 
 def seed_demo():
-    with Session(engine) as session:
-        tenant = clear_db(session)
-        tenant_id = tenant.id
-        
-        print(f"🔑 Usando Tenant ID: {tenant_id}")
-        
+    tenant_id = clear_db()
+    
+    print(f"🔑 Usando Tenant ID: {tenant_id}")
+    
+    with Session(seed_engine) as session:
         # Injetar tenant_id nos agentes
         print("🤖 Populando agentes...")
         agentes = [
@@ -123,8 +127,9 @@ def seed_demo():
 
         print("📈 Gerando histórico de 180 dias...")
         hoje = datetime.now(timezone.utc)
+        
+        # Commit ofertas em batch separado
         for p, preco_base in produtos_criados:
-            # 1. Ofertas Atuais (simulando 3 fornecedores por produto)
             for f in random.sample(fornecedores, 3):
                 variacao = Decimal(random.uniform(0.9, 1.2))
                 oferta = OfertaProduto(
@@ -135,8 +140,10 @@ def seed_demo():
                     tenant_id=tenant_id
                 )
                 session.add(oferta)
-
-            # 2. Séries Temporais (Preços e Vendas)
+        session.commit()
+        
+        # Histórico em batches menores
+        for p, preco_base in produtos_criados:
             for d in range(180):
                 data = hoje - timedelta(days=d)
                 
@@ -164,6 +171,8 @@ def seed_demo():
                         tenant_id=tenant_id
                     )
                     session.add(phost)
+            # Commit por produto para evitar timeout
+            session.commit()
 
         print("📝 Criando ordens recentes e auditoria...")
         # Simular algumas ordens criadas nos últimos 10 dias

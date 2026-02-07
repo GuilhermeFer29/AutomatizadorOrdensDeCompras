@@ -1,8 +1,10 @@
-from typing import Optional
-from sqlmodel import Session, select
-from app.models.models import OrdemDeCompra, Produto, Fornecedor
 
-def get_orders(session: Session, status: Optional[str] = None, search: Optional[str] = None):
+from sqlmodel import Session, select
+
+from app.models.models import Fornecedor, OrdemDeCompra, Produto
+
+
+def get_orders(session: Session, status: str | None = None, search: str | None = None):
     statement = select(OrdemDeCompra).join(Produto)
     if status and status != 'all':
         statement = statement.where(OrdemDeCompra.status == status)
@@ -15,7 +17,7 @@ def get_or_create_default_fornecedor(session: Session) -> Fornecedor:
     fornecedor = session.exec(
         select(Fornecedor).where(Fornecedor.nome == "Fornecedor Padrão")
     ).first()
-    
+
     if not fornecedor:
         fornecedor = Fornecedor(
             nome="Fornecedor Padrão",
@@ -24,7 +26,7 @@ def get_or_create_default_fornecedor(session: Session) -> Fornecedor:
         )
         session.add(fornecedor)
         session.flush()
-    
+
     return fornecedor
 
 def create_order(session: Session, order_data: dict):

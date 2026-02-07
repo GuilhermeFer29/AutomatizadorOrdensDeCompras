@@ -1,6 +1,5 @@
 """Tests for order endpoints."""
 
-import pytest
 from fastapi.testclient import TestClient
 
 
@@ -76,7 +75,7 @@ def test_approve_order(client: TestClient):
         }
     )
     order_id = create_response.json()["id"]
-    
+
     # Approve order
     response = client.post(f"/api/orders/{order_id}/approve")
     assert response.status_code == 200
@@ -104,7 +103,7 @@ def test_reject_order(client: TestClient):
         }
     )
     order_id = create_response.json()["id"]
-    
+
     # Reject order
     response = client.post(f"/api/orders/{order_id}/reject")
     assert response.status_code == 200
@@ -133,7 +132,7 @@ def test_approve_already_approved_order(client: TestClient):
     )
     order_id = create_response.json()["id"]
     client.post(f"/api/orders/{order_id}/approve")
-    
+
     # Try to approve again
     response = client.post(f"/api/orders/{order_id}/approve")
     assert response.status_code == 400
@@ -152,7 +151,7 @@ def test_get_orders(client: TestClient):
             "origin": "Manual"
         }
     )
-    
+
     # Get orders
     response = client.get("/api/orders/")
     assert response.status_code == 200
@@ -175,7 +174,7 @@ def test_get_orders_by_status(client: TestClient):
     )
     order_id = create_response.json()["id"]
     client.post(f"/api/orders/{order_id}/approve")
-    
+
     # Get approved orders
     response = client.get("/api/orders/?status=approved")
     assert response.status_code == 200

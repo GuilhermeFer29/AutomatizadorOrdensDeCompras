@@ -25,14 +25,13 @@ Autor: Sistema PMI | Data: 2026-01-14
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
-from sqlmodel import Session, select
+from sqlmodel import select
 
-from app.core.database import get_session
+from app.core.security import get_current_user
 
 LOGGER = logging.getLogger(__name__)
 
@@ -46,7 +45,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 class SyncStatus(BaseModel):
     """Status da sincronização RAG."""
     status: str  # idle, running, completed, failed
-    last_sync: Optional[str] = None
+    last_sync: str | None = None
     products_indexed: int = 0
     message: str = ""
 
@@ -78,27 +77,28 @@ _sync_state = {
 def _sync_rag_background(batch_size: int = 100) -> None:
     """
     Sincroniza produtos no vector store em background com paginação.
-    
+
     Args:
         batch_size: Número de produtos por batch (evita OOM)
     """
     global _sync_state
-    
+
     _sync_state["status"] = "running"
     _sync_state["message"] = "Sincronização em andamento..."
-    
+
     try:
+        from sqlmodel import Session
+
         from app.core.database import get_sync_engine
         from app.core.vector_db import get_products_collection
         from app.models.models import Produto
-        from sqlmodel import Session
-        
+
         engine = get_sync_engine()
         collection = get_products_collection()
-        
+
         total_indexed = 0
         offset = 0
-        
+
         with Session(engine) as session:
             while True:
                 # Busca batch de produtos (PAGINAÇÃO)
@@ -107,15 +107,15 @@ def _sync_rag_background(batch_size: int = 100) -> None:
                     .offset(offset)
                     .limit(batch_size)
                 ).all()
-                
+
                 if not produtos:
                     break
-                
+
                 # Prepara documentos para ChromaDB
                 ids = []
                 documents = []
                 metadatas = []
-                
+
                 for p in produtos:
                     # Cria documento enriquecido
                     doc_content = (
@@ -125,10 +125,10 @@ def _sync_rag_background(batch_size: int = 100) -> None:
                         f"Estoque Atual: {p.estoque_atual} unidades\n"
                         f"Estoque Mínimo: {p.estoque_minimo} unidades\n"
                     )
-                    
+
                     if p.estoque_atual <= p.estoque_minimo:
                         doc_content += "⚠️ ATENÇÃO: Estoque abaixo do mínimo!\n"
-                    
+
                     ids.append(f"product_{p.id}")
                     documents.append(doc_content)
                     metadatas.append({
@@ -139,26 +139,26 @@ def _sync_rag_background(batch_size: int = 100) -> None:
                         "estoque_atual": p.estoque_atual,
                         "estoque_minimo": p.estoque_minimo,
                     })
-                
+
                 # Upsert no ChromaDB
                 collection.upsert(
                     ids=ids,
                     documents=documents,
                     metadatas=metadatas
                 )
-                
+
                 total_indexed += len(produtos)
                 offset += batch_size
-                
+
                 LOGGER.info(f"RAG Sync: {total_indexed} produtos indexados...")
-        
+
         _sync_state["status"] = "completed"
-        _sync_state["last_sync"] = datetime.now(timezone.utc).isoformat()
+        _sync_state["last_sync"] = datetime.now(UTC).isoformat()
         _sync_state["products_indexed"] = total_indexed
         _sync_state["message"] = f"Sincronização concluída: {total_indexed} produtos"
-        
+
         LOGGER.info(f"✅ RAG Sync completo: {total_indexed} produtos indexados")
-        
+
     except Exception as e:
         LOGGER.error(f"❌ RAG Sync falhou: {e}")
         _sync_state["status"] = "failed"
@@ -173,36 +173,37 @@ def _sync_rag_background(batch_size: int = 100) -> None:
 async def sync_rag(
     background_tasks: BackgroundTasks,
     batch_size: int = 100,
-    force: bool = False
+    force: bool = False,
+    current_user=Depends(get_current_user),
 ):
     """
     Inicia sincronização de produtos no vector store (background).
-    
+
     - **batch_size**: Produtos por batch (default: 100)
     - **force**: Força re-sync mesmo se já estiver rodando
-    
+
     A sincronização roda em background para não bloquear a API.
     Use GET /admin/rag/status para acompanhar o progresso.
     """
     global _sync_state
-    
+
     if _sync_state["status"] == "running" and not force:
         raise HTTPException(
             status_code=409,
             detail="Sincronização já em andamento. Use force=true para reiniciar."
         )
-    
+
     # Agenda task em background
     background_tasks.add_task(_sync_rag_background, batch_size)
-    
+
     _sync_state["status"] = "running"
     _sync_state["message"] = "Sincronização iniciada em background"
-    
+
     return SyncStatus(**_sync_state)
 
 
 @router.get("/rag/status", response_model=SyncStatus)
-async def get_rag_status():
+async def get_rag_status(current_user=Depends(get_current_user)):
     """
     Retorna status atual da sincronização RAG.
     """
@@ -210,20 +211,20 @@ async def get_rag_status():
 
 
 @router.get("/health", response_model=HealthStatus)
-async def admin_health_check():
+async def admin_health_check(current_user=Depends(get_current_user)):
     """
     Health check detalhado para monitoramento.
-    
+
     Verifica:
     - Conexão com banco de dados
     - Conexão com vector store
     """
     from app.core.database import check_database_health
     from app.core.vector_db import VectorDBManager
-    
+
     # Check database
-    db_health = check_database_health()
-    
+    db_health = await check_database_health()
+
     # Check vector DB
     try:
         if VectorDBManager.is_initialized():
@@ -234,22 +235,22 @@ async def admin_health_check():
             vector_status = "connected"
     except Exception as e:
         vector_status = f"error: {str(e)}"
-    
+
     overall = "healthy" if db_health["status"] == "healthy" and vector_status == "connected" else "unhealthy"
-    
+
     return HealthStatus(
         status=overall,
         database=db_health["status"],
         vector_db=vector_status,
-        timestamp=datetime.now(timezone.utc).isoformat()
+        timestamp=datetime.now(UTC).isoformat()
     )
 
 
 @router.post("/cache/clear")
-async def clear_caches():
+async def clear_caches(current_user=Depends(get_current_user)):
     """
     Limpa caches do sistema.
-    
+
     Útil para forçar recarga de dados após atualizações.
     """
     # TODO: Implementar limpeza de caches quando houver Redis

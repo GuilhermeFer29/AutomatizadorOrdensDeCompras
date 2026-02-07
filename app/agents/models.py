@@ -22,11 +22,9 @@ Autor: Sistema PMI | Data: 2026-01-14
 
 from __future__ import annotations
 
-from decimal import Decimal
 from enum import Enum
-from typing import List, Optional
-from pydantic import BaseModel, Field
 
+from pydantic import BaseModel, Field
 
 # ============================================================================
 # ENUMS
@@ -60,7 +58,7 @@ class PriceTrend(str, Enum):
 class DemandAnalysisOutput(BaseModel):
     """
     Output estruturado do Analista de Demanda.
-    
+
     Usado como response_model no Agno Agent.
     """
     need_restock: bool = Field(
@@ -72,7 +70,7 @@ class DemandAnalysisOutput(BaseModel):
     confidence_level: ConfidenceLevel = Field(
         description="Nível de confiança da análise (high, medium, low)"
     )
-    
+
     model_config = {
         "json_schema_extra": {
             "example": {
@@ -107,15 +105,15 @@ class MarketResearchOutput(BaseModel):
     """
     Output estruturado do Pesquisador de Mercado.
     """
-    offers: List[SupplierOffer] = Field(
+    offers: list[SupplierOffer] = Field(
         default_factory=list,
         description="Lista de ofertas de fornecedores"
     )
-    preco_medio: Optional[float] = Field(
+    preco_medio: float | None = Field(
         default=None,
         description="Preço médio das ofertas"
     )
-    melhor_oferta: Optional[BestOffer] = Field(
+    melhor_oferta: BestOffer | None = Field(
         default=None,
         description="Melhor oferta encontrada"
     )
@@ -127,7 +125,7 @@ class MarketResearchOutput(BaseModel):
         default=PriceTrend.STABLE,
         description="Tendência de preço segundo ML"
     )
-    
+
     model_config = {
         "json_schema_extra": {
             "example": {
@@ -165,7 +163,7 @@ class LogisticsAnalysisOutput(BaseModel):
     """
     Output estruturado do Analista de Logística.
     """
-    selected_offer: Optional[SelectedOffer] = Field(
+    selected_offer: SelectedOffer | None = Field(
         default=None,
         description="Oferta selecionada como melhor opção"
     )
@@ -173,11 +171,11 @@ class LogisticsAnalysisOutput(BaseModel):
         default="",
         description="Detalhes sobre a decisão e trade-offs"
     )
-    alternatives: List[str] = Field(
+    alternatives: list[str] = Field(
         default_factory=list,
         description="Lista de alternativas viáveis"
     )
-    
+
     model_config = {
         "json_schema_extra": {
             "example": {
@@ -201,17 +199,17 @@ class LogisticsAnalysisOutput(BaseModel):
 class PurchaseRecommendationOutput(BaseModel):
     """
     Output estruturado do Gerente de Compras (decisão final).
-    
+
     Este é o modelo principal que consolida todas as análises.
     """
     decision: PurchaseDecision = Field(
         description="Decisão final: approve, reject ou manual_review"
     )
-    supplier: Optional[str] = Field(
+    supplier: str | None = Field(
         default=None,
         description="Nome do fornecedor recomendado"
     )
-    price: Optional[float] = Field(
+    price: float | None = Field(
         default=None,
         ge=0,
         description="Preço unitário acordado"
@@ -227,7 +225,7 @@ class PurchaseRecommendationOutput(BaseModel):
     rationale: str = Field(
         description="Justificativa detalhada da decisão"
     )
-    next_steps: List[str] = Field(
+    next_steps: list[str] = Field(
         default_factory=list,
         description="Lista de ações a serem tomadas"
     )
@@ -235,7 +233,7 @@ class PurchaseRecommendationOutput(BaseModel):
         default="",
         description="Avaliação de riscos da operação"
     )
-    
+
     model_config = {
         "json_schema_extra": {
             "example": {
@@ -259,28 +257,28 @@ class PurchaseRecommendationOutput(BaseModel):
 class SupplyChainAnalysisResult(BaseModel):
     """
     Resultado consolidado da análise completa de Supply Chain.
-    
+
     Usado como retorno final de run_supply_chain_analysis().
     """
     product_sku: str = Field(description="SKU do produto analisado")
-    
+
     # Resultados de cada agente
-    demand_analysis: Optional[DemandAnalysisOutput] = Field(
+    demand_analysis: DemandAnalysisOutput | None = Field(
         default=None,
         description="Análise de demanda"
     )
-    market_research: Optional[MarketResearchOutput] = Field(
+    market_research: MarketResearchOutput | None = Field(
         default=None,
         description="Pesquisa de mercado"
     )
-    logistics_analysis: Optional[LogisticsAnalysisOutput] = Field(
+    logistics_analysis: LogisticsAnalysisOutput | None = Field(
         default=None,
         description="Análise logística"
     )
     recommendation: PurchaseRecommendationOutput = Field(
         description="Recomendação final de compra"
     )
-    
+
     # Metadados
     agent_name: str = Field(
         default="Supply Chain Team",
@@ -294,7 +292,7 @@ class SupplyChainAnalysisResult(BaseModel):
         default="2.0",
         description="Versão do algoritmo de análise"
     )
-    
+
     model_config = {
         "json_schema_extra": {
             "example": {
@@ -331,7 +329,7 @@ __all__ = [
     "ConfidenceLevel",
     "PurchaseDecision",
     "PriceTrend",
-    
+
     # Models de agentes
     "DemandAnalysisOutput",
     "SupplierOffer",
@@ -340,7 +338,7 @@ __all__ = [
     "SelectedOffer",
     "LogisticsAnalysisOutput",
     "PurchaseRecommendationOutput",
-    
+
     # Resultado consolidado
     "SupplyChainAnalysisResult",
 ]

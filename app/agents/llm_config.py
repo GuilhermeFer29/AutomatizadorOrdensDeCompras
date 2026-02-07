@@ -22,7 +22,7 @@ Atualização: 2025-10-14 (Migração para Gemini 2.5)
 """
 
 import os
-from typing import Optional
+
 from agno.models.google import Gemini
 
 
@@ -32,14 +32,14 @@ def get_gemini_llm(
 ) -> Gemini:
     """
     Configura e retorna uma instância do modelo Google Gemini.
-    
+
     Esta é a ÚNICA função que deve ser usada para criar instâncias do LLM
     em todo o projeto. Isso garante:
     - Configuração consistente em todos os agentes
     - Carregamento centralizado da API key
     - Fácil manutenção e atualização de versões
     - Validação adequada de variáveis de ambiente
-    
+
     Args:
         temperature: Controla a aleatoriedade das respostas (0.0 = determinístico, 1.0 = criativo).
                     Padrão: 0.3 (bom para tarefas analíticas)
@@ -48,28 +48,28 @@ def get_gemini_llm(
                  Alternativas:
                  - "models/gemini-2.5-flash" (mais rápido, menos preciso)
                  - "models/gemini-2.5-pro" (versão anterior)
-    
+
     Returns:
         Gemini: Instância configurada do modelo Gemini pronta para uso.
-    
+
     Raises:
         ValueError: Se a variável de ambiente GOOGLE_API_KEY não estiver configurada.
-    
+
     Example:
         ```python
         from app.agents.llm_config import get_gemini_llm
         from agno.agent import Agent
-        
+
         # Obter modelo configurado
         llm = get_gemini_llm()
-        
+
         # Usar em um agente
         agent = Agent(
             model=llm,
             instructions="Você é um assistente especializado."
         )
         ```
-    
+
     Notas:
         - A API key deve ser definida no arquivo .env: GOOGLE_API_KEY=sua_chave_aqui
         - Obtenha sua chave em: https://aistudio.google.com/app/apikey
@@ -81,7 +81,7 @@ def get_gemini_llm(
     """
     # Carrega API key do ambiente
     api_key = os.getenv("GOOGLE_API_KEY")
-    
+
     # Validação crítica: sem API key = sem funcionamento
     if not api_key:
         raise ValueError(
@@ -96,11 +96,11 @@ def get_gemini_llm(
             "Após adicionar, reinicie a aplicação com:\n"
             "  docker-compose restart api worker\n"
         )
-    
+
     # Log de configuração (útil para debug)
     masked_key = f"{api_key[:8]}...{api_key[-4:]}" if len(api_key) > 12 else "***"
     print(f"🤖 Gemini LLM configurado: {model_id} (temp={temperature}, key={masked_key})")
-    
+
     # Cria e retorna instância configurada
     return Gemini(
         id=model_id,
@@ -116,27 +116,27 @@ def get_gemini_llm(
 def get_gemini_with_fallback(temperature: float = 0.3) -> Gemini:
     """
     Retorna modelo Gemini com FALLBACK AUTOMÁTICO para erros 429.
-    
+
     Esta função deve ser usada para agentes que podem sofrer rate limiting.
     Automaticamente alterna entre modelos quando quota é excedida:
     1. gemini-2.5-flash (principal)
     2. gemini-2.5-flash-lite (alternativo)
     3. gemini-3-flash (alternativo)
     4. gemma-3-27b (fallback final)
-    
+
     Args:
         temperature: Temperatura do modelo (padrão: 0.3)
-        
+
     Returns:
         Gemini: Instância do modelo atual na chain de fallback
-        
+
     Example:
         ```python
         from app.agents.llm_config import get_gemini_with_fallback
-        
+
         # Obter modelo (pode ser qualquer um da chain)
         model = get_gemini_with_fallback(temperature=0.2)
-        
+
         # O modelo retornado depende do estado atual da chain
         agent = Agent(model=model, instructions="...")
         ```
@@ -153,11 +153,11 @@ def get_gemini_with_fallback(temperature: float = 0.3) -> Gemini:
 def get_gemini_for_nlu() -> Gemini:
     """
     Retorna uma instância do Gemini otimizada para tarefas de NLU (Natural Language Understanding).
-    
+
     Configuração especializada:
     - Temperature baixa (0.1) para respostas mais determinísticas
     - Ideal para extração de entidades e classificação de intenções
-    
+
     Returns:
         Gemini: Instância otimizada para NLU.
     """
@@ -167,11 +167,11 @@ def get_gemini_for_nlu() -> Gemini:
 def get_gemini_for_creative() -> Gemini:
     """
     Retorna uma instância do Gemini otimizada para tarefas criativas.
-    
+
     Configuração especializada:
     - Temperature alta (0.7) para respostas mais variadas
     - Ideal para geração de relatórios e análises narrativas
-    
+
     Returns:
         Gemini: Instância otimizada para criação de conteúdo.
     """
@@ -181,20 +181,20 @@ def get_gemini_for_creative() -> Gemini:
 def get_gemini_for_fast_agents() -> Gemini:
     """
     Retorna Gemini 2.5 Flash otimizado para agentes intermediários rápidos.
-    
+
     Configuração especializada:
     - Modelo: gemini-2.5-flash (velocidade máxima)
     - Temperature: 0.2 (determinístico mas não rígido)
     - Ideal para: Agentes especialistas que precisam processar dados rapidamente
-    
+
     Casos de uso:
     - AnalistaDemanda: Análise de estoque e previsões
     - PesquisadorMercado: Busca de ofertas e preços
     - AnalistaLogistica: Cálculos de distância e prazos
-    
+
     Returns:
         Gemini: Instância Flash otimizada para velocidade.
-    
+
     Performance:
         - ~2-3x mais rápido que Pro
         - Custo reduzido
@@ -209,30 +209,30 @@ def get_gemini_for_fast_agents() -> Gemini:
 def get_gemini_for_decision_making() -> Gemini:
     """
     Retorna Gemini 2.5 Pro otimizado para tomada de decisões críticas.
-    
+
     ⚠️ MODO DE QUOTA REDUZIDA ATIVO:
     Temporariamente usando Flash em vez de Pro devido a limites de quota.
     Para usar Pro: defina GEMINI_USE_PRO=true no .env e tenha plano pago.
-    
+
     Configuração especializada:
     - Modelo: gemini-2.5-flash (temporário - quota maior)
     - Temperature: 0.1 (máxima precisão e consistência)
     - Ideal para: Decisões finais que impactam negócios
-    
+
     Casos de uso:
     - GerenteCompras: Decisão final de aprovar/rejeitar compra
     - ConversationalAgent: Interação com usuário (UX crítica)
-    
+
     Returns:
         Gemini: Instância Flash otimizada para decisões (temporário).
-    
+
     Performance:
         - Flash: 1500 req/dia (free tier) vs Pro: 50 req/dia
         - Para voltar ao Pro: upgrade para plano pago ou defina GEMINI_USE_PRO=true
     """
     # 🚨 WORKAROUND QUOTA: Usa Flash se quota baixa ou variável não definida
     use_pro = os.getenv("GEMINI_USE_PRO", "false").lower() == "true"
-    
+
     if use_pro:
         print("⚠️ GEMINI_USE_PRO=true: Usando Pro (certifique-se de ter quota suficiente)")
         return get_gemini_llm(
@@ -250,33 +250,33 @@ def get_gemini_for_decision_making() -> Gemini:
 def get_gemini_for_advanced_tasks() -> Gemini:
     """
     Retorna uma instância do Gemini otimizada para tarefas complexas e avançadas.
-    
+
     Configuração especializada:
     - Modelo: gemini-2.5-pro-latest (máximo poder de raciocínio)
     - Temperature: 0.7 (criativo mas controlado)
     - Ideal para: Análises complexas, geração criativa, instruções elaboradas
-    
+
     Casos de uso:
     - Análise profunda de cadeia de suprimentos
     - Geração de relatórios executivos
     - Tomada de decisões complexas
     - Síntese de informações de múltiplas fontes
-    
+
     Returns:
         Gemini: Instância do modelo PRO otimizada para tarefas avançadas.
-    
+
     Example:
         ```python
         from app.agents.llm_config import get_gemini_for_advanced_tasks
         from agno.agent import Agent
-        
+
         # Agente para análise complexa
         analyst = Agent(
             model=get_gemini_for_advanced_tasks(),
             instructions="Realize análise profunda de dados de supply chain..."
         )
         ```
-    
+
     Notas:
         - O modelo PRO é mais lento mas significativamente mais preciso
         - Use apenas quando a tarefa realmente exigir raciocínio avançado
@@ -291,7 +291,7 @@ def get_gemini_for_advanced_tasks() -> Gemini:
 # Validação ao importar o módulo
 if __name__ == "__main__":
     print("🧪 Testando configuração do Gemini LLM...")
-    
+
     try:
         llm = get_gemini_llm()
         print(f"✅ Sucesso! Modelo configurado: {llm.id}")

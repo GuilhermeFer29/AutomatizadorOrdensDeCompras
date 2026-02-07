@@ -1,14 +1,16 @@
 """Serviço para execução do team de agentes de cadeia de suprimentos."""
 
 from __future__ import annotations
-from typing import Any, Dict, Optional
+
+from datetime import UTC, datetime
+from typing import Any
+
 import structlog
 from sqlmodel import Session, select
-from app.models.models import Agente
-from datetime import datetime, timezone
 
-from app.agents.supply_chain_team import execute_supply_chain_team
 from app.agents.supply_chain_graph import supply_chain_graph
+from app.agents.supply_chain_team import execute_supply_chain_team
+from app.models.models import Agente
 
 LOGGER = structlog.get_logger(__name__)
 
@@ -57,6 +59,7 @@ def toggle_agent_status(session: Session, agent_id: int, action: str):
 
 from app.tasks.agent_tasks import execute_agent_analysis_task
 
+
 def run_agent_now(session: Session, agent_id: int):
     agent = session.get(Agente, agent_id)
     if not agent:
@@ -71,15 +74,15 @@ def run_agent_now(session: Session, agent_id: int):
     if produto:
         execute_agent_analysis_task.delay(sku=produto.sku)
 
-    agent.ultima_execucao = datetime.now(timezone.utc)
+    agent.ultima_execucao = datetime.now(UTC)
     session.add(agent)
     session.commit()
     session.refresh(agent)
     return agent
 
 def execute_supply_chain_analysis(
-    *, sku: str, inquiry_reason: Optional[str] = None
-) -> Dict[str, Any]:
+    *, sku: str, inquiry_reason: str | None = None
+) -> dict[str, Any]:
     """Executa o team de agentes Agno e retorna o estado final consolidado."""
 
     if not sku.strip():

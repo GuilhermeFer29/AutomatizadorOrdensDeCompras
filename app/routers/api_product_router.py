@@ -1,11 +1,14 @@
-from typing import List, Optional
 import logging
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
-from sqlmodel import Session, select
-from app.core.database import get_session
-from app.services.product_service import get_products, get_product_by_id, create_product, update_product
-from app.models.models import PrecosHistoricos, Produto
+from datetime import UTC
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlmodel import Session, select
+
+from app.core.security import get_current_user
+from app.core.tenant import get_tenant_session
+from app.models.models import PrecosHistoricos, Produto
+from app.services.product_service import create_product, get_product_by_id, get_products, update_product
 
 logger = logging.getLogger(__name__)
 
@@ -16,9 +19,9 @@ class ProductCreate(BaseModel):
     stock: int
 
 class ProductUpdate(BaseModel):
-    name: Optional[str] = None
-    price: Optional[float] = None
-    stock: Optional[int] = None
+    name: str | None = None
+    price: float | None = None
+    stock: int | None = None
 
 router = APIRouter(prefix="/api/products", tags=["api-products"])
 
@@ -26,7 +29,7 @@ router = APIRouter(prefix="/api/products", tags=["api-products"])
 def sync_rag_background():
     """
     Função para sincronizar RAG em background após mudanças no banco.
-    
+
     Executa a sincronização sem bloquear a resposta da API.
     """
     try:
@@ -42,15 +45,16 @@ def sync_rag_background():
 
 
 @router.get("/")
-def read_products(search: Optional[str] = None, session: Session = Depends(get_session)):
+def read_products(search: str | None = None, session: Session = Depends(get_tenant_session), current_user=Depends(get_current_user)):
     """
     Retorna lista de produtos com preço atual e fornecedor padrão.
     """
-    from sqlalchemy import func, desc
     from collections import Counter
-    
+
+    from sqlalchemy import desc
+
     produtos = get_products(session, search)
-    
+
     result = []
     for produto in produtos:
         # Buscar preço mais recente
@@ -60,21 +64,21 @@ def read_products(search: Optional[str] = None, session: Session = Depends(get_s
             .order_by(desc(PrecosHistoricos.coletado_em))
             .limit(1)
         ).first()
-        
+
         preco_atual = float(preco_recente.preco) if preco_recente else 0.0
-        
+
         # Calcular preço médio dos últimos 30 dias
-        from datetime import datetime, timedelta, timezone
-        data_limite = datetime.now(timezone.utc) - timedelta(days=30)
+        from datetime import datetime, timedelta
+        data_limite = datetime.now(UTC) - timedelta(days=30)
         precos_recentes = list(session.exec(
             select(PrecosHistoricos)
             .where(PrecosHistoricos.produto_id == produto.id)
             .where(PrecosHistoricos.coletado_em >= data_limite)
         ))
-        
+
         if precos_recentes:
             preco_medio = sum(float(p.preco) for p in precos_recentes) / len(precos_recentes)
-            
+
             # Determinar fornecedor mais comum
             fornecedores = [p.fornecedor for p in precos_recentes if p.fornecedor]
             if fornecedores:
@@ -85,7 +89,7 @@ def read_products(search: Optional[str] = None, session: Session = Depends(get_s
         else:
             preco_medio = preco_atual
             fornecedor_padrao = None
-        
+
         result.append({
             "id": produto.id,
             "sku": produto.sku,
@@ -99,12 +103,12 @@ def read_products(search: Optional[str] = None, session: Session = Depends(get_s
             "criado_em": produto.criado_em.isoformat(),
             "atualizado_em": produto.atualizado_em.isoformat(),
         })
-    
+
     return result
 
 
 @router.get("/{product_id}")
-def read_product(product_id: int, session: Session = Depends(get_session)):
+def read_product(product_id: int, session: Session = Depends(get_tenant_session), current_user=Depends(get_current_user)):
     product = get_product_by_id(session, product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -115,19 +119,20 @@ def read_product(product_id: int, session: Session = Depends(get_session)):
 def handle_create_product(
     product: ProductCreate,
     background_tasks: BackgroundTasks,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_tenant_session),
+    current_user=Depends(get_current_user),
 ):
     """
     Cria um novo produto e sincroniza RAG automaticamente.
-    
+
     A sincronização do RAG acontece em background para não atrasar a resposta.
     """
     created_product = create_product(session, product.dict())
-    
+
     # Sincroniza RAG em background
     background_tasks.add_task(sync_rag_background)
     logger.info(f"📦 Produto criado: {product.sku} - RAG será sincronizado")
-    
+
     return created_product
 
 
@@ -136,21 +141,22 @@ def handle_update_product(
     product_id: int,
     product: ProductUpdate,
     background_tasks: BackgroundTasks,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_tenant_session),
+    current_user=Depends(get_current_user),
 ):
     """
     Atualiza um produto e sincroniza RAG automaticamente.
-    
+
     A sincronização do RAG acontece em background para não atrasar a resposta.
     """
     updated_product = update_product(session, product_id, product.dict(exclude_unset=True))
     if not updated_product:
         raise HTTPException(status_code=404, detail="Product not found")
-    
+
     # Sincroniza RAG em background
     background_tasks.add_task(sync_rag_background)
     logger.info(f"🔄 Produto atualizado: ID {product_id} - RAG será sincronizado")
-    
+
     return updated_product
 
 
@@ -158,11 +164,12 @@ def handle_update_product(
 def get_product_price_history(
     sku: str,
     limit: int = Query(default=30, ge=1, le=365),
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_tenant_session),
+    current_user=Depends(get_current_user),
 ):
     """
     Retorna o histórico de preços de um produto por SKU.
-    
+
     Args:
         sku: SKU do produto
         limit: Número máximo de registros (padrão: 30, máximo: 365)
@@ -171,7 +178,7 @@ def get_product_price_history(
     produto = session.exec(select(Produto).where(Produto.sku == sku)).first()
     if not produto:
         raise HTTPException(status_code=404, detail=f"Produto com SKU '{sku}' não encontrado")
-    
+
     # Buscar histórico de preços
     precos = list(
         session.exec(
@@ -181,10 +188,10 @@ def get_product_price_history(
             .limit(limit)
         )
     )
-    
+
     # Reverter ordem para cronológica
     precos.reverse()
-    
+
     return [
         {
             "date": preco.coletado_em.isoformat(),

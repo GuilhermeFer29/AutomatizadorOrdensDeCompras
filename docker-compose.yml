@@ -87,8 +87,8 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-    ports:
-      - "3306:3306"
+    # Portas NAO expostas externamente por seguranca.
+    # Para acessar local: docker compose exec db mysql -u root -p
     volumes:
       - mysql_data:/var/lib/mysql
     networks: [pmi-network]
@@ -107,9 +107,8 @@ services:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-pmi}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-pmi_secret}
       RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_DEFAULT_VHOST:-pmi}
-    ports:
-      - "5672:5672"
-      - "15672:15672"
+    # Portas NAO expostas externamente por seguranca.
+    # Management UI acessivel via: docker compose exec rabbitmq rabbitmqctl status
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks: [pmi-network]
@@ -125,8 +124,8 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
-    ports:
-      - "6379:6379"
+    # Portas NAO expostas externamente por seguranca.
+    # Para acessar local: docker compose exec redis redis-cli
     volumes:
       - redis_data:/data
     networks: [pmi-network]
@@ -136,34 +135,38 @@ services:
       timeout: 3s
       retries: 5
 
-  # Prometheus (monitoring profile)
+  # Prometheus
   prometheus:
     image: prom/prometheus:v2.53.0
+    restart: unless-stopped
     ports:
       - "9095:9090"
     volumes:
       - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     networks: [pmi-network]
-    profiles: [monitoring]
 
-  # Grafana (monitoring profile)
+  # Grafana
   grafana:
     image: grafana/grafana:11.1.0
+    restart: unless-stopped
     ports:
       - "3001:3000"
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/pmi-dashboard.json
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on: [prometheus]
     networks: [pmi-network]
-    profiles: [monitoring]
 
-  # Flower (monitoring profile)
+  # Flower (Celery Monitor)
   flower:
     image: mher/flower:2.0
+    restart: unless-stopped
     environment:
       CELERY_BROKER_URL: amqp://${RABBITMQ_DEFAULT_USER:-pmi}:${RABBITMQ_DEFAULT_PASS:-pmi_secret}@rabbitmq:5672/${RABBITMQ_DEFAULT_VHOST:-pmi}
       FLOWER_BASIC_AUTH: ${FLOWER_USER:-admin}:${FLOWER_PASSWORD:-admin}
@@ -172,7 +175,6 @@ services:
     depends_on:
       rabbitmq: { condition: service_healthy }
     networks: [pmi-network]
-    profiles: [monitoring]
 
 volumes:
   mysql_data:

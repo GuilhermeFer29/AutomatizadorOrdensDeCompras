@@ -1,8 +1,10 @@
-from typing import Optional
+
 from sqlmodel import Session, select
+
 from app.models.models import Produto
 
-def get_products(session: Session, search_term: Optional[str] = None):
+
+def get_products(session: Session, search_term: str | None = None):
     statement = select(Produto)
     if search_term:
         statement = statement.where(Produto.nome.contains(search_term) | Produto.sku.contains(search_term))
@@ -29,19 +31,18 @@ def update_product(session: Session, product_id: int, product_data: dict):
     product = session.get(Produto, product_id)
     if not product:
         return None
-    
+
     # Map English API fields to Portuguese model fields
     field_mapping = {
         'name': 'nome',
         'stock': 'estoque_atual',
-        'price': 'preco_medio',  # If price update needed
     }
-    
+
     for key, value in product_data.items():
         model_field = field_mapping.get(key, key)  # Use mapping or original key
         if hasattr(product, model_field):
             setattr(product, model_field, value)
-    
+
     session.add(product)
     session.commit()
     session.refresh(product)
