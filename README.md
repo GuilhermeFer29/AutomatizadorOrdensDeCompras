@@ -124,7 +124,7 @@ Sistema completo de **Inteligência Artificial** para automatizar e otimizar dec
 - **Google Gemini 2.5 Flash** - LLM principal
 - **ChromaDB** - Vector database
 - **StatsForecast (AutoARIMA)** - Previsões
-- **Google AI Embeddings** - text-embedding-004
+- **Google AI Embeddings** - gemini-embedding-001
 
 ### Infraestrutura
 - **Docker & Docker Compose** - Containerização
@@ -480,17 +480,3 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para ma
 
 ---
 
-## 📞 Suporte
-
-- 📧 Email: suporte@exemplo.com
-- 🐛 Issues: [GitHub Issues](https://github.com/seu-usuario/projeto/issues)
-
----
-
-<div align="center">
-
-**Desenvolvido com ❤️ para PMIs brasileiras**
-
-⭐ Star este repositório se foi útil para você!
-
-</div>

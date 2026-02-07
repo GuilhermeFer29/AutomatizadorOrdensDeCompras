@@ -1,21 +1,24 @@
 """
 Tenant Context Management - Row-Level Security Implementation.
 
-Este módulo fornece o mecanismo de isolamento de dados Multi-Tenant
-usando ContextVar para propagação segura do tenant_id através de
-chamadas assíncronas e síncronas.
+Este módulo fornece o mecanismo de isolamento de dados Multi-Tenant.
+Delegamos para o ContextVar único definido em app.core.tenant para
+evitar o bug de ContextVars duplicados.
+
+IMPORTANTE:
+- O ContextVar canonical é `_tenant_context` em app.core.tenant
+- Este módulo provê classes utilitárias (TenantContext, decorators)
+- TODOS os reads/writes passam pelo mesmo ContextVar
 
 REFERÊNCIAS:
 - Python contextvars: https://docs.python.org/3/library/contextvars.html
 - FastAPI Middleware: https://fastapi.tiangolo.com/tutorial/middleware/
-- SQLAlchemy Events: https://docs.sqlalchemy.org/en/20/core/event.html
 
 SEGURANÇA:
 - ContextVar garante isolamento entre requests concorrentes
 - Cada request tem seu próprio contexto de tenant
-- Queries automáticas com WHERE tenant_id = X
 
-Autor: Sistema PMI | Atualizado: 2026-01-14
+Autor: Sistema PMI | Atualizado: 2026-02-07
 """
 
 from __future__ import annotations
@@ -31,17 +34,17 @@ LOGGER = logging.getLogger(__name__)
 
 
 # ============================================================================
-# CONTEXT VARIABLES (Thread-Safe, Async-Safe)
+# CONTEXT VARIABLES — SINGLE SOURCE OF TRUTH
 # ============================================================================
-
-# ContextVar para armazenar tenant_id do request atual
-# Conforme docs Python: https://docs.python.org/3/library/contextvars.html
-_current_tenant_id: ContextVar[UUID | None] = ContextVar(
-    "current_tenant_id",
-    default=None
+# Importamos o ContextVar canônico de tenant.py para garantir
+# que middleware, services, agents e tasks todos usem a MESMA variável.
+from app.core.tenant import (  # noqa: E402
+    _tenant_context,
+    get_current_tenant_id,
+    set_current_tenant_id,
 )
 
-# ContextVar para armazenar user_id (opcional, para audit logs)
+# ContextVar para user_id (auxiliar, para audit logs)
 _current_user_id: ContextVar[int | None] = ContextVar(
     "current_user_id",
     default=None
@@ -82,7 +85,7 @@ class TenantContext:
 
     def __enter__(self) -> TenantContext:
         """Entra no contexto, setando tenant e user."""
-        self._tenant_token = _current_tenant_id.set(self.tenant_id)
+        self._tenant_token = _tenant_context.set(self.tenant_id)
         if self.user_id:
             self._user_token = _current_user_id.set(self.user_id)
 
@@ -92,7 +95,7 @@ class TenantContext:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Sai do contexto, resetando tokens."""
         if self._tenant_token:
-            _current_tenant_id.reset(self._tenant_token)
+            _tenant_context.reset(self._tenant_token)
         if self._user_token:
             _current_user_id.reset(self._user_token)
 
@@ -119,7 +122,7 @@ class TenantContext:
         Returns:
             UUID do tenant ou None se não estiver em contexto de tenant.
         """
-        return _current_tenant_id.get()
+        return _tenant_context.get()
 
     @staticmethod
     def get_current_user() -> int | None:
@@ -144,7 +147,7 @@ class TenantContext:
         Raises:
             TenantRequiredError: Se não houver tenant no contexto.
         """
-        tenant_id = _current_tenant_id.get()
+        tenant_id = _tenant_context.get()
         if tenant_id is None:
             raise TenantRequiredError(
                 "Operação requer contexto de tenant. "
@@ -162,7 +165,7 @@ class TenantContext:
         Returns:
             True se não houver tenant_id no contexto.
         """
-        return _current_tenant_id.get() is None
+        return _tenant_context.get() is None
 
 
 # ============================================================================

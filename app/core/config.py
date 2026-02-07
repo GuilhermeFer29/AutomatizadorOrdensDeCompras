@@ -177,7 +177,7 @@ class LLMSettings(BaseSettings):
         default=None,
         validation_alias="GOOGLE_API_KEY"
     )
-    GEMINI_MODEL: str = Field(default="gemini-1.5-flash")
+    GEMINI_MODEL: str = Field(default="gemini-2.5-flash")
     GEMINI_TEMPERATURE: float = Field(default=0.2, ge=0.0, le=2.0)
     GEMINI_MAX_OUTPUT_TOKENS: int = Field(default=8192)
 
@@ -242,9 +242,31 @@ class SecuritySettings(BaseSettings):
 
     # JWT
     SECRET_KEY: SecretStr = Field(
-        default=SecretStr("dev-secret-key-change-in-production"),
-        description="Chave secreta para JWT"
+        description="Chave secreta para JWT. OBRIGATÓRIA via env var."
     )
+
+    @field_validator("SECRET_KEY", mode="before")
+    @classmethod
+    def validate_secret_key(cls, v: Any) -> str:
+        """Garante que SECRET_KEY é fornecida e segura."""
+        import os as _os
+        import secrets as _secrets
+        if not v or v == "dev-secret-key-change-in-production":
+            env = _os.getenv("ENVIRONMENT", "development")
+            if env in ("production", "staging"):
+                raise ValueError(
+                    "SECRET_KEY é obrigatória em produção/staging. "
+                    "Gere com: python -c 'import secrets; print(secrets.token_hex(32))'"
+                )
+            # Dev/test: gera chave efêmera com warning
+            import logging as _log
+            _log.getLogger(__name__).warning(
+                "SECRET_KEY não definida. Gerando chave efêmera (dev only)."
+            )
+            return _secrets.token_hex(32)
+        if isinstance(v, str) and len(v) < 32:
+            raise ValueError("SECRET_KEY deve ter pelo menos 32 caracteres.")
+        return v
     JWT_ALGORITHM: str = Field(default="HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30)
     REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7)

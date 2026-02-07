@@ -4,7 +4,7 @@ Serviço de RAG (Retrieval-Augmented Generation) com LangChain e Google AI.
 ARQUITETURA DE PRODUÇÃO:
 ========================
 - Vector Store: ChromaDB via singleton (app.core.vector_db)
-- Embeddings: Google text-embedding-004
+- Embeddings: Google gemini-embedding-001
 - LLM: Google Gemini 2.5 Flash
 - Framework: LangChain LCEL
 
@@ -74,7 +74,7 @@ def get_embeddings() -> GoogleGenerativeAIEmbeddings:
     global _embeddings
     if _embeddings is None:
         _embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/text-embedding-004"
+            model="models/gemini-embedding-001"
         )
         LOGGER.info("✅ Google Embeddings inicializados")
     return _embeddings

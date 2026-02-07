@@ -12,6 +12,9 @@ REASONING ADICIONADO (2026-01-14).
 """
 
 from datetime import UTC
+import logging
+
+logger = logging.getLogger(__name__)
 
 from agno.agent import Agent
 from agno.db.sqlite import SqliteDb
@@ -21,6 +24,7 @@ from sqlmodel import Session
 # Importações locais (Nova Arquitetura)
 from app.agents.knowledge import load_knowledge_base
 from app.agents.llm_config import get_gemini_with_fallback
+from app.agents.prompts import load_prompts
 from app.agents.tools_secure import (
     create_purchase_order_tool,
     find_supplier_offers_for_sku,
@@ -31,6 +35,9 @@ from app.agents.tools_secure import (
     run_full_purchase_analysis,
     search_market_price,
 )
+
+# Carrega prompts do YAML (cached)
+_CONV_PROMPTS = load_prompts("conversational")
 
 
 def get_conversational_agent(session_id: str) -> Agent:
@@ -56,55 +63,8 @@ def get_conversational_agent(session_id: str) -> Agent:
         session_table="agent_sessions"
     )
 
-    # 3. Instruções do Agente
-    instructions = [
-        "Você é o Assistente de Compras Inteligente (Agno Powered) com capacidade de RACIOCÍNIO.",
-        "Sua missão é ajudar gerentes de suprimentos a tomar decisões rápidas e precisas.",
-        "",
-        "## COMO VOCÊ PENSA (Reasoning):",
-        "Você tem ferramentas de raciocínio `think()` e `analyze()` - USE-AS!",
-        "- SEMPRE use `think()` ANTES de responder perguntas complexas ou ambíguas",
-        "- Use `analyze()` DEPOIS de chamar ferramentas para avaliar os resultados",
-        "- Padrão: Think → Act (usar ferramenta) → Analyze → Responder",
-        "",
-        "## SUAS CAPACIDADES (USE-AS!):",
-        "1. **Knowledge Base (RAG)**: Acesso ao catálogo de produtos e detalhes técnicos.",
-        "2. **Ferramentas de Dados**:",
-        "   - `list_all_products`: PARA PERGUNTAS GERAIS sem SKU específico!",
-        "     - 'Como está meu estoque?' → Use list_all_products()",
-        "     - 'Quais produtos preciso repor?' → Use list_all_products(only_low_stock=True)",
-        "   - `get_product_info(sku)`: Para detalhes de um produto ESPECÍFICO.",
-        "   - `get_price_forecast_for_sku(sku)`: Previsão de preços.",
-        "   - `find_supplier_offers_for_sku(sku)`: Ofertas de fornecedores.",
-        "   - `run_full_purchase_analysis(sku)`: Análise completa de compra.",
-        "",
-        "## REGRAS DE COMPORTAMENTO:",
-        "- **RACIOCINE PRIMEIRO**: Use think() para planejar antes de agir.",
-        "- **PERGUNTAS GERAIS**: Se não tem SKU, use `list_all_products()` primeiro!",
-        "- **Não alucine**: Se não achar nos dados/ferramentas, diga que não sabe.",
-        "- **Seja Proativo**: Alerte sobre estoques baixos e sugira ações.",
-        "- **Resposta Rica**: Use Markdown, tabelas e emojis para clareza.",
-        "",
-        "## EXEMPLOS DE FLUXO:",
-        "",
-        "**Exemplo 1 - Pergunta GERAL (sem SKU):**",
-        "- Usuário: 'Como está meu estoque?'",
-        "- think(): 'Usuário quer visão geral. Não tem SKU. Devo listar todos.'",
-        "- Ação: Chame `list_all_products()`",
-        "- analyze(): 'Retornou X produtos, Y em alerta. Vou sumarizar.'",
-        "- Resposta: Tabela com resumo + alertas prioritários.",
-        "",
-        "**Exemplo 2 - Produto ESPECÍFICO:**",
-        "- Usuário: 'Como está o estoque do SKU_001?'",
-        "- think(): 'Usuário quer info de SKU específico.'",
-        "- Ação: `get_product_info('SKU_001')`",
-        "",
-        "**Exemplo 3 - Decisão de Compra:**",
-        "- Usuário: 'Devo comprar Parafuso agora?'",
-        "- think(): 'Preciso achar o SKU e fazer análise completa.'",
-        "- Ação 1: Buscar na Knowledge Base ou list_all_products",
-        "- Ação 2: `run_full_purchase_analysis(sku)`",
-    ]
+    # 3. Instruções do Agente (carregadas do YAML)
+    instructions = _CONV_PROMPTS["conversational_agent"]
 
     # 4. Instanciar o Agente COM REASONING
     agent = Agent(
@@ -197,7 +157,7 @@ def extract_entities(message: str, session: Session = None, session_id: int = No
 
         return json.loads(content)
     except Exception as e:
-        print(f"⚠️ Erro na extração de entidades: {e}")
+        logger.warning("Erro na extração de entidades: %s", e)
         return {"sku": None, "intent": "unknown"}
 
 

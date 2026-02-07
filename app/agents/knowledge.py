@@ -6,13 +6,17 @@ Este módulo substitui o antigo RAG baseado em LangChain por uma implementação
 
 Funcionalidades:
 - Conexão com ChromaDB via Agno
-- Embeddings via Google Gemini (text-embedding-004)
+- Embeddings via Google Gemini (gemini-embedding-001)
 - Indexação automática de produtos do SQL para VectorDB
+
+Ref: https://docs.agno.com/knowledge/concepts/embedder/gemini/gemini-embedder
 """
 
+import logging
 import os
 
-# ✅ CORREÇÃO: Agno 2.3 usa Knowledge, não KnowledgeBase
+logger = logging.getLogger(__name__)
+
 from agno.knowledge import Knowledge
 from agno.knowledge.document import Document
 from agno.knowledge.embedder.google import GeminiEmbedder
@@ -33,7 +37,7 @@ def get_product_documents() -> list[Document]:
         products = session.exec(select(Produto)).all()
 
         if not products:
-            print("⚠️ [Knowledge] Nenhum produto encontrado para indexação")
+            logger.warning("Nenhum produto encontrado para indexação")
             return []
 
         for p in products:
@@ -89,9 +93,9 @@ def get_product_knowledge() -> Knowledge:
         raise ValueError("❌ GOOGLE_API_KEY não encontrada no ambiente.")
 
     embedder = GeminiEmbedder(
-        id="models/text-embedding-004",
+        id="gemini-embedding-001",
         api_key=api_key,
-        dimensions=768  # text-embedding-004 dimensão padrão
+        dimensions=768  # gemini-embedding-001 dimensão padrão
     )
 
     # 2. Usar cliente ChromaDB do singleton (evita conflito de instâncias)

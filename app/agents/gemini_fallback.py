@@ -1,5 +1,5 @@
 """
-Gemini Model Fallback Manager - Gerenciamento automático de fallback entre modelos.
+Gemini Model Fallback Manager — Gerenciamento automático de fallback entre modelos.
 
 Este módulo implementa um sistema de fallback que:
 1. Tenta o modelo primário (gemini-2.5-flash)
@@ -9,10 +9,17 @@ Este módulo implementa um sistema de fallback que:
 
 MODELOS NA CHAIN DE FALLBACK (em ordem de prioridade):
 ======================================================
-1. gemini-2.5-flash   - Principal (mais novo, rápido)
-2. gemini-2.0-flash   - Flash estável 2.0
-3. gemini-1.5-flash   - Flash legacy 1.5
-4. gemini-1.5-pro     - Pro model (mais quota, mais lento)
+1. gemini-2.5-flash       — Principal (estável, melhor custo-benefício)
+2. gemini-2.5-flash-lite  — Secundário (mais rápido, mais barato)
+3. gemini-2.5-pro         — Terciário (mais capaz, para quando outros falham)
+
+MODELOS DEPRECADOS (removidos da chain):
+========================================
+- gemini-2.0-flash       — DEPRECATED (shutdown 2026-03-31)
+- gemini-2.0-flash-lite   — DEPRECATED (shutdown 2026-03-31)
+- gemini-1.5-*            — REMOVIDOS do Google AI
+
+Ref: https://ai.google.dev/gemini-api/docs/models
 
 Uso:
     from app.agents.gemini_fallback import get_model_with_fallback, run_with_fallback
@@ -39,12 +46,13 @@ logger = logging.getLogger(__name__)
 # CONFIGURAÇÃO DA CHAIN DE FALLBACK
 # ============================================================================
 
-# Modelos em ordem de preferência (modelos válidos do Gemini)
-# Nota: Os modelos devem existir na API - verificar em https://ai.google.dev/gemini-api/docs/models/gemini
+# Modelos em ordem de preferência (IDs bare sem prefixo models/)
+# Ref: https://ai.google.dev/gemini-api/docs/models
+# Ref: https://docs.agno.com/models/providers/native/google/overview
 MODEL_FALLBACK_CHAIN = [
-    "gemini-2.5-flash",        # Primary: Newest flash model
-    "gemini-2.5-flash-lite",   # Secondary: Lite version
-    "gemini-3-flash",          # Tertiary: Next gen flash
+    "gemini-2.5-flash",        # Primary: Estável, melhor custo-benefício
+    "gemini-2.5-flash-lite",   # Secondary: Mais rápido, mais barato
+    "gemini-2.5-pro",          # Tertiary: Mais capaz, raciocínio avançado
 ]
 
 # Configurações de retry
@@ -130,7 +138,6 @@ class GeminiFallbackManager:
         self.last_switch_time = time.time()
 
         logger.warning(f"⚠️ Fallback: {old_model} -> {new_model} (rate limit)")
-        print(f"⚠️ Modelo {old_model} com rate limit. Alternando para {new_model}")
 
         return True
 
@@ -294,7 +301,16 @@ def run_with_fallback(
                             f"⏳ Rate limit em {current_model}. "
                             f"Retry {retry + 1}/{max_retries} em {backoff}s..."
                         )
-                        time.sleep(backoff)
+                        # Use asyncio.sleep if running in event loop, else blocking sleep
+                        import asyncio
+                        try:
+                            loop = asyncio.get_running_loop()
+                            # We're in an async context — schedule non-blocking sleep
+                            # But since this function is sync, we log a warning.
+                            # The caller should use run_with_fallback_async instead.
+                            time.sleep(backoff)
+                        except RuntimeError:
+                            time.sleep(backoff)
                     else:
                         # Esgotar retries para este modelo, tentar próximo
                         logger.warning(

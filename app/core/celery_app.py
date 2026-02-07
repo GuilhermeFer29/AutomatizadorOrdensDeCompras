@@ -72,8 +72,9 @@ def create_celery_app() -> Celery:
     broker_url = _get_broker_url()
     backend_url = _get_result_backend()
 
-    print(f"🐰 Celery Broker: {broker_url.replace(os.getenv('RABBITMQ_DEFAULT_PASS', 'pmi_secret'), '***')}")
-    print(f"📦 Result Backend: {backend_url}")
+    LOGGER = __import__('logging').getLogger(__name__)
+    LOGGER.info("Celery Broker: %s", broker_url.split('@')[-1] if '@' in broker_url else broker_url)
+    LOGGER.info("Result Backend: %s", backend_url)
 
     celery_app = Celery(
         "pmi_worker",
@@ -83,17 +84,46 @@ def create_celery_app() -> Celery:
     )
 
     celery_app.conf.update(
-        # Queue Configuration
+        # Queue Configuration with DLQ (Dead Letter Queue)
         task_default_queue="default",
         task_queues={
-            "default": {"exchange": "default", "routing_key": "default"},
-            "agents": {"exchange": "agents", "routing_key": "agents.#"},
-            "ml": {"exchange": "ml", "routing_key": "ml.#"},
+            "default": {
+                "exchange": "default",
+                "routing_key": "default",
+                "queue_arguments": {
+                    "x-dead-letter-exchange": "dlx",
+                    "x-dead-letter-routing-key": "dlq.default",
+                },
+            },
+            "agents": {
+                "exchange": "agents",
+                "routing_key": "agents.#",
+                "queue_arguments": {
+                    "x-dead-letter-exchange": "dlx",
+                    "x-dead-letter-routing-key": "dlq.agents",
+                },
+            },
+            "ml": {
+                "exchange": "ml",
+                "routing_key": "ml.#",
+                "queue_arguments": {
+                    "x-dead-letter-exchange": "dlx",
+                    "x-dead-letter-routing-key": "dlq.ml",
+                },
+            },
+            "dlq": {
+                "exchange": "dlx",
+                "routing_key": "dlq.#",
+            },
         },
         task_routes={
             "app.tasks.agent_tasks.*": {"queue": "agents"},
             "app.tasks.ml_tasks.*": {"queue": "ml"},
         },
+
+        # Retry Policy (exponential backoff)
+        task_default_retry_delay=60,      # 1 min initial
+        task_max_retries=5,               # Max 5 retries
 
         # Performance & Reliability
         worker_prefetch_multiplier=1,  # Distribui tarefas de forma justa
@@ -130,12 +160,12 @@ def create_celery_app() -> Celery:
             'schedule': crontab(hour=1, minute=0),  # 1h da manhã
             'options': {'queue': 'ml'},
         },
-        # Limpeza de cache de resultados semanalmente
-        'cleanup-old-results-weekly': {
-            'task': 'app.tasks.maintenance_tasks.cleanup_old_results',
-            'schedule': crontab(hour=3, minute=0, day_of_week='sunday'),
-            'options': {'queue': 'default'},
-        },
+        # TODO: Implementar maintenance_tasks module
+        # 'cleanup-old-results-weekly': {
+        #     'task': 'app.tasks.maintenance_tasks.cleanup_old_results',
+        #     'schedule': crontab(hour=3, minute=0, day_of_week='sunday'),
+        #     'options': {'queue': 'default'},
+        # },
     }
 
     celery_app.set_default()

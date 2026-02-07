@@ -5,10 +5,17 @@ Este módulo fornece funções para configurar e retornar instâncias
 dos modelos Gemini 2.5, garantindo consistência em todo o projeto e facilitando
 manutenção futura.
 
-MODELOS DISPONÍVEIS (Google AI 2.5):
+MODELOS DISPONÍVEIS (Google Gemini 2.5 - Estáveis):
 =====================================
 • gemini-2.5-flash: Alta performance, resposta rápida (PADRÃO)
+• gemini-2.5-flash-lite: Mais rápido e barato
 • gemini-2.5-pro: Raciocínio avançado, tarefas complexas
+
+MODELOS DEPRECADOS (NÃO USAR):
+================================
+• gemini-2.0-flash: DEPRECATED (shutdown 2026-03-31)
+• gemini-2.0-flash-lite: DEPRECATED (shutdown 2026-03-31)
+• gemini-1.5-*: REMOVIDOS do Google AI
 
 FUNÇÕES PRINCIPAIS:
 ===================
@@ -21,14 +28,17 @@ Autor: Sistema de Automação de Compras
 Atualização: 2025-10-14 (Migração para Gemini 2.5)
 """
 
+import logging
 import os
 
 from agno.models.google import Gemini
 
+logger = logging.getLogger(__name__)
+
 
 def get_gemini_llm(
     temperature: float = 0.3,
-    model_id: str = "models/gemini-2.5-flash"
+    model_id: str = "gemini-2.5-flash"
 ) -> Gemini:
     """
     Configura e retorna uma instância do modelo Google Gemini.
@@ -44,10 +54,10 @@ def get_gemini_llm(
         temperature: Controla a aleatoriedade das respostas (0.0 = determinístico, 1.0 = criativo).
                     Padrão: 0.3 (bom para tarefas analíticas)
         model_id: ID do modelo Gemini a ser usado.
-                 Padrão: "models/gemini-2.5-flash" (mais recente e estável)
+                 Padrão: "gemini-2.5-flash" (estável, melhor custo-benefício)
                  Alternativas:
-                 - "models/gemini-2.5-flash" (mais rápido, menos preciso)
-                 - "models/gemini-2.5-pro" (versão anterior)
+                 - "gemini-2.5-flash-lite" (mais rápido e barato)
+                 - "gemini-2.5-pro" (raciocínio avançado)
 
     Returns:
         Gemini: Instância configurada do modelo Gemini pronta para uso.
@@ -97,9 +107,8 @@ def get_gemini_llm(
             "  docker-compose restart api worker\n"
         )
 
-    # Log de configuração (útil para debug)
-    masked_key = f"{api_key[:8]}...{api_key[-4:]}" if len(api_key) > 12 else "***"
-    print(f"🤖 Gemini LLM configurado: {model_id} (temp={temperature}, key={masked_key})")
+    # Log de configuração (sem expor a chave)
+    logger.info("Gemini LLM configurado: model=%s temp=%s", model_id, temperature)
 
     # Cria e retorna instância configurada
     return Gemini(
@@ -146,7 +155,7 @@ def get_gemini_with_fallback(temperature: float = 0.3) -> Gemini:
         return get_model_with_fallback(temperature)
     except ImportError:
         # Fallback se módulo não disponível
-        print("⚠️ gemini_fallback não disponível, usando modelo padrão")
+        logger.warning("gemini_fallback não disponível, usando modelo padrão")
         return get_gemini_llm(temperature)
 
 
@@ -202,7 +211,7 @@ def get_gemini_for_fast_agents() -> Gemini:
     """
     return get_gemini_llm(
         temperature=0.2,
-        model_id="models/gemini-2.5-flash"
+        model_id="gemini-2.5-flash"
     )
 
 
@@ -234,16 +243,16 @@ def get_gemini_for_decision_making() -> Gemini:
     use_pro = os.getenv("GEMINI_USE_PRO", "false").lower() == "true"
 
     if use_pro:
-        print("⚠️ GEMINI_USE_PRO=true: Usando Pro (certifique-se de ter quota suficiente)")
+        logger.info("GEMINI_USE_PRO=true: Usando Pro")
         return get_gemini_llm(
             temperature=0.1,
-            model_id="models/gemini-2.5-pro"
+            model_id="gemini-2.5-pro"
         )
     else:
-        print("🔧 GEMINI_USE_PRO=false: Usando Flash para evitar quota exceeded")
+        logger.info("GEMINI_USE_PRO=false: Usando Flash")
         return get_gemini_llm(
             temperature=0.1,  # Mesma temperature baixa para precisão
-            model_id="models/gemini-2.5-flash"  # Flash tem quota 30x maior
+            model_id="gemini-2.5-flash"  # Flash tem quota 30x maior
         )
 
 
@@ -284,7 +293,7 @@ def get_gemini_for_advanced_tasks() -> Gemini:
     """
     return get_gemini_llm(
         temperature=0.7,
-        model_id="models/gemini-2.5-pro-latest"
+        model_id="gemini-2.5-pro"
     )
 
 

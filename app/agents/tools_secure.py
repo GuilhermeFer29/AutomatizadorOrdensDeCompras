@@ -302,7 +302,7 @@ def get_price_forecast_for_sku(sku: str, days_ahead: int = 7) -> str:
 
         # Se validou, chama serviço de ML
         try:
-            from app.services.ml_service import predict_prices_for_product
+            from app.ml.prediction import predict_prices_for_product
             result = predict_prices_for_product(sku=sku, days_ahead=days_ahead)
 
             if "error" in result:
@@ -689,7 +689,7 @@ def get_forecast_tool(product_sku: str) -> str:
         return produto_info
 
     try:
-        from app.services.ml_service import get_forecast
+        from app.ml.prediction import predict_prices_for_product as get_forecast
         forecast = get_forecast(product_sku)
         return json.dumps({
             "sku": product_sku,

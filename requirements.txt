@@ -8,6 +8,7 @@
 # ==========================================================================
 agno
 fastapi
+pydantic-settings
 python-dotenv
 python-multipart
 structlog
@@ -54,6 +55,7 @@ langchain-chroma
 # ==========================================================================
 # ML FORECASTING
 # ==========================================================================
+joblib
 statsforecast
 prophet
 scikit-learn
@@ -85,6 +87,9 @@ python-jose[cryptography]
 # ==========================================================================
 reportlab
 faker
+pyyaml
+alembic
+cryptography
 
 # ==========================================================================
 # TESTING

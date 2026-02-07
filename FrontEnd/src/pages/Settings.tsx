@@ -253,7 +253,7 @@ export default function Settings() {
                                 Vector Store
                             </div>
                             <p className="font-medium">ChromaDB</p>
-                            <p className="text-xs text-muted-foreground">text-embedding-004</p>
+                            <p className="text-xs text-muted-foreground">gemini-embedding-001</p>
                         </div>
                     </div>
                 </CardContent>

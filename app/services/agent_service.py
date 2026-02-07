@@ -8,7 +8,6 @@ from typing import Any
 import structlog
 from sqlmodel import Session, select
 
-from app.agents.supply_chain_graph import supply_chain_graph
 from app.agents.supply_chain_team import execute_supply_chain_team
 from app.models.models import Agente
 
@@ -109,16 +108,14 @@ def execute_supply_chain_analysis(
 
 def run_purchase_analysis(sku: str):
     """
-    Executa o gráfico da cadeia de suprimentos para um determinado SKU de produto.
+    Executa análise da cadeia de suprimentos para um determinado SKU.
 
     Args:
         sku (str): O SKU do produto a ser analisado.
 
     Returns:
-        dict: O estado final do gráfico após a execução.
+        dict: O estado final após a execução.
     """
-    initial_state = {"product_sku": sku, "forecast": None, "market_prices": None, "recommendation": None}
-    final_state = supply_chain_graph.run(initial_state)
-    return final_state
+    return execute_supply_chain_analysis(sku=sku)
 
 __all__ = ["execute_supply_chain_analysis", "get_agents", "toggle_agent_status", "run_agent_now", "run_purchase_analysis"]

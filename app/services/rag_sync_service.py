@@ -12,7 +12,7 @@ FUNCIONAMENTO:
 
 MODELOS UTILIZADOS:
 ===================
-• Embeddings: Google text-embedding-004 (768 dimensões)
+• Embeddings: Google gemini-embedding-001 (768 dimensões)
 • LLM RAG: Gemini 2.5 Flash
 
 Autor: Sistema de Automação de Compras

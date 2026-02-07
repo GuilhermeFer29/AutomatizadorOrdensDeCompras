@@ -9,11 +9,11 @@ Isso garante validação automática e elimina a necessidade de parsing com Rege
 BENEFÍCIOS:
 - Validação automática de tipos
 - Documentação auto-gerada
-- Compatibilidade com response_model do Agno
+- Compatibilidade com output_schema do Agno
 - Erros claros quando o LLM retorna formato inválido
 
 REFERÊNCIAS:
-- Agno Structured Outputs: https://docs.agno.com/agents/structured-output
+- Agno Structured Outputs: https://docs.agno.com/input-output/structured-output/agent
 - Pydantic v2: https://docs.pydantic.dev/latest/
 - Gemini Structured Output: https://ai.google.dev/gemini-api/docs/structured-output
 
@@ -59,7 +59,7 @@ class DemandAnalysisOutput(BaseModel):
     """
     Output estruturado do Analista de Demanda.
 
-    Usado como response_model no Agno Agent.
+    Usado como output_schema no Agno Agent.
     """
     need_restock: bool = Field(
         description="Se o produto precisa de reabastecimento"

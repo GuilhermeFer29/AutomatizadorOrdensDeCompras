@@ -31,7 +31,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import select
 
-from app.core.security import get_current_user
+from app.core.permissions import require_role
 
 LOGGER = logging.getLogger(__name__)
 
@@ -174,7 +174,7 @@ async def sync_rag(
     background_tasks: BackgroundTasks,
     batch_size: int = 100,
     force: bool = False,
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_role("admin", "owner")),
 ):
     """
     Inicia sincronização de produtos no vector store (background).
@@ -203,7 +203,7 @@ async def sync_rag(
 
 
 @router.get("/rag/status", response_model=SyncStatus)
-async def get_rag_status(current_user=Depends(get_current_user)):
+async def get_rag_status(current_user=Depends(require_role("admin", "owner"))):
     """
     Retorna status atual da sincronização RAG.
     """
@@ -211,7 +211,7 @@ async def get_rag_status(current_user=Depends(get_current_user)):
 
 
 @router.get("/health", response_model=HealthStatus)
-async def admin_health_check(current_user=Depends(get_current_user)):
+async def admin_health_check(current_user=Depends(require_role("admin", "owner"))):
     """
     Health check detalhado para monitoramento.
 
@@ -247,7 +247,7 @@ async def admin_health_check(current_user=Depends(get_current_user)):
 
 
 @router.post("/cache/clear")
-async def clear_caches(current_user=Depends(get_current_user)):
+async def clear_caches(current_user=Depends(require_role("admin", "owner"))):
     """
     Limpa caches do sistema.
 

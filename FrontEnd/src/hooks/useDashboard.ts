@@ -37,16 +37,7 @@ enabled: !!productId, // Só executa se productId existir
 });
 };
 
-// Hook para buscar lista de produtos do catálogo
-export const useProducts = () => {
-return useQuery({
-queryKey: ['products'],
-queryFn: async () => {
-const response = await api.get('/api/products');
-return response.data;
-},
-});
-};
+// NOTA: useProducts foi removido daqui — use o hook canônico de @/hooks/useProducts
 
 // Hook para buscar previsões de preço de um produto por SKU
 export const useProductPredictions = (sku: string | null, daysAhead: number = 14) => {

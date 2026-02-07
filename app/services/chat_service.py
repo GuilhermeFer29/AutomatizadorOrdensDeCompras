@@ -1,4 +1,5 @@
 import json
+import logging
 
 from sqlmodel import Session, select
 
@@ -9,6 +10,8 @@ from app.agents.conversational_agent import (
 )
 from app.models.models import ChatMessage, ChatSession
 from app.services.rag_service import embed_and_store_message
+
+LOGGER = logging.getLogger(__name__)
 
 
 def get_or_create_chat_session(session: Session, session_id: int = None) -> ChatSession:
@@ -55,7 +58,7 @@ def add_chat_message(
     try:
         embed_and_store_message(message)
     except Exception as e:
-        print(f"Erro ao indexar mensagem para RAG: {e}")
+        LOGGER.warning("Erro ao indexar mensagem para RAG", exc_info=e)
 
     return message
 
@@ -75,7 +78,7 @@ def process_user_message(session: Session, session_id: int, message_text: str):
 
     # 2. Extrai entidades (SKU, intent, etc)
     entities = extract_entities(message_text, session, session_id)
-    print(f"🔍 DEBUG - Entities: {entities}")
+    LOGGER.debug("Entities extracted", extra={"entities": entities})
 
     # 3. Salva SKU no contexto se foi identificado
     if entities.get("sku"):
@@ -88,12 +91,12 @@ def process_user_message(session: Session, session_id: int, message_text: str):
 
     # Se pede análise/decisão de compra E tem SKU → Dispara agente especialista
     if intent in ["purchase_decision", "forecast", "logistics"] and sku:
-        print(f"🚀 Disparando análise especializada para {sku}")
+        LOGGER.info("Disparando analise especializada", extra={"sku": sku})
         response_content, metadata = handle_supply_chain_analysis(session, session_id, entities)
 
     # QUALQUER OUTRA PERGUNTA → RAG responde naturalmente
     else:
-        print(f"💬 Usando RAG para conversa natural: '{message_text}'")
+        LOGGER.info("Usando RAG para conversa natural", extra={"message": message_text[:100]})
         response_content, metadata = handle_natural_conversation(session, session_id, message_text, entities)
 
     # 5. Salva resposta do agente
@@ -116,7 +119,7 @@ def handle_natural_conversation(session: Session, session_id: int, user_question
     """
 
     try:
-        print(f"🤖 Agente Conversacional processando: '{user_question}'")
+        LOGGER.info("Agente Conversacional processando pergunta")
 
         # NOTA: O histórico de conversa é gerenciado automaticamente pelo Agno
         # através de add_history_to_context=True e SqliteDb storage.
@@ -130,20 +133,20 @@ def handle_natural_conversation(session: Session, session_id: int, user_question
         # DEBUG: Mostra ferramentas registradas no agente
         if hasattr(agent, 'tools') and agent.tools:
             tool_names = [getattr(t, 'name', str(t)[:30]) for t in agent.tools]
-            print(f"🔧 DEBUG - Ferramentas do agente: {tool_names}")
+            LOGGER.debug("Ferramentas do agente", extra={"tools": tool_names})
 
         # Usa apenas a pergunta do usuário - o Agno adiciona o histórico automaticamente
         full_question = user_question
 
         # Executa o agente com contexto (ele decide automaticamente se delega ou não)
-        print("🔧 DEBUG - Pergunta completa enviada ao agente:")
-        print(f"   {full_question[:300]}...")
+        LOGGER.debug("Pergunta enviada ao agente")
+        LOGGER.debug("Pergunta", extra={"question_preview": full_question[:300]})
 
         response = agent.run(full_question)
 
         # Verifica se resposta é válida
         if response is None:
-            print("❌ Agente retornou None - possível erro na API")
+            LOGGER.error("Agente retornou None")
             return (
                 "Desculpe, houve um erro ao processar sua pergunta. Por favor, tente novamente ou reformule a pergunta de forma mais simples.",
                 {"type": "error", "error": "agent_returned_none"}
@@ -151,38 +154,38 @@ def handle_natural_conversation(session: Session, session_id: int, user_question
 
         # DEBUG: Verifica status da resposta
         if hasattr(response, 'status'):
-            print(f"🔧 DEBUG - Status da resposta: {response.status}")
+            LOGGER.debug("Status da resposta: %s", response.status)
         if hasattr(response, 'is_paused') and response.is_paused:
-            print("⚠️ DEBUG - Resposta está PAUSADA (aguardando confirmação?)")
+            LOGGER.debug("Resposta PAUSADA")
         if hasattr(response, 'is_cancelled') and response.is_cancelled:
-            print("⚠️ DEBUG - Resposta foi CANCELADA")
+            LOGGER.debug("Resposta CANCELADA")
 
         # DEBUG: Verifica detalhes da resposta
-        print(f"🔧 DEBUG - Tipo response: {type(response)}")
-        print(f"🔧 DEBUG - response.content: '{response.content if hasattr(response, 'content') else 'N/A'}' (tipo: {type(response.content) if hasattr(response, 'content') else 'N/A'})")
+        LOGGER.debug("Tipo response: %s", type(response).__name__)
+        LOGGER.debug("response.content type: %s", type(response.content).__name__ if hasattr(response, "content") else "N/A")
 
         # Verifica se há tools executadas
         if hasattr(response, 'tools') and response.tools:
-            print(f"🔧 DEBUG - Tools executadas: {len(response.tools)}")
+            LOGGER.debug("Tools executadas: %d", len(response.tools))
             for t in response.tools:
-                print(f"   - {getattr(t, 'tool_name', 'unknown')}: {str(getattr(t, 'result', ''))[:100]}")
+                LOGGER.debug("Tool: %s", getattr(t, "tool_name", "unknown"))
 
         if hasattr(response, 'messages') and response.messages:
-            print(f"🔧 DEBUG - Mensagens do agente: {len(response.messages)}")
+            LOGGER.debug("Mensagens do agente: %d", len(response.messages))
             for idx, msg in enumerate(response.messages):
                 msg_role = getattr(msg, 'role', 'unknown')
                 msg_content = getattr(msg, 'content', None)
                 msg_content_preview = str(msg_content)[:200] if msg_content else 'None'
-                print(f"   [{idx}] role={msg_role}, content={msg_content_preview}")
+                LOGGER.debug("Message [%d] role=%s", idx, msg_role)
 
                 # Verifica tool_calls
                 if hasattr(msg, 'tool_calls') and msg.tool_calls:
-                    print(f"       🔧 tool_calls: {len(msg.tool_calls)}")
+                    LOGGER.debug("tool_calls: %d", len(msg.tool_calls))
                     for tc in msg.tool_calls:
                         if hasattr(tc, 'function'):
-                            print(f"          - {getattr(tc.function, 'name', 'unknown')}")
+                            LOGGER.debug("tool_call: %s", getattr(tc.function, "name", "unknown"))
                         elif isinstance(tc, dict):
-                            print(f"          - {tc.get('function', {}).get('name', 'unknown')}")
+                            LOGGER.debug("tool_call: %s", tc.get("function", {}).get("name", "unknown"))
 
         # Extrai conteúdo da resposta (Agno RunOutput)
         agent_response = None
@@ -193,15 +196,15 @@ def handle_natural_conversation(session: Session, session_id: int, user_question
                 content_str = response.get_content_as_string()
                 if content_str and isinstance(content_str, str) and len(content_str.strip()) > 0:
                     agent_response = content_str
-                    print("✅ DEBUG - Resposta extraída via get_content_as_string()")
+                    LOGGER.debug("Resposta via get_content_as_string()")
             except Exception as e:
-                print(f"⚠️ DEBUG - get_content_as_string() falhou: {e}")
+                LOGGER.debug("get_content_as_string() falhou", exc_info=e)
 
         # MÉTODO 2: response.content direto
         if not agent_response:
             if hasattr(response, 'content') and response.content and isinstance(response.content, str) and len(response.content.strip()) > 0:
                 agent_response = response.content
-                print("✅ DEBUG - Resposta extraída de response.content")
+                LOGGER.debug("Resposta via response.content")
 
         # MÉTODO 3: Busca nas mensagens (model/assistant com content texto)
         if not agent_response and hasattr(response, 'messages') and response.messages:
@@ -217,16 +220,15 @@ def handle_natural_conversation(session: Session, session_id: int, user_question
                 # Assistant ou model message com conteúdo texto
                 if msg_role_str in ['assistant', 'model'] and msg_content and isinstance(msg_content, str) and len(msg_content.strip()) > 0:
                     agent_response = msg_content
-                    print(f"✅ DEBUG - Resposta extraída de messages (role={msg_role_str})")
+                    LOGGER.debug("Resposta via messages (role=%s)", msg_role_str)
                     break
 
         # MÉTODO 4: Fallback com mensagem padrão
         if not agent_response:
             agent_response = "Desculpe, não consegui formular uma resposta adequada. Por favor, reformule sua pergunta ou seja mais específico sobre o que deseja saber."
-            print("⚠️ DEBUG - Usando resposta padrão (nenhum método retornou conteúdo)")
+            LOGGER.warning("Nenhum metodo retornou conteudo, usando fallback")
 
-        print(f"✅ Agente respondeu: {agent_response[:100]}...")
-        print(f"🔧 DEBUG - Resposta completa tem {len(agent_response)} chars")
+        LOGGER.info("Agente respondeu com %d chars", len(agent_response))
 
         return (
             agent_response,
@@ -239,9 +241,9 @@ def handle_natural_conversation(session: Session, session_id: int, user_question
         )
 
     except Exception as e:
-        print(f"❌ Erro no agente conversacional: {e}")
-        import traceback
-        traceback.print_exc()
+        LOGGER.exception("Erro no agente conversacional")
+        # traceback replaced by LOGGER.exception
+        # Stack trace already captured by LOGGER.exception above
 
         # Fallback: mensagem amigável
         return (

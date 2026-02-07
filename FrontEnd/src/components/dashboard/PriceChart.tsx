@@ -18,7 +18,8 @@ import {
   ResponsiveContainer
 } from "recharts";
 import { TrendingUp, AlertTriangle, Search, Activity, Target, TrendingDown } from "lucide-react";
-import { useProducts, useProductPredictions } from "@/hooks/useDashboard";
+import { useProducts } from "@/hooks/useProducts";
+import { useProductPredictions } from "@/hooks/useDashboard";
 import { Product } from "@/types/api.types";
 import api from "@/services/api";
 

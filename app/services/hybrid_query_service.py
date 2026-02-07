@@ -257,7 +257,7 @@ def execute_ml_predictions(intent: dict[str, Any], db_session: Session, sales_da
     """
     Executa previsões ML para produtos relevantes.
     """
-    from app.ml.prediction import predict_prices
+    from app.ml.prediction import predict_prices_for_product
 
     try:
         # Se tem dados de vendas, pega top produtos
@@ -274,7 +274,7 @@ def execute_ml_predictions(intent: dict[str, Any], db_session: Session, sales_da
         predictions = []
         for sku in top_skus:
             try:
-                pred = predict_prices(sku, days_ahead=14)
+                pred = predict_prices_for_product(sku, days_ahead=14)
                 if pred:
                     predictions.append({
                         "sku": sku,

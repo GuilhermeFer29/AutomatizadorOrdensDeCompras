@@ -204,7 +204,19 @@ def execute_chat_action(
 
 @router.websocket("/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: int, session: Session = Depends(get_session)):
-    # ✅ CORREÇÃO: Usa manager para permitir push de mensagens
+    # Authenticate WebSocket via query param or first message
+    token = websocket.query_params.get("token")
+    if token:
+        try:
+            from app.core.security import decode_jwt_token
+            payload = decode_jwt_token(token)
+            if not payload.get("sub"):
+                await websocket.close(code=4001, reason="Invalid token")
+                return
+        except Exception:
+            await websocket.close(code=4001, reason="Authentication failed")
+            return
+
     await websocket_manager.connect(websocket, session_id)
 
     try:
@@ -225,4 +237,5 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int, session: Ses
             await websocket.send_json(response_data)
     except WebSocketDisconnect:
         websocket_manager.disconnect(websocket, session_id)
-        print(f"Client disconnected from session {session_id}")
+        import logging as _log
+        _log.getLogger(__name__).info("Client disconnected from session %s", session_id)

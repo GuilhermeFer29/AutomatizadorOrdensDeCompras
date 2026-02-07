@@ -2,6 +2,20 @@ import { useState, useEffect, useRef } from 'react';
 import { ChatMessage } from '@/types/api.types';
 import api from '@/services/api';
 
+/**
+ * Build the WebSocket URL dynamically from the API base URL env var
+ * or fall back to the current page origin.
+ */
+function buildWsUrl(path: string): string {
+  const base = import.meta.env.VITE_API_BASE_URL as string | undefined;
+  if (base) {
+    // Replace http(s):// with ws(s)://
+    return base.replace(/^http/, 'ws') + path;
+  }
+  const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  return `${proto}://${window.location.host}${path}`;
+}
+
 export const useChat = (sessionId: number | null) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isConnected, setIsConnected] = useState(false);
@@ -23,8 +37,10 @@ export const useChat = (sessionId: number | null) => {
       setHasAsyncTask(hasAsync);
     });
 
-    // Setup WebSocket
-    const ws = new WebSocket(`ws://localhost:8000/api/chat/ws/${sessionId}`);
+    // Setup WebSocket with dynamic URL and JWT auth token
+    const token = localStorage.getItem('token');
+    const wsPath = `/api/chat/ws/${sessionId}${token ? `?token=${token}` : ''}`;
+    const ws = new WebSocket(buildWsUrl(wsPath));
     websocket.current = ws;
 
     ws.onopen = () => {
