@@ -8,7 +8,7 @@ export const useAgents = () => {
 return useQuery<Agent[]>({
 queryKey: ['agents'],
 queryFn: async () => {
-const response = await api.get('/api/agents');
+const response = await api.get('/api/agents/');
 return response.data;
 },
 refetchInterval: 30000, // Atualiza a cada 30 segundos

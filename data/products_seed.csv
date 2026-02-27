@@ -1,50 +1,51 @@
 nome,sku,categoria,estoque_atual,estoque_minimo
-Pistolas de cola quente 34mm,386DC631,Ferramentas e Insumos de Produção,396,22
-Jacquard floral 1L,24149A00,Tecidos e Revestimentos,372,48
-Chapas OSB 3L,DEB9B480,Estruturas de Madeira,254,45
-Rodízios plásticos 4x2cm,71AEDA80,Ferragens e Acessórios,74,37
-Jacquard floral 2kg,6294B149,Tecidos e Revestimentos,223,76
-Mantas acrílicas 1x2m,239E4C02,Espumas e Enchimentos,386,46
-Zíperes reforçados 1x1m,7ACC2FA9,Acabamentos,300,60
-Agulhas para costura de estofados 2kg,C0417838,Ferramentas e Insumos de Produção,170,73
-Cola de contato 1L,9BCC0020,Colas e Adesivos,398,42
-Parafusos soberbos 16mm,8D7E042C,Ferragens e Acessórios,291,29
-Linho 2kg,A0877AFD,Tecidos e Revestimentos,114,56
-Pregos sem cabeça 2kg,5AD3A5D4,Ferragens e Acessórios,248,71
-Jacquard floral 3L,C0FB291B,Tecidos e Revestimentos,158,40
-Sarrafos de pinus 1L,C040EEFF,Estruturas de Madeira,174,33
-Zíperes reforçados 2kg,F1996DBF,Acabamentos,265,62
-Fibras siliconadas 2x1m,E9B85312,Espumas e Enchimentos,221,53
-Pregos sem cabeça 4x1cm,EF1D0750,Ferragens e Acessórios,300,52
-Sarrafos de pinus 1L,74B0A833,Estruturas de Madeira,295,45
-Chenille 2x2m,B5E66CE7,Tecidos e Revestimentos,281,56
-Sarrafos de pinus 44mm,205C923B,Estruturas de Madeira,101,28
-Agulhas para costura de estofados 12mm,6FD43BB9,Ferramentas e Insumos de Produção,276,76
-Cola de contato 4x4cm,F07BCE65,Colas e Adesivos,345,57
-Agulhas para costura de estofados 2x2m,D1F1DF8F,Ferramentas e Insumos de Produção,209,31
-Cola quente bastão 3L,F07A6AB7,Colas e Adesivos,52,51
-Rodízios de silicone 50mm,8C005768,Ferragens e Acessórios,74,73
-Suede 90mm,7C494CDB,Tecidos e Revestimentos,98,66
-Agulhas para costura de estofados 3x2cm,56778547,Ferramentas e Insumos de Produção,72,26
-Grampeadores pneumáticos 2x2cm,282E0300,Ferramentas e Insumos de Produção,197,64
-Mantas acrílicas 11mm,0F443382,Espumas e Enchimentos,84,68
-Espuma viscoelástica 2x2m,0EF48BE4,Espumas e Enchimentos,207,55
-Cola de contato 3L,317DE148,Ferramentas e Insumos de Produção,175,21
-Fibras siliconadas 2x2cm,3ABDC853,Espumas e Enchimentos,395,18
-Chapas MDF 5x3cm,2B94071F,Estruturas de Madeira,289,51
-Cantoneiras metálicas 1x1m,58A945EF,Ferragens e Acessórios,114,64
-Suede 2x2m,B9E3B7A4,Tecidos e Revestimentos,258,54
-Pespontos decorativos 5x3cm,C00AEF20,Acabamentos,136,26
-Sarrafos de pinus 1kg,6F583EB0,Estruturas de Madeira,280,19
-Jacquard floral 1kg,2C8142AA,Tecidos e Revestimentos,382,68
-Cola spray 2x2m,C4C8564E,Colas e Adesivos,61,22
-Botões encapados 15mm,F7BB4DB2,Acabamentos,354,66
-Cola de contato 2x1m,1A3716A5,Colas e Adesivos,289,41
-Rodízios plásticos 5x4cm,20CCF97E,Ferragens e Acessórios,325,51
-Mantas acrílicas 1x1m,CC93F167,Espumas e Enchimentos,120,36
-Cantoneiras metálicas 1kg,0F9322E9,Ferragens e Acessórios,195,61
-Sarrafos de pinus 2kg,E992413B,Estruturas de Madeira,301,33
-Mantas acrílicas 1L,8F60F393,Espumas e Enchimentos,348,10
-Cola de contato 5x1cm,6F1E3D47,Colas e Adesivos,124,30
-Chenille 45mm,7D283619,Tecidos e Revestimentos,277,30
-Cola spray 75mm,EEE64FAC,Ferramentas e Insumos de Produção,279,50
+Parafuso Sextavado M12x50,FER-001,Ferragens e Acessórios,500,200
+Rolamento Autocompensador 6205,FER-002,Ferragens e Acessórios,25,10
+Rodízio Silicone 50mm (jogo c/4),FER-003,Ferragens e Acessórios,60,40
+Dobradiça de Pressão 35mm,FER-004,Ferragens e Acessórios,180,80
+Corrediça Telescópica 45cm (par),FER-005,Ferragens e Acessórios,90,50
+Pé Cromado Cônico 12cm,FER-006,Ferragens e Acessórios,220,100
+Tecido Jacquard Floral 1m,TEC-001,Tecidos e Revestimentos,180,80
+Chenille Premium 2m,TEC-002,Tecidos e Revestimentos,95,60
+Suede Importado 1.5m,TEC-003,Tecidos e Revestimentos,120,50
+Veludo Alemão 1.4m,TEC-004,Tecidos e Revestimentos,85,40
+Linho Natural 1.6m,TEC-005,Tecidos e Revestimentos,140,60
+Couro Sintético PU 1m,TEC-006,Tecidos e Revestimentos,200,80
+Couro Legítimo Bovino 1m²,TEC-007,Tecidos e Revestimentos,30,15
+Sarja Pesada 1.8m,TEC-008,Tecidos e Revestimentos,160,70
+Chapa MDF 18mm 2.75x1.84m,MAD-001,Estruturas de Madeira,200,80
+Sarrafo de Pinus 5x2cm 3m,MAD-002,Estruturas de Madeira,350,100
+Compensado 15mm 2.20x1.60m,MAD-003,Estruturas de Madeira,120,50
+Eucalipto Serrado 6x6cm 3m,MAD-004,Estruturas de Madeira,180,70
+Chapa OSB 15mm 2.44x1.22m,MAD-005,Estruturas de Madeira,90,40
+Tábua de Cedrinho 2x15cm 3m,MAD-006,Estruturas de Madeira,140,60
+Cola de Contato Extra 1L,COL-001,Colas e Adesivos,150,60
+Cola Quente Bastão (kg),COL-002,Colas e Adesivos,45,30
+Cola Spray Permanente 500ml,COL-003,Colas e Adesivos,80,40
+Cola PVA Marceneiro 5kg,COL-004,Colas e Adesivos,65,25
+Adesivo Estrutural Epóxi 1kg,COL-005,Colas e Adesivos,40,20
+Espuma D33 Soft 1x2m 10cm,ESP-001,Espumas e Enchimentos,60,30
+Manta Acrílica 200g 1x1m,ESP-002,Espumas e Enchimentos,200,80
+Fibra Siliconada Solta 1kg,ESP-003,Espumas e Enchimentos,100,50
+Espuma D28 Firme 1x2m 5cm,ESP-004,Espumas e Enchimentos,75,35
+Espuma Viscoelástica 1x2m 6cm,ESP-005,Espumas e Enchimentos,45,20
+Flocos de Espuma 5kg,ESP-006,Espumas e Enchimentos,120,50
+Percintas Elásticas 50mm (rolo 25m),ESP-007,Espumas e Enchimentos,80,40
+Zíper Reforçado 60cm,ACA-001,Acabamentos,300,120
+Botão Encapado 20mm (cento),ACA-002,Acabamentos,500,200
+Pesponto Decorativo Duplo 1m,ACA-003,Acabamentos,150,60
+Viés de Acabamento 15mm (rolo 50m),ACA-004,Acabamentos,90,40
+Linha de Costura Nylon 100g,ACA-005,Acabamentos,350,150
+Cordão Sianinha 10mm (rolo 50m),ACA-006,Acabamentos,110,50
+Fita de Velcro 50mm (rolo 25m),ACA-007,Acabamentos,70,35
+Grampeador Pneumático Industrial,INS-001,Ferramentas e Insumos de Produção,8,3
+Pistola de Cola Quente 200W,INS-002,Ferramentas e Insumos de Produção,12,5
+Agulha Estofado Curva 10cm (kit c/5),INS-003,Ferramentas e Insumos de Produção,200,100
+Serra Circular Bancada 10pol,INS-004,Ferramentas e Insumos de Produção,4,2
+Compressor de Ar 50L,INS-005,Ferramentas e Insumos de Produção,3,2
+Máquina de Costura Industrial Reta,INS-006,Ferramentas e Insumos de Produção,5,2
+Grampo Pneumático 80/14 (cx c/5000),INS-007,Ferramentas e Insumos de Produção,250,100
+Tesoura Industrial 12pol,INS-008,Ferramentas e Insumos de Produção,15,8
+Fita Métrica Aço 5m,INS-009,Ferramentas e Insumos de Produção,30,15
+Lápis de Marcação Tecido (cx c/12),INS-010,Ferramentas e Insumos de Produção,40,20
+Pregos Sem Cabeça 15mm (kg),FER-007,Ferragens e Acessórios,280,120

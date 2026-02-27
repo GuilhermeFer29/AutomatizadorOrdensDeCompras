@@ -968,8 +968,6 @@ Exemplos:
 
     result = run_seed(days=args.days, clear=args.clear, only_missing=args.only_missing)
 
-    result = run_seed(days=args.days, clear=args.clear, only_missing=args.only_missing)
-
     if not result:
         sys.exit(1)
 

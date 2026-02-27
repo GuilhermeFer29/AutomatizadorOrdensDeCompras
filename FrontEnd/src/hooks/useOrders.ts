@@ -20,7 +20,7 @@ export const useOrders = (filters?: {
     return useQuery<Order[]>({
         queryKey: ['orders', filters],
         queryFn: async () => {
-            const response = await api.get('/api/orders', { params: filters });
+            const response = await api.get('/api/orders/', { params: filters });
             return response.data;
         },
     });
@@ -32,7 +32,7 @@ export const useCreateOrder = () => {
 
     return useMutation({
         mutationFn: async (newOrder: OrderCreate) => {
-            const response = await api.post('/api/orders', newOrder);
+            const response = await api.post('/api/orders/', newOrder);
             return response.data;
         },
         onSuccess: () => {

@@ -23,7 +23,7 @@ export const useProducts = (searchTerm?: string) => {
         queryKey: ['products', searchTerm],
         queryFn: async () => {
             const params = searchTerm ? { search: searchTerm } : {};
-            const response = await api.get('/api/products', { params });
+            const response = await api.get('/api/products/', { params });
             return response.data;
         },
     });
@@ -46,7 +46,7 @@ export const useCreateProduct = () => {
 
     return useMutation({
         mutationFn: async (newProduct: ProductCreate) => {
-            const response = await api.post('/api/products', newProduct);
+            const response = await api.post('/api/products/', newProduct);
             return response.data;
         },
         onSuccess: () => {
