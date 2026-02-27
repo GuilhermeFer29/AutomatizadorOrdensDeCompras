@@ -42,14 +42,3 @@ retry: false, // Não retenta em caso de erro (evita múltiplas chamadas)
 staleTime: 1000 * 60 * 5, // Cache por 5 minutos
 });
 };
-
-// Hook para buscar modelos ML treinados
-export const useMLModels = () => {
-return useQuery({
-queryKey: ['ml', 'models'],
-queryFn: async () => {
-const response = await api.get('/ml/models');
-return response.data;
-},
-});
-};

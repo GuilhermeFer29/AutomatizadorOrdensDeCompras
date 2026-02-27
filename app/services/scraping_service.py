@@ -62,9 +62,8 @@ def get_market_price_for_sku(sku: str, session: Session = None) -> float | None:
                 .order_by(PrecosHistoricos.coletado_em.desc())
             ).first()
             if latest_price:
-                # Simula variação de mercado de ±5%
-                import random
-                variation = random.uniform(0.95, 1.05)
-                return round(float(latest_price.preco) * variation, 2)
+                # Retorna preço real do banco (sem variação aleatória)
+                # TODO: Implementar scraping real de preços de mercado
+                return round(float(latest_price.preco), 2)
 
     return None

@@ -76,10 +76,13 @@ class Produto(TenantMixin, SQLModel, table=True):
     """Entity representing a product in the catalogue."""
 
     __tablename__ = "produtos"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "sku", name="uq_produto_tenant_sku"),
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
     nome: str = Field(index=True, max_length=255)
-    sku: str = Field(index=True, unique=True, max_length=64)
+    sku: str = Field(index=True, max_length=64)
     categoria: Optional[str] = Field(default=None, max_length=120)
     estoque_atual: int = Field(default=0, ge=0)
     estoque_minimo: int = Field(default=0, ge=0)

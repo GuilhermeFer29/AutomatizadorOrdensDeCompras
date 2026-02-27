@@ -387,7 +387,7 @@ export default function Agents() {
               }
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+              onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
               disabled={!isConnected}
               className="pr-12"
             />

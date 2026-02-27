@@ -33,10 +33,6 @@ export interface Product {
   estoque_minimo: number;
 }
 
-export interface ProductWithHistory extends Product {
-  priceHistory: PricePoint[];
-}
-
 // ============= ML Prediction Types =============
 export interface MLPrediction {
   sku: string;
@@ -60,12 +56,6 @@ export interface MLModel {
   };
   features_count?: number;
   training_samples?: number;
-}
-
-export interface PriceHistoryPoint {
-  date: string;
-  price: number;
-  is_prediction: boolean;
 }
 
 // ============= Agent Types =============

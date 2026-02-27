@@ -61,10 +61,24 @@ const PageLoader = () => (
   </div>
 );
 
-// Componente para proteger rotas
+// Componente para proteger rotas — valida formato e expiração do JWT
 const ProtectedRoute = ({ element }: { element: React.ReactNode }) => {
   const token = localStorage.getItem("token");
-  return token ? element : <Navigate to="/login" replace />;
+  if (!token) return <Navigate to="/login" replace />;
+
+  try {
+    // Decodifica payload do JWT (base64url) para verificar expiração
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    if (payload.exp && payload.exp * 1000 < Date.now()) {
+      localStorage.removeItem("token");
+      return <Navigate to="/login" replace />;
+    }
+  } catch {
+    localStorage.removeItem("token");
+    return <Navigate to="/login" replace />;
+  }
+
+  return element;
 };
 
 const App = () => (

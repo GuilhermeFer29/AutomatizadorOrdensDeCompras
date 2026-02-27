@@ -58,7 +58,10 @@ export function EditProductModal({ product, open, onOpenChange }: EditProductMod
             id: product.id,
             data: {
                 name: formData.name,
+                price: parseFloat(formData.price) || undefined,
                 stock: parseInt(formData.stock) || 0,
+                ...(formData.categoria !== undefined && { categoria: formData.categoria }),
+                ...(formData.estoque_minimo && { estoque_minimo: parseInt(formData.estoque_minimo) || 0 }),
             },
         });
 

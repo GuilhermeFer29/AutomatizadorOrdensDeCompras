@@ -96,7 +96,14 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     return encoded_jwt
 
 async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
-    """Extrai o usuario atual do token JWT."""
+    """Extrai o usuario atual do token JWT.
+
+    A consulta ao banco é executada em threadpool para não
+    bloquear o event loop do asyncio.
+    """
+    import asyncio
+    from functools import partial
+
     from sqlmodel import Session, select
 
     from app.core.database import get_sync_engine
@@ -121,27 +128,31 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
     except JWTError as exc:
         raise credentials_exception from exc
 
-    # Buscar usuario no banco - usa with para garantir que session fecha
-    engine = get_sync_engine()
-    with Session(engine) as session:
-        user = session.exec(
-            select(User).where(User.email == token_data.email)
-        ).first()
+    # Buscar usuario no banco via threadpool para não bloquear o event loop
+    def _fetch_user(email: str):
+        engine = get_sync_engine()
+        with Session(engine) as session:
+            return session.exec(
+                select(User).where(User.email == email)
+            ).first()
 
-        if user is None:
-            raise credentials_exception
+    loop = asyncio.get_running_loop()
+    user = await loop.run_in_executor(None, partial(_fetch_user, token_data.email))
 
-        # Injeta tenant_id no contexto se disponivel
-        if token_data.tenant_id:
-            try:
-                from uuid import UUID
+    if user is None:
+        raise credentials_exception
 
-                from app.core.tenant import set_current_tenant_id
-                set_current_tenant_id(UUID(token_data.tenant_id))
-            except (ValueError, TypeError):
-                pass
+    # Injeta tenant_id no contexto se disponivel
+    if token_data.tenant_id:
+        try:
+            from uuid import UUID
 
-        return user
+            from app.core.tenant import set_current_tenant_id
+            set_current_tenant_id(UUID(token_data.tenant_id))
+        except (ValueError, TypeError):
+            pass
+
+    return user
 
 
 def decode_jwt_token(token: str) -> dict:

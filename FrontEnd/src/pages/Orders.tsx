@@ -104,7 +104,7 @@ export default function Orders() {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <Select onValueChange={(value) => setStatusFilter(value as OrderStatus)}>
+            <Select onValueChange={(value) => setStatusFilter(value === "all" ? undefined : value as OrderStatus)}>
               <SelectTrigger>
                 <SelectValue placeholder="Filtrar por status" />
               </SelectTrigger>
@@ -171,7 +171,7 @@ export default function Orders() {
                         <Button
                           size="sm"
                           variant="default"
-                          onClick={() => approveMutation.mutate(Number(order.id))}
+                          onClick={(e) => { e.stopPropagation(); approveMutation.mutate(Number(order.id)); }}
                           disabled={approveMutation.isPending}
                           className="gap-1"
                         >
@@ -181,7 +181,7 @@ export default function Orders() {
                         <Button
                           size="sm"
                           variant="destructive"
-                          onClick={() => rejectMutation.mutate(Number(order.id))}
+                          onClick={(e) => { e.stopPropagation(); rejectMutation.mutate(Number(order.id)); }}
                           disabled={rejectMutation.isPending}
                           className="gap-1"
                         >

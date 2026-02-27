@@ -9,12 +9,16 @@ interface ProductCreate {
     name: string;  // Backend usa 'name' não 'nome'
     price: number;
     stock: number;
+    categoria?: string;
+    estoque_minimo?: number;
 }
 
 interface ProductUpdate {
     name?: string;
     price?: number;
     stock?: number;
+    categoria?: string;
+    estoque_minimo?: number;
 }
 
 // Hook para listar produtos

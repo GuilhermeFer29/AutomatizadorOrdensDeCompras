@@ -204,8 +204,19 @@ def execute_chat_action(
 
 @router.websocket("/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: int, session: Session = Depends(get_session)):
-    # Authenticate WebSocket via query param or first message
-    token = websocket.query_params.get("token")
+    # Authenticate WebSocket via Sec-WebSocket-Protocol header or query param (fallback)
+    token = None
+
+    # Prefer Sec-WebSocket-Protocol: ['access_token', '<jwt>']
+    protocols = websocket.headers.get("sec-websocket-protocol", "")
+    parts = [p.strip() for p in protocols.split(",")]
+    if len(parts) >= 2 and parts[0] == "access_token":
+        token = parts[1]
+
+    # Fallback: query param (legacy)
+    if not token:
+        token = websocket.query_params.get("token")
+
     if token:
         try:
             from app.core.security import decode_jwt_token
@@ -217,7 +228,9 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int, session: Ses
             await websocket.close(code=4001, reason="Authentication failed")
             return
 
-    await websocket_manager.connect(websocket, session_id)
+    # Accept with the sub-protocol so the browser handshake succeeds
+    subprotocol = "access_token" if protocols else None
+    await websocket_manager.connect(websocket, session_id, subprotocol=subprotocol)
 
     try:
         while True:

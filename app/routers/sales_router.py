@@ -60,7 +60,7 @@ async def upload_sales_csv(
     return response
 
 
-@router.post("/retrain/{produto_id}", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/retrain/{produto_id}", status_code=status.HTTP_202_ACCEPTED, deprecated=True)
 def retrain_model(produto_id: int, current_user=Depends(get_current_user)) -> dict:
     """Endpoint descontinuado. Use /ml/train/{sku} para treinar modelos individuais."""
     return {

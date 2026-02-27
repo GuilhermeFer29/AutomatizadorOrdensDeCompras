@@ -1,723 +1,434 @@
-# 🏭 PMI — Automação Inteligente de Ordens de Compra
+# 🏭 PMI — Automação Inteligente de Compras Industriais
 
 <div align="center">
 
-![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.128-009688?style=for-the-badge&logo=fastapi&logoColor=white)
-![React](https://img.shields.io/badge/React-18.3-61DAFB?style=for-the-badge&logo=react&logoColor=black)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
-![Gemini](https://img.shields.io/badge/Gemini_2.5-4285F4?style=for-the-badge&logo=google&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.11-blue?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-18.3-61DAFB?logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+![Gemini](https://img.shields.io/badge/Google_Gemini-2.5_Flash-4285F4?logo=google&logoColor=white)
+![License](https://img.shields.io/badge/License-Proprietary-red)
 
-**Plataforma SaaS Multi-Tenant de IA Multi-Agente para Automação de Compras Industriais**
+**Plataforma SaaS multi-tenant que automatiza o ciclo completo de compras industriais utilizando agentes de IA, machine learning para previsão de preços/demanda e RAG para consulta inteligente de catálogo.**
 
-[Funcionalidades](#-funcionalidades) •
-[Arquitetura](#-arquitetura) •
-[Instalação](#-instalação-rápida) •
-[API](#-api-endpoints-54-rotas) •
-[Configuração](#-variáveis-de-ambiente) •
-[Desenvolvimento](#-desenvolvimento-local)
+[Funcionalidades](#-funcionalidades) • [Arquitetura](#-arquitetura) • [Setup Rápido](#-setup-rápido) • [Documentação da API](#-documentação-da-api) • [Stack Técnica](#-stack-técnica) • [Métricas](#-métricas)
 
 </div>
 
 ---
 
-## 📋 Sobre o Projeto
+## 📋 Funcionalidades
 
-Plataforma completa de **Inteligência Artificial** para automatizar e otimizar decisões de compra em **Pequenas e Médias Indústrias (PMI)**. Combina uma arquitetura multi-agente com Google Gemini 2.5, Machine Learning para previsões de demanda/preço, RAG (Retrieval-Augmented Generation), e um frontend React moderno — tudo com isolamento multi-tenant (Row-Level Security).
+### 🤖 Agentes de IA (Multi-Agent Supply Chain Team)
+- **Assistente de Compras** — interface conversacional principal com chat em tempo real (WebSocket)
+- **Analista de Demanda** — avalia estoque, identifica necessidade de reposição e analisa padrões de consumo
+- **Pesquisador de Mercado** — inteligência de mercado, comparação de preços e ofertas de fornecedores
+- **Analista de Logística** — otimização logística, custo total e ranking de fornecedores
+- **Gerente de Compras** — síntese final e decisão de compra com auditoria completa
 
-### 🎯 Problema vs. Solução
+### 📊 Machine Learning
+- **Previsão de preços** com AutoARIMA (StatsForecast) — forecasting de séries temporais
+- **Treinamento automático** via Celery Beat (cron diário às 01:00 UTC)
+- **Métricas de modelo** — MAPE, RMSE, MAE por SKU
+- **API de previsão** — endpoint REST para consultar previsões por SKU
 
-| Antes | Depois |
-|-------|--------|
-| ❌ Decisões de compra manuais e lentas | ✅ Chat IA — pergunte em linguagem natural |
-| ❌ Sem análise de múltiplos fornecedores | ✅ 4 agentes especializados analisam em paralelo |
-| ❌ Sem previsão de demanda/preço | ✅ AutoARIMA + ML com séries temporais |
-| ❌ Dados isolados em planilhas | ✅ Dashboard real-time + auditoria completa |
-| ❌ Sem rastreabilidade de decisões | ✅ Log de auditoria com justificativa IA |
+### 🔍 RAG (Retrieval-Augmented Generation)
+- **ChromaDB** como vector store para catálogo de produtos
+- **Google Gemini Embeddings** para representação vetorial
+- **LangChain** pipeline para busca semântica + resposta contextualizada
+- **Sincronização automática** MySQL → ChromaDB
 
----
+### 🏢 Multi-Tenancy
+- **Row-Level Security** via `TenantMixin` em todas as tabelas de dados
+- **Isolamento por JWT** — `tenant_id` extraído do token e propagado via `ContextVar`
+- **Cache isolado** — chaves Redis por tenant
+- **Agentes isolados** — cada tenant tem seu próprio conjunto de dados
 
-## ✨ Funcionalidades
+### 📈 Dashboard & Monitoramento
+- **KPIs em tempo real** — economia gerada, ordens automatizadas, nível de estoque, acurácia ML
+- **Alertas de estoque** com ação direta para análise via agente
+- **Gráficos de previsão** com comparativo histórico vs. previsão ML
+- **Status dos agentes** com controles de ativação/pausa
+- **Prometheus + Grafana** para métricas de infraestrutura e LLM
 
-| Módulo | Descrição | Stack |
-|--------|-----------|-------|
-| 🤖 **Chat IA** | Converse em linguagem natural para obter recomendações | Agno + Gemini 2.5 |
-| 📊 **Dashboard** | KPIs, alertas de estoque baixo, métricas em tempo real | React + Recharts |
-| 📦 **Catálogo** | CRUD de produtos com estoque, preços e fornecedores | SQLModel + MySQL |
-| 📋 **Ordens de Compra** | Crie, aprove ou rejeite com rastreabilidade | FastAPI + Celery |
-| 🚚 **Fornecedores** | Gestão completa com ofertas e confiabilidade | Multi-Tenant RLS |
-| 📝 **Auditoria** | Histórico completo de decisões dos agentes | Audit Log |
-| 🔮 **Previsão ML** | Demanda (AutoARIMA) e preço (StatsForecast) | AutoARIMA + scikit-learn |
-| 🔍 **RAG** | Busca semântica inteligente no catálogo | ChromaDB + LangChain |
-| 🔄 **Fallback AI** | Alternância automática entre modelos Gemini | gemini-2.5-flash → lite → pro |
-| 📈 **Observabilidade** | Métricas Prometheus + Grafana + custo LLM | Prometheus + Grafana |
-| 🔐 **Multi-Tenant** | Isolamento completo por empresa (JWT + RLS) | ContextVar + Middleware |
-| 🔑 **Credential Store** | Armazenamento criptografado de secrets (Fernet) | cryptography |
-| 🔌 **Integrações** | Framework extensível para ERPs (Bling, SAP…) | BaseConnector ABC |
-
----
-
-## 🏗️ Arquitetura
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│               FRONTEND  (React 18 + Vite 7 + TypeScript)           │
-│     TailwindCSS • shadcn/ui • Recharts • React Query v5 • Zod     │
-└──────────────────────────────────┬──────────────────────────────────┘
-                                   │ HTTP / REST / WebSocket
-┌──────────────────────────────────┴──────────────────────────────────┐
-│                     BACKEND  (FastAPI 0.128)                        │
-│                 54 endpoints • Multi-Tenant • JWT                   │
-├────────────┬────────────┬────────────┬──────────┬───────────────────┤
-│  Routers   │  Services  │   Agents   │    ML    │   Integrations   │
-│ (14 files) │ (15 files) │ (Agno 2.4) │ (ARIMA)  │  (BaseConnector) │
-└─────┬──────┴─────┬──────┴──────┬─────┴────┬─────┴───────────────────┘
-      │            │             │          │
-┌─────┴──┐  ┌─────┴──┐   ┌─────┴──┐  ┌────┴──────┐  ┌──────────┐
-│ MySQL  │  │ Redis  │   │ Gemini │  │ ChromaDB  │  │ RabbitMQ │
-│  8.0   │  │   7    │   │  2.5   │  │ (Vetores) │  │  3.13    │
-└────────┘  └────────┘   └────────┘  └───────────┘  └──────────┘
-```
-
-### 🤖 Sistema Multi-Agente (Agno Team)
-
-```
-                     ┌───────────────────────────────┐
-                     │     AGENTE CONVERSACIONAL      │
-                     │    (RAG + Reasoning Tools)     │
-                     │   Interface com o Usuário      │
-                     └──────────────┬────────────────┘
-                                    │ Delega via Team
-         ┌──────────────┬───────────┴──────────┬──────────────┐
-         ↓              ↓                      ↓              ↓
-┌─────────────────┐ ┌──────────────────┐ ┌────────────────┐ ┌────────────────┐
-│   Analista de   │ │  Pesquisador de  │ │   Analista de  │ │   Gerente de   │
-│    Demanda      │ │     Mercado      │ │   Logística    │ │    Compras     │
-├─────────────────┤ ├──────────────────┤ ├────────────────┤ ├────────────────┤
-│ output_schema:  │ │ output_schema:   │ │ output_schema: │ │ output_schema: │
-│ DemandAnalysis  │ │ MarketResearch   │ │ Logistics      │ │ Purchase       │
-│                 │ │                  │ │ Analysis       │ │ Recommendation │
-│ • Estoque       │ │ • Ofertas        │ │ • Fornecedor   │ │ • Consolida    │
-│ • Previsão ML   │ │ • Tendências     │ │ • Custo total  │ │ • Decisão      │
-│ • Confiança     │ │ • Previsão ML    │ │ • Alternativas │ │ • Riscos       │
-└─────────────────┘ └──────────────────┘ └────────────────┘ └────────────────┘
-         ↑                    ↑                   ↑
-    Tools: get_forecast  find_supplier_offers  search_market_price
-```
-
-**Destaques da arquitetura de agentes:**
-
-- **`output_schema`** (Pydantic) para respostas estruturadas — sem regex/parsing manual
-- **`role`** em cada agente para delegação inteligente pelo Team leader
-- **Fallback chain:** `gemini-2.5-flash` → `gemini-2.5-flash-lite` → `gemini-2.5-pro`
-- **Prompts externalizados** em YAML (`app/agents/prompts/`)
-- **Métricas de custo LLM** via Prometheus (`llm_metrics.py`)
+### 🛒 Gestão Operacional
+- **Catálogo de produtos** com histórico de preços e previsões
+- **Ordens de compra** com workflow de aprovação/rejeição
+- **Fornecedores** com métricas de confiabilidade e ofertas
+- **Auditoria completa** de todas as decisões dos agentes com raciocínio
 
 ---
 
-## 🛠️ Stack Tecnológico
+## 🏗 Arquitetura
 
-### Backend
+```
+┌──────────────────┐     ┌───────────────────────────────────────────────────────┐
+│    Frontend      │     │                     Backend                           │
+│  React + Vite    │────▶│  FastAPI (uvicorn)                                    │
+│  nginx :3000     │     │   ├── Middleware: Prometheus → Tenant → CORS          │
+└──────────────────┘     │   ├── 15 Routers (52 endpoints) → Services → MySQL   │
+                         │   ├── AI Agents (Agno + Gemini 2.5) → ChromaDB (RAG) │
+                         │   ├── ML Pipeline (StatsForecast/AutoARIMA)          │
+                         │   └── WebSocket Manager → Redis Pub/Sub              │
+                         └─────────┬────────────┬────────────┬──────────────────┘
+                                   │            │            │
+                         ┌─────────▼──┐ ┌───────▼──────┐ ┌──▼──────────┐
+                         │ MySQL 8.0  │ │  Redis 7     │ │ RabbitMQ    │
+                         │ 20 tabelas │ │ Cache+PubSub │ │ (Broker)    │
+                         └────────────┘ └──────────────┘ └──────┬──────┘
+                                                                │
+                         ┌──────────────────────────────────────▼──────────┐
+                         │  Celery Workers (agents + ml queues)            │
+                         │  Celery Beat (re-treinamento diário cron)       │
+                         └─────────────────────────────────────────────────┘
 
-| Tecnologia | Versão | Uso |
-|------------|--------|-----|
-| **Python** | 3.12 | Linguagem principal |
-| **FastAPI** | 0.128 | Framework web assíncrono |
-| **SQLModel** | 0.0.32 | ORM (SQLAlchemy + Pydantic) |
-| **Agno** | 2.4.8 | Framework de agentes IA |
-| **LangChain** | 1.2.9 | Orquestração RAG |
-| **Celery** | 5.6.2 | Task queue assíncrona |
-| **Pydantic Settings** | — | Configuração tipada via env vars |
-| **Alembic** | — | Migrations de banco de dados |
+         Observabilidade: Prometheus :9095 → Grafana :3001 │ Flower :5555
+```
 
-### Frontend
-
-| Tecnologia | Versão | Uso |
-|------------|--------|-----|
-| **React** | 18.3 | Biblioteca UI |
-| **TypeScript** | 5.8 | Tipagem estática |
-| **Vite** | 7.1 | Build tool |
-| **TailwindCSS** | 3.4 | Estilização |
-| **shadcn/ui** (Radix) | — | Componentes acessíveis |
-| **React Query** | 5.83 | Data fetching + cache |
-| **Recharts** | 3.2 | Gráficos/dashboards |
-| **Zod** | 3.25 | Validação de formulários |
-| **React Router** | 6.30 | Roteamento SPA |
-
-### IA / ML
-
-| Tecnologia | Uso |
-|------------|-----|
-| **Google Gemini 2.5 Flash** | LLM principal (fallback: flash-lite → pro) |
-| **gemini-embedding-001** | Embeddings para RAG |
-| **ChromaDB** 1.4 | Vector store |
-| **StatsForecast** 2.0 (AutoARIMA) | Previsão de demanda e preço |
-| **scikit-learn** | Modelos complementares |
-
-### Infraestrutura (Docker Compose — 10 serviços)
-
-| Serviço | Imagem | Porta |
-|---------|--------|-------|
-| **Frontend** | Nginx (build Vite) | 3000 |
-| **API** | python:3.11-slim | 8000 |
-| **Worker** | Celery (mesmo image) | — |
-| **Beat** | Celery Beat (scheduler) | — |
-| **MySQL** | mysql:8.0 | — (interna) |
-| **Redis** | redis:7-alpine | — (interna) |
-| **RabbitMQ** | rabbitmq:3.13-management | — (interna) |
-| **Prometheus** | prom/prometheus:v2.53 | 9095 |
-| **Grafana** | grafana/grafana:11.1 | 3001 |
-| **Flower** | mher/flower:2.0 | 5555 |
+### Fluxo de Dados
+1. **Request** → TenantMiddleware (extrai `tenant_id` do JWT) → Router → Service → MySQL
+2. **Chat** → WebSocket → Agente Conversacional (Agno + Gemini) → Tools (DB queries, RAG, ML) → Resposta em tempo real
+3. **Análise Completa** → Celery Task → Supply Chain Team (4 analistas + 1 gerente) → Decisão auditada → Redis Pub/Sub → WebSocket → Frontend
+4. **ML Pipeline** → Celery Beat (01:00 UTC) → PrecosHistoricos → StatsForecast/AutoARIMA → Métricas salvas
 
 ---
 
-## 🚀 Instalação Rápida
+## 🚀 Setup Rápido
 
 ### Pré-requisitos
+- Docker & Docker Compose v2
+- Chave de API do Google Gemini (`GOOGLE_API_KEY`)
 
-- **Docker** & **Docker Compose** v2+
-- **Chave API do Google** (Gemini) — [obter aqui](https://aistudio.google.com/app/apikey)
-
-### 1. Clone o repositório
+### 1. Clone e configure
 
 ```bash
-git clone https://github.com/seu-usuario/automatizador-ordens-compra.git
-cd automatizador-ordens-compra
+git clone <repo-url>
+cd AutomacaoPMI
 ```
 
 ### 2. Configure as variáveis de ambiente
 
-```bash
-cp .env.example .env
-```
-
-Edite o `.env` com os valores **mínimos obrigatórios**:
+Crie o arquivo `.env` na raiz:
 
 ```env
-# Obrigatório — Google Gemini
-GOOGLE_API_KEY=sua_chave_google_api
+# IA
+GOOGLE_API_KEY=sua_chave_gemini_aqui
 
-# Obrigatório — Banco de dados
+# Banco de Dados
+DATABASE_URL=mysql+pymysql://app_user:app_password@db:3306/app_db
+ASYNC_DATABASE_URL=mysql+aiomysql://app_user:app_password@db:3306/app_db
 MYSQL_ROOT_PASSWORD=root_password
 MYSQL_DATABASE=app_db
 MYSQL_USER=app_user
 MYSQL_PASSWORD=app_password
 
-# Obrigatório — Segurança (gerar chave forte!)
-SECRET_KEY=<saída de: python3 -c "import secrets; print(secrets.token_hex(32))">
+# Segurança
+SECRET_KEY=sua_chave_secreta_jwt_aqui
 
-# Opcional — Busca web de preços
-TAVILY_API_KEY=sua_chave_tavily
+# Message Queue
+RABBITMQ_DEFAULT_USER=pmi_user
+RABBITMQ_DEFAULT_PASS=pmi_password
+CELERY_BROKER_URL=amqp://pmi_user:pmi_password@rabbitmq:5672//
+CELERY_RESULT_BACKEND=redis://redis:6379/0
+
+# Redis
+REDIS_URL=redis://redis:6379/0
+
+# ChromaDB
+CHROMA_PERSIST_DIRECTORY=/data/chroma
 ```
 
-> 📌 Obtenha sua chave Google em: https://aistudio.google.com/app/apikey
-
-### 3. Inicie os containers
+### 3. Suba todos os serviços
 
 ```bash
-# Todos os serviços (backend + frontend + banco + filas + monitoring)
-docker compose up -d
-
-# Ou sem monitoring (mais leve para dev)
-docker compose up -d frontend api worker beat db redis rabbitmq
+docker compose up -d --build
 ```
 
 ### 4. Popule o banco de dados
 
 ```bash
-# Criar dados de exemplo (produtos, fornecedores, vendas)
-docker compose exec api python scripts/seed_database.py
-
-# Sincronizar RAG (indexar produtos no ChromaDB)
-docker compose exec api python scripts/sync_vectors.py
+docker compose exec api python scripts/seed_full.py
 ```
 
-### 5. Acesse a aplicação
+Isso cria: **50 produtos** (estofaria/ferragens), **10 fornecedores**, **159+ ofertas**, **18.250 registros de preços**, **18.250 registros de vendas**, **40 ordens de compra**, **6 agentes** e um **usuário admin**.
+
+### 5. Acesse
 
 | Serviço | URL | Credenciais |
 |---------|-----|-------------|
-| 🌐 **Frontend** | http://localhost:3000 | Crie em `/register` |
-| ⚡ **API Docs (Swagger)** | http://localhost:8000/docs | — |
-| 📖 **API Docs (ReDoc)** | http://localhost:8000/redoc | — |
-| 📊 **Grafana** | http://localhost:3001 | admin / admin |
-| 🌸 **Flower (Celery)** | http://localhost:5555 | admin / admin |
-| 📈 **Prometheus** | http://localhost:9095 | — |
+| **Frontend** | http://localhost:3000 | `admin@pmi.com.br` / `SeedAdmin1` |
+| **API Docs (Swagger)** | http://localhost:8000/docs | — |
+| **Grafana** | http://localhost:3001 | admin / admin |
+| **Flower (Celery)** | http://localhost:5555 | — |
+| **RabbitMQ Management** | http://localhost:15672 | pmi_user / pmi_password |
 
----
-
-## 📖 Como Usar
-
-### 1. Criar uma conta
-
-Acesse http://localhost:3000/register — cada conta cria um **tenant** isolado com seus próprios dados.
-
-### 2. Conversar com o Agente
-
-Na página **Agents**, faça perguntas:
-
-**Perguntas simples (resposta direta via RAG):**
-
-```
-"Qual o estoque do SKU_001?"
-"Me mostre produtos com estoque baixo"
-"Previsão de preço para SKU_001 nos próximos 7 dias?"
-```
-
-**Perguntas complexas (análise pelo time de 4 agentes):**
-
-```
-"Devo comprar o produto SKU_001?"
-"Qual fornecedor é melhor para parafusos?"
-"Analise a necessidade de reposição para SKU_001"
-```
-
-### 3. Exemplo de Resposta
-
-```
-✅ Recomendo APROVAR a compra de 100 unidades
-
-📦 Fornecedor Recomendado: Distribuidora Nacional
-   💰 Preço: R$ 1.450,00 (R$ 14,50/un)
-   ⏱️ Prazo: 5 dias úteis
-   ⭐ Confiabilidade: 95%
-
-📊 Justificativa:
-   • Estoque atual (45 un) abaixo do mínimo (80 un)
-   • Previsão ML indica tendência de alta (+3%)
-   • Melhor custo-benefício entre 5 fornecedores
-
-📋 Próximos passos:
-   1. Emitir ordem de compra
-   2. Agendar entrega para +5 dias
-```
-
----
-
-## 📡 API Endpoints (54 rotas)
-
-### Autenticação — `/auth`
-
-| Método | Endpoint | Descrição |
-|--------|----------|-----------|
-| POST | `/auth/register` | Criar conta (tenant + owner) |
-| POST | `/auth/login` | Login → JWT com `tenant_id` |
-| GET | `/auth/me` | Dados do usuário autenticado |
-
-### Chat IA — `/api/chat`
-
-| Método | Endpoint | Descrição |
-|--------|----------|-----------|
-| GET | `/api/chat/sessions` | Listar sessões com preview |
-| POST | `/api/chat/sessions` | Criar nova sessão |
-| DELETE | `/api/chat/sessions/{id}` | Apagar sessão + mensagens |
-| GET | `/api/chat/sessions/{id}/messages` | Histórico de mensagens |
-| POST | `/api/chat/sessions/{id}/messages` | Enviar mensagem → resposta IA |
-| POST | `/api/chat/sessions/{id}/actions` | Executar ação interativa |
-| WS | `/api/chat/ws/{id}` | WebSocket real-time (autenticado) |
-
-### Produtos — `/api/products`
-
-| Método | Endpoint | Descrição |
-|--------|----------|-----------|
-| GET | `/api/products/` | Listar (filtros: busca, preço, fornecedor) |
-| GET | `/api/products/{id}` | Detalhes do produto |
-| POST | `/api/products/` | Criar produto (+ sync RAG automático) |
-| PUT | `/api/products/{id}` | Atualizar produto (+ sync RAG automático) |
-| GET | `/api/products/{sku}/price-history` | Histórico de preços |
-
-### Ordens de Compra — `/api/orders`
-
-| Método | Endpoint | Descrição |
-|--------|----------|-----------|
-| GET | `/api/orders/` | Listar ordens (com cache) |
-| POST | `/api/orders/` | Criar ordem |
-| POST | `/api/orders/{id}/approve` | Aprovar |
-| POST | `/api/orders/{id}/reject` | Rejeitar |
-
-### Fornecedores — `/api/suppliers`
-
-| Método | Endpoint | Descrição |
-|--------|----------|-----------|
-| GET | `/api/suppliers/` | Listar com estatísticas |
-| GET | `/api/suppliers/{id}` | Detalhes |
-| GET | `/api/suppliers/{id}/offers` | Ofertas do fornecedor |
-| POST | `/api/suppliers/` | Criar |
-| PUT | `/api/suppliers/{id}` | Atualizar |
-| DELETE | `/api/suppliers/{id}` | Remover |
-
-### Auditoria — `/api/audit`
-
-| Método | Endpoint | Descrição |
-|--------|----------|-----------|
-| GET | `/api/audit/decisions/` | Decisões recentes da IA |
-| GET | `/api/audit/decisions/{id}` | Detalhes da decisão |
-| GET | `/api/audit/stats/` | Estatísticas de auditoria |
-
-### Dashboard — `/api/dashboard`
-
-| Método | Endpoint | Descrição |
-|--------|----------|-----------|
-| GET | `/api/dashboard/kpis` | KPIs principais (cache) |
-| GET | `/api/dashboard/alerts` | Alertas de estoque/preço (cache) |
-
-### Machine Learning — `/ml`
-
-| Método | Endpoint | Descrição |
-|--------|----------|-----------|
-| POST | `/ml/train/all/async` | Treinar todos (Celery async) |
-| POST | `/ml/train/{sku}/async` | Treinar modelo de 1 SKU (async) |
-| POST | `/ml/train/{sku}` | Treinar síncrono |
-| GET | `/ml/predict/{sku}` | Previsão multi-target |
-| GET | `/ml/models` | Listar modelos treinados |
-| GET | `/ml/models/{sku}` | Info do modelo |
-| GET | `/ml/models/{sku}/targets` | Targets disponíveis |
-| DELETE | `/ml/models/{sku}` | Deletar modelo |
-| GET | `/ml/tasks/{task_id}` | Status da task Celery |
-
-### Agentes — `/agents` + `/api/agents`
-
-| Método | Endpoint | Descrição |
-|--------|----------|-----------|
-| POST | `/agents/execute-analysis/{sku}` | Análise supply-chain completa |
-| GET | `/api/agents/` | Listar agentes |
-| POST | `/api/agents/{id}/{action}` | Ativar / pausar / executar |
-
-### RAG — `/api/rag`
-
-| Método | Endpoint | Descrição |
-|--------|----------|-----------|
-| GET | `/api/rag/status` | Status do vector store |
-| POST | `/api/rag/sync` | Sincronizar incrementalmente |
-| POST | `/api/rag/resync` | Re-sync completo |
-
-### Admin — `/admin` (requer role `admin` ou `owner`)
-
-| Método | Endpoint | Descrição |
-|--------|----------|-----------|
-| POST | `/admin/rag/sync` | Sync RAG (background task) |
-| GET | `/admin/rag/status` | Status da sincronização |
-| GET | `/admin/health` | Health check detalhado (DB + vector store) |
-| POST | `/admin/cache/clear` | Limpar caches Redis |
-
-### Vendas — `/vendas`
-
-| Método | Endpoint | Descrição |
-|--------|----------|-----------|
-| POST | `/vendas/upload` | Upload CSV de vendas |
-| POST | `/vendas/retrain/{produto_id}` | Retreinar modelo |
-
-### Tasks — `/tasks`
-
-| Método | Endpoint | Descrição |
-|--------|----------|-----------|
-| GET | `/tasks/{task_id}` | Status de task Celery |
-
----
-
-## 🔐 Variáveis de Ambiente
-
-> Todas as variáveis estão documentadas em [.env.example](.env.example).
-
-### Obrigatórias
-
-| Variável | Descrição |
-|----------|-----------|
-| `GOOGLE_API_KEY` | Chave API do Google Gemini (LLM + embeddings) |
-| `MYSQL_ROOT_PASSWORD` | Senha root do MySQL |
-| `MYSQL_DATABASE` | Nome do banco de dados (ex: `app_db`) |
-| `MYSQL_USER` | Usuário do banco |
-| `MYSQL_PASSWORD` | Senha do usuário |
-| `SECRET_KEY` | Chave JWT — mínimo 32 caracteres |
-
-### Opcionais
-
-| Variável | Default | Descrição |
-|----------|---------|-----------|
-| `APP_ENV` | `development` | Ambiente (`development` / `staging` / `production`) |
-| `TAVILY_API_KEY` | — | Web search para preços externos |
-| `REDIS_URL` | `redis://redis:6379/0` | URL do Redis |
-| `CELERY_BROKER_URL` | `amqp://pmi:secret@rabbitmq/pmi` | URL do RabbitMQ |
-| `PROMETHEUS_ENABLED` | `true` | Habilitar métricas Prometheus |
-| `CORS_ALLOW_ALL` | `false` | Liberar todos os CORS (**dev only!**) |
-| `FRONTEND_URL` | `http://localhost:5173` | URL do frontend (CORS) |
-| `GEMINI_MODEL` | `gemini-2.5-flash` | Modelo Gemini padrão |
-| `SCRAPERAPI_KEY` | — | Chave ScraperAPI (scraping Mercado Livre) |
-| `CREDENTIAL_ENCRYPTION_KEY` | — | Chave Fernet para credential store |
-| `GRAFANA_USER` / `GRAFANA_PASSWORD` | admin / admin | Credenciais Grafana |
-| `FLOWER_USER` / `FLOWER_PASSWORD` | admin / admin | Credenciais Flower UI |
-
----
-
-## 📂 Estrutura do Projeto
-
-```
-📦 AutomacaoPMI/
-├── 📂 app/                         # Backend FastAPI
-│   ├── main.py                     # Entry point + lifespan + middlewares
-│   ├── 📂 agents/                  # Sistema Multi-Agente (Agno)
-│   │   ├── conversational_agent.py # Agente de chat (RAG + Reasoning)
-│   │   ├── supply_chain_team.py    # Team: 4 agentes especializados
-│   │   ├── gemini_fallback.py      # Fallback chain automático
-│   │   ├── knowledge.py            # ChromaDB knowledge base
-│   │   ├── llm_config.py           # Factory de modelos Gemini
-│   │   ├── llm_metrics.py          # Prometheus: custo por chamada LLM
-│   │   ├── models.py               # Pydantic output_schema models
-│   │   ├── tools_secure.py         # Tools tenant-aware
-│   │   └── 📂 prompts/             # Prompts externalizados em YAML
-│   ├── 📂 core/                    # Infraestrutura
-│   │   ├── config.py               # Pydantic Settings (env vars)
-│   │   ├── database.py             # SQLAlchemy sync + async engines
-│   │   ├── security.py             # JWT + password hashing
-│   │   ├── tenant.py               # Multi-Tenant middleware (JWT)
-│   │   ├── tenant_context.py       # ContextVar Row-Level Security
-│   │   ├── permissions.py          # RBAC (require_role)
-│   │   ├── credential_store.py     # Fernet encrypted secrets
-│   │   ├── celery_app.py           # Celery + RabbitMQ + DLQ
-│   │   ├── cache.py                # Redis cache (fastapi-cache2)
-│   │   └── vector_db.py            # ChromaDB singleton manager
-│   ├── 📂 models/                  # SQLModel ORM
-│   │   ├── models.py               # Produto, Fornecedor, Ordem, etc.
-│   │   └── integration_models.py   # Integration + Credential models
-│   ├── 📂 routers/                 # 14 router files → 54 endpoints
-│   ├── 📂 services/                # 15 service files (lógica de negócio)
-│   ├── 📂 ml/                      # Machine Learning
-│   │   ├── training.py             # Treinamento (AutoARIMA, etc.)
-│   │   ├── prediction.py           # Previsões multi-target
-│   │   └── model_manager.py        # Persistência de modelos (joblib)
-│   ├── 📂 tasks/                   # Celery tasks
-│   │   ├── agent_tasks.py          # Tasks de agentes
-│   │   └── ml_tasks.py             # Tasks de ML (treinamento async)
-│   └── 📂 integrations/            # Conectores ERP (extensível)
-│       ├── __init__.py             # Registry + factory pattern
-│       └── base.py                 # BaseConnector ABC
-├── 📂 FrontEnd/                    # React + Vite + TypeScript
-│   └── 📂 src/pages/              # 11 páginas
-│       ├── Dashboard.tsx           # KPIs + gráficos
-│       ├── Agents.tsx              # Chat IA
-│       ├── Catalog.tsx             # Produtos
-│       ├── Orders.tsx              # Ordens de compra
-│       ├── Suppliers.tsx           # Fornecedores
-│       ├── AuditLog.tsx            # Log de auditoria
-│       ├── Settings.tsx            # Configurações do sistema
-│       ├── Login.tsx               # Login
-│       ├── Register.tsx            # Registro de conta
-│       └── Index.tsx               # Página inicial
-├── 📂 scripts/                     # 14 scripts utilitários
-│   ├── seed_database.py            # Popular banco de exemplo
-│   ├── sync_vectors.py             # Indexar RAG no ChromaDB
-│   ├── generate_realistic_data.py  # Dados sintéticos
-│   ├── seed_sales_history.py       # Histórico de vendas
-│   ├── train_all_phases.py         # Treinar todos os modelos ML
-│   └── ...
-├── 📂 migrations/                  # Alembic migrations
-│   ├── env.py                      # Config de migração
-│   └── script.py.mako              # Template de migration
-├── 📂 config/                      # Configs de observabilidade
-│   ├── prometheus.yml
-│   └── 📂 grafana/                 # Dashboards + provisioning
-├── docker-compose.yml              # 10 serviços (prod-ready)
-├── docker-compose.production.yml   # Override para produção
-├── Dockerfile                      # Build da API (python:3.11-slim)
-├── requirements.txt                # ~50 dependências Python
-├── alembic.ini                     # Config Alembic
-├── pyproject.toml                  # Metadados do projeto
-└── conftest.py                     # Fixtures de teste (pytest)
-```
-
----
-
-## 🔧 Comandos Úteis
-
-### Docker
+### 6. Execute os testes
 
 ```bash
-# Iniciar todos os serviços
-docker compose up -d
+# Backend (180 testes E2E)
+docker compose exec api pytest -v
 
-# Escalar workers horizontalmente
-docker compose up -d --scale worker=3
-
-# Ver logs da API em tempo real
-docker compose logs -f api
-
-# Parar tudo
-docker compose down
-
-# Reconstruir imagem (após mudar requirements.txt ou Dockerfile)
-docker compose build --no-cache api
-```
-
-### Scripts de Dados
-
-```bash
-# Popular banco com dados de exemplo
-docker compose exec api python scripts/seed_database.py
-
-# Sincronizar RAG (produtos → ChromaDB)
-docker compose exec api python scripts/sync_vectors.py
-
-# Gerar dados sintéticos realistas
-docker compose exec api python scripts/generate_realistic_data.py
-
-# Gerar histórico de vendas
-docker compose exec api python scripts/seed_sales_history.py
-
-# Treinar todos os modelos ML
-docker compose exec api python scripts/train_all_phases.py
-
-# Validar séries temporais
-docker compose exec api python scripts/validate_timeseries.py
-```
-
-### Alembic (Migrations)
-
-```bash
-# Gerar migration a partir das mudanças nos models
-docker compose exec api alembic revision --autogenerate -m "descrição"
-
-# Aplicar migrations pendentes
-docker compose exec api alembic upgrade head
-
-# Reverter última migration
-docker compose exec api alembic downgrade -1
+# Com cobertura
+docker compose exec api pytest --cov=app --cov-report=html
 ```
 
 ---
 
-## 💻 Desenvolvimento Local
+## 📡 Documentação da API
+
+A documentação interativa completa está disponível em `http://localhost:8000/docs` (Swagger UI) e `http://localhost:8000/redoc` (ReDoc).
+
+### Autenticação (`/auth`)
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| `POST` | `/auth/register` | Registro de novo usuário + tenant |
+| `POST` | `/auth/login` | Login (OAuth2 password flow) |
+| `GET` | `/auth/me` | Dados do usuário autenticado |
+
+### Dashboard (`/api/dashboard`)
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| `GET` | `/api/dashboard/kpis` | KPIs em tempo real (economia, automação, estoque, ML) |
+| `GET` | `/api/dashboard/alerts` | Alertas de produtos com estoque baixo |
+
+### Produtos (`/api/products`)
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| `GET` | `/api/products/` | Listar todos os produtos |
+| `GET` | `/api/products/{id}` | Detalhes de um produto |
+| `POST` | `/api/products/` | Criar produto |
+| `PUT` | `/api/products/{id}` | Atualizar produto |
+| `GET` | `/api/products/{sku}/price-history` | Histórico de preços por SKU |
+
+### Ordens de Compra (`/api/orders`)
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| `GET` | `/api/orders/` | Listar ordens (com filtros) |
+| `POST` | `/api/orders/` | Criar ordem de compra |
+| `POST` | `/api/orders/{id}/approve` | Aprovar ordem |
+| `POST` | `/api/orders/{id}/reject` | Rejeitar ordem |
+
+### Fornecedores (`/api/suppliers`)
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| `GET` | `/api/suppliers/` | Listar fornecedores |
+| `GET` | `/api/suppliers/{id}` | Detalhes do fornecedor |
+| `GET` | `/api/suppliers/{id}/offers` | Ofertas do fornecedor |
+| `POST` | `/api/suppliers/` | Criar fornecedor |
+| `PUT` | `/api/suppliers/{id}` | Atualizar fornecedor |
+| `DELETE` | `/api/suppliers/{id}` | Remover fornecedor |
+
+### Chat com IA (`/api/chat`)
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| `GET` | `/api/chat/sessions` | Listar sessões de chat |
+| `POST` | `/api/chat/sessions` | Criar sessão |
+| `DELETE` | `/api/chat/sessions/{id}` | Deletar sessão |
+| `GET` | `/api/chat/sessions/{id}/messages` | Mensagens da sessão |
+| `POST` | `/api/chat/sessions/{id}/messages` | Enviar mensagem ao agente |
+| `WS` | `/api/chat/ws/{session_id}` | WebSocket para chat em tempo real |
+
+### Agentes (`/api/agents`)
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| `GET` | `/api/agents/` | Listar agentes do sistema |
+| `POST` | `/api/agents/{id}/{action}` | Ativar/pausar/executar agente |
+
+### Auditoria (`/api/audit`)
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| `GET` | `/api/audit/decisions/` | Listar decisões auditadas |
+| `GET` | `/api/audit/decisions/{id}` | Detalhes de uma decisão |
+| `GET` | `/api/audit/stats/` | Estatísticas de auditoria |
+
+### Machine Learning (`/ml`)
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| `POST` | `/ml/train/all/async` | Treinar todos os modelos (async) |
+| `POST` | `/ml/train/{sku}/async` | Treinar modelo por SKU (async) |
+| `GET` | `/ml/predict/{sku}` | Previsão de preço por SKU |
+| `GET` | `/ml/models` | Listar modelos treinados |
+| `GET` | `/ml/models/{sku}` | Detalhes do modelo por SKU |
+
+### RAG & Admin (`/api/rag`, `/admin`)
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| `GET` | `/api/rag/status` | Status da sincronização RAG |
+| `POST` | `/api/rag/sync` | Sincronizar catálogo → ChromaDB |
+| `POST` | `/admin/cache/clear` | Limpar cache Redis |
+| `GET` | `/health` | Health check |
+| `GET` | `/metrics` | Métricas Prometheus |
+
+---
+
+## 🛠 Stack Técnica
 
 ### Backend
-
-```bash
-# Criar e ativar venv
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Instalar dependências
-pip install --upgrade pip
-pip install -r requirements.txt
-
-# Rodar API (precisa de MySQL, Redis, RabbitMQ rodando)
-uvicorn app.main:app --reload --port 8000
-
-# Rodar Worker Celery
-celery -A app.core.celery_app.celery_app worker --loglevel=info -Q default,ml
-
-# Rodar testes
-pytest --cov=app -v
-```
+| Tecnologia | Versão | Uso |
+|------------|--------|-----|
+| Python | 3.11 | Linguagem principal |
+| FastAPI | latest | Framework web assíncrono |
+| SQLModel | latest | ORM (SQLAlchemy + Pydantic) |
+| SQLAlchemy | 2.0+ | Engine de banco de dados (sync + async) |
+| Celery | 5.6+ | Task queue distribuída |
+| Agno SDK | latest | Framework de agentes de IA multi-agente |
+| Google Gemini | 2.5 Flash | LLM principal (com fallback chain: Flash → Lite → Pro) |
+| ChromaDB | latest | Vector store para RAG |
+| LangChain | latest | Pipeline RAG (embeddings + retrieval + chain) |
+| StatsForecast | latest | Forecasting de séries temporais (AutoARIMA) |
+| scikit-learn | latest | Feature engineering e métricas ML |
+| Redis | 7 | Cache, pub/sub, Celery result backend |
+| RabbitMQ | 3.13 | Message broker (Celery) com DLQ |
+| MySQL | 8.0 | Banco de dados relacional |
 
 ### Frontend
+| Tecnologia | Versão | Uso |
+|------------|--------|-----|
+| React | 18.3 | UI framework |
+| TypeScript | 5.8 | Tipagem estática |
+| Vite | 7.1 | Build tool & dev server (SWC) |
+| Tailwind CSS | 3.4 | Framework CSS utility-first |
+| shadcn/ui | latest | Componentes UI (Radix UI primitives) |
+| TanStack Query | 5.83 | Gerenciamento de estado servidor |
+| Axios | 1.12 | Cliente HTTP com interceptors |
+| Recharts | 3.2 | Gráficos de preços e previsões |
+| React Router | 6.30 | Roteamento SPA com lazy loading |
+| react-markdown | 9.0 | Renderização de markdown no chat |
 
-```bash
-cd FrontEnd
+### Infraestrutura
+| Tecnologia | Uso |
+|------------|-----|
+| Docker Compose | Orquestração de 10 serviços |
+| Nginx | Reverse proxy + serving de assets estáticos |
+| Prometheus | Coleta de métricas (API, LLM, HTTP) |
+| Grafana | Dashboards de monitoramento |
+| Flower | Monitoramento visual do Celery |
 
-# Instalar dependências
-bun install   # ou npm install
+---
 
-# Dev server (http://localhost:5173)
-bun dev       # ou npm run dev
+## 📐 Estrutura do Projeto
 
-# Build produção
-bun run build
-
-# Testes
-bun test
 ```
-
-### Variáveis necessárias para dev local
-
-Exporte no terminal ou crie um `.env` na raiz:
-
-```bash
-export GOOGLE_API_KEY="sua_chave"
-export DATABASE_URL="mysql+pymysql://app_user:app_password@localhost:3306/app_db"
-export SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
-export APP_ENV="development"
-export ALLOW_DEV_CORS="true"
+AutomacaoPMI/
+├── app/                          # Backend Python
+│   ├── main.py                   # FastAPI factory + middleware + routers
+│   ├── agents/                   # Agentes de IA
+│   │   ├── conversational_agent.py   # Agente conversacional principal
+│   │   ├── supply_chain_team.py      # Time de analistas (4 agentes)
+│   │   ├── tools_secure.py           # Ferramentas tenant-aware (633 linhas)
+│   │   ├── knowledge.py              # RAG Agno (ChromaDB Knowledge)
+│   │   ├── gemini_fallback.py        # Fallback chain (Flash → Lite → Pro)
+│   │   ├── llm_config.py             # Configuração centralizada de LLM
+│   │   ├── llm_metrics.py            # Métricas Prometheus para LLM
+│   │   ├── models.py                 # Schemas Pydantic dos agentes
+│   │   └── prompts/                  # Prompts YAML externalizados
+│   ├── core/                     # Infraestrutura
+│   │   ├── config.py                 # Settings (Pydantic BaseSettings)
+│   │   ├── database.py               # Engines sync + async (pymysql + aiomysql)
+│   │   ├── security.py               # JWT, bcrypt/argon2, auth dependencies
+│   │   ├── celery_app.py             # Celery config (queues, beat, DLQ)
+│   │   └── redis_client.py           # Redis singleton
+│   ├── models/                   # Modelos de banco (20 tabelas)
+│   │   ├── models.py                 # Modelos principais (252 linhas)
+│   │   └── integration_models.py     # Modelos de integração
+│   ├── routers/                  # 15 routers (52 endpoints)
+│   ├── services/                 # 12 serviços de negócio
+│   ├── ml/                       # Pipeline de Machine Learning
+│   │   ├── training.py               # Treinamento StatsForecast
+│   │   ├── prediction.py             # Previsão de preços
+│   │   └── model_manager.py          # Gerenciamento de modelos
+│   └── tasks/                    # Tarefas Celery
+│       ├── agent_tasks.py            # Execução de análise via agentes
+│       └── ml_tasks.py               # Treinamento ML assíncrono
+├── FrontEnd/                     # Frontend React
+│   ├── src/
+│   │   ├── pages/                    # 10 páginas
+│   │   ├── hooks/                    # 16 hooks customizados
+│   │   ├── components/               # 12 business + 51 shadcn/ui
+│   │   ├── services/api.ts           # Cliente HTTP Axios
+│   │   └── types/api.types.ts        # Tipos TypeScript
+│   ├── nginx.conf                    # Proxy reverso produção
+│   └── Dockerfile                    # Build multi-stage (node → nginx)
+├── scripts/                      # 14 scripts operacionais
+│   ├── seed_full.py                  # Seeder completo (10 etapas)
+│   └── train_all_phases.py           # Treinamento multi-fase
+├── tests/                        # 14 arquivos de teste E2E (180 testes)
+├── config/                       # Prometheus + Grafana configs
+├── data/products_seed.csv        # 50 produtos (estofaria/ferragens)
+├── docker-compose.yml            # 10 serviços Docker
+├── requirements.txt              # Dependências Python
+└── pyproject.toml                # Config (Ruff, MyPy, Pytest)
 ```
 
 ---
 
-## 🐛 Troubleshooting
+## 📊 Métricas do Projeto
 
-### "GOOGLE_API_KEY não encontrada"
-
-```bash
-grep GOOGLE_API_KEY .env                         # Verificar se está no .env
-docker compose down && docker compose up -d      # Recriar containers
-```
-
-### "Conexão com banco recusada"
-
-```bash
-docker compose logs -f db      # Aguardar MySQL iniciar (~30s)
-docker compose ps              # Verificar status dos containers
-```
-
-### "ChromaDB instance conflict"
-
-```bash
-docker compose exec api python scripts/sync_vectors.py   # Resync
-# Ou forçar reset do volume:
-docker compose down -v         # ⚠️ Remove TODOS os volumes
-docker compose up -d
-```
-
-### "externally-managed-environment" (pip)
-
-```bash
-# Causa: pip tentando instalar no Python do sistema (PEP 668)
-# Solução: usar venv
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-### Frontend não conecta na API
-
-```bash
-# Deve ter VITE_API_URL no FrontEnd/.env.local
-echo "VITE_API_URL=http://localhost:8000" > FrontEnd/.env.local
-```
+| Métrica | Backend | Frontend | Total |
+|---------|---------|----------|-------|
+| **Linhas de código** | 17.005 | 9.987 | **~27.000** |
+| **Arquivos fonte** | ~65 | 93 | **~158** |
+| **Endpoints da API** | 52 | — | **52** |
+| **Tabelas no banco** | 20 | — | **20** |
+| **Páginas** | — | 10 | **10** |
+| **Componentes** | — | 63 | **63** |
+| **Hooks** | — | 16 | **16** |
+| **Serviços** | 12 | 1 | **13** |
+| **Agentes de IA** | 6 | — | **6** |
+| **Tarefas Celery** | 4 | — | **4** |
+| **Testes** | 180 | 4 | **184** |
+| **Dependências** | 48 | 53 | **101** |
+| **Serviços Docker** | — | — | **10** |
 
 ---
 
-## 🗺️ Roadmap
+## 🧪 Testes
 
-- [x] Sistema Multi-Agente com Agno (Team + `output_schema`)
-- [x] RAG com ChromaDB + LangChain + `gemini-embedding-001`
-- [x] Previsões ML com StatsForecast (AutoARIMA)
-- [x] Frontend React completo (11 páginas)
-- [x] Autenticação JWT + Multi-Tenant (Row-Level Security)
-- [x] RBAC (admin, owner, user)
-- [x] Fallback automático de modelos Gemini (2.5-flash → lite → pro)
-- [x] Métricas de custo LLM (Prometheus)
-- [x] Credential store criptografado (Fernet)
-- [x] DLQ (Dead Letter Queue) no Celery / RabbitMQ
-- [x] Alembic migrations
-- [x] Prompts externalizados em YAML
-- [x] WebSocket autenticado (JWT)
-- [x] Observabilidade (Prometheus + Grafana + Flower)
-- [ ] Conectores ERP reais (Bling, Tiny, SAP Business One)
-- [ ] App mobile (React Native)
-- [ ] Deploy em cloud (AWS / GCP)
-- [ ] Testes E2E (Playwright)
+O projeto possui **180 testes E2E** cobrindo todas as camadas:
+
+| Área | Arquivo | Cobertura |
+|------|---------|-----------|
+| Health | `test_e2e_health.py` | Endpoints de saúde e readiness |
+| Autenticação | `test_e2e_auth.py` | Registro, login, JWT, validação de senha |
+| Produtos | `test_e2e_products.py` | CRUD, busca, histórico de preços |
+| Ordens | `test_e2e_orders.py` | CRUD, aprovação/rejeição, filtros |
+| Fornecedores | `test_e2e_suppliers.py` | CRUD, ofertas |
+| Dashboard | `test_e2e_dashboard.py` | KPIs, alertas |
+| Chat | `test_e2e_chat.py` | Sessões, mensagens |
+| Agentes | `test_e2e_agents.py` | CRUD, ativação |
+| Auditoria | `test_e2e_audit.py` | Decisões, estatísticas |
+| ML | `test_e2e_ml.py` | Modelos treinados |
+| RAG | `test_e2e_rag.py` | Status do vector store |
+| Segurança | `test_e2e_security.py` | RBAC, acesso não-autenticado, restrições |
+| Serviços | `test_e2e_services.py` | Testes unitários da camada de serviços |
+| Multi-Tenant | `test_e2e_tenant.py` | Isolamento de dados entre tenants |
+
+**Banco de testes**: SQLite in-memory (substitui MySQL)  
+**Framework**: pytest + pytest-asyncio + FastAPI TestClient
 
 ---
 
-## 🤝 Contribuindo
+## 🔒 Segurança
 
-1. Fork o projeto
-2. Crie sua branch (`git checkout -b feature/NovaFuncionalidade`)
-3. Commit suas mudanças (`git commit -m 'feat: adiciona nova funcionalidade'`)
-4. Push para a branch (`git push origin feature/NovaFuncionalidade`)
-5. Abra um Pull Request
+- **Autenticação JWT** com bcrypt/argon2 password hashing (passlib)
+- **Multi-tenancy row-level** — queries filtradas por `tenant_id` em todas as operações
+- **CORS configurado** para origens específicas (dev: 5173, 3000, 8080)
+- **Portas internas protegidas** — MySQL, Redis, RabbitMQ não expostos externamente
+- **Credenciais criptografadas** — modelo `IntegrationCredential` com Fernet encryption
+- **Fallback chain LLM** — exponential backoff entre modelos Gemini
+- **Dead Letter Queues** — mensagens falhas isoladas por fila Celery
+- **Auditoria completa** — todas as decisões de agentes registradas com raciocínio
 
 ---
 
 ## 📄 Licença
 
-Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para detalhes.
+Projeto proprietário. Todos os direitos reservados.
+
+---
+
+## 👤 Autor
+
+Desenvolvido como plataforma SaaS de automação de compras industriais com inteligência artificial.
 

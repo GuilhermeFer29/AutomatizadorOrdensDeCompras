@@ -59,15 +59,39 @@ class HealthStatus(BaseModel):
 
 
 # ============================================================================
-# ESTADO GLOBAL (Em produção, usar Redis)
+# SYNC STATE (Redis-backed para ser consistente entre workers)
 # ============================================================================
 
-_sync_state = {
-    "status": "idle",
-    "last_sync": None,
-    "products_indexed": 0,
-    "message": "Nunca sincronizado"
-}
+def _get_sync_state() -> dict:
+    """Lê estado de sync do Redis (ou retorna default se indisponível)."""
+    try:
+        import json
+        from app.core.redis_client import get_redis_client
+        redis = get_redis_client()
+        if redis:
+            raw = redis.get("rag_sync_state")
+            if raw:
+                return json.loads(raw)
+    except Exception:
+        pass
+    return {
+        "status": "idle",
+        "last_sync": None,
+        "products_indexed": 0,
+        "message": "Nunca sincronizado"
+    }
+
+
+def _set_sync_state(state: dict) -> None:
+    """Persiste estado de sync no Redis."""
+    try:
+        import json
+        from app.core.redis_client import get_redis_client
+        redis = get_redis_client()
+        if redis:
+            redis.set("rag_sync_state", json.dumps(state), ex=86400)  # TTL 24h
+    except Exception:
+        pass
 
 
 # ============================================================================
@@ -81,10 +105,12 @@ def _sync_rag_background(batch_size: int = 100) -> None:
     Args:
         batch_size: Número de produtos por batch (evita OOM)
     """
-    global _sync_state
-
-    _sync_state["status"] = "running"
-    _sync_state["message"] = "Sincronização em andamento..."
+    _set_sync_state({
+        "status": "running",
+        "last_sync": None,
+        "products_indexed": 0,
+        "message": "Sincronização em andamento..."
+    })
 
     try:
         from sqlmodel import Session
@@ -152,17 +178,23 @@ def _sync_rag_background(batch_size: int = 100) -> None:
 
                 LOGGER.info(f"RAG Sync: {total_indexed} produtos indexados...")
 
-        _sync_state["status"] = "completed"
-        _sync_state["last_sync"] = datetime.now(UTC).isoformat()
-        _sync_state["products_indexed"] = total_indexed
-        _sync_state["message"] = f"Sincronização concluída: {total_indexed} produtos"
+        _set_sync_state({
+            "status": "completed",
+            "last_sync": datetime.now(UTC).isoformat(),
+            "products_indexed": total_indexed,
+            "message": f"Sincronização concluída: {total_indexed} produtos",
+        })
 
         LOGGER.info(f"✅ RAG Sync completo: {total_indexed} produtos indexados")
 
     except Exception as e:
         LOGGER.error(f"❌ RAG Sync falhou: {e}")
-        _sync_state["status"] = "failed"
-        _sync_state["message"] = f"Erro: {str(e)}"
+        _set_sync_state({
+            "status": "failed",
+            "last_sync": None,
+            "products_indexed": 0,
+            "message": f"Erro: {str(e)}",
+        })
 
 
 # ============================================================================
@@ -185,9 +217,9 @@ async def sync_rag(
     A sincronização roda em background para não bloquear a API.
     Use GET /admin/rag/status para acompanhar o progresso.
     """
-    global _sync_state
+    current_state = _get_sync_state()
 
-    if _sync_state["status"] == "running" and not force:
+    if current_state["status"] == "running" and not force:
         raise HTTPException(
             status_code=409,
             detail="Sincronização já em andamento. Use force=true para reiniciar."
@@ -196,10 +228,15 @@ async def sync_rag(
     # Agenda task em background
     background_tasks.add_task(_sync_rag_background, batch_size)
 
-    _sync_state["status"] = "running"
-    _sync_state["message"] = "Sincronização iniciada em background"
+    new_state = {
+        "status": "running",
+        "last_sync": current_state.get("last_sync"),
+        "products_indexed": current_state.get("products_indexed", 0),
+        "message": "Sincronização iniciada em background",
+    }
+    _set_sync_state(new_state)
 
-    return SyncStatus(**_sync_state)
+    return SyncStatus(**new_state)
 
 
 @router.get("/rag/status", response_model=SyncStatus)
@@ -207,7 +244,7 @@ async def get_rag_status(current_user=Depends(require_role("admin", "owner"))):
     """
     Retorna status atual da sincronização RAG.
     """
-    return SyncStatus(**_sync_state)
+    return SyncStatus(**_get_sync_state())
 
 
 @router.get("/health", response_model=HealthStatus)

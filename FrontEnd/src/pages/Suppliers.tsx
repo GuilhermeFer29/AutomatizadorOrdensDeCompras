@@ -174,7 +174,7 @@ export default function Suppliers() {
                         placeholder="Buscar fornecedor..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                         className="w-64"
                     />
                     <Button variant="outline" onClick={handleSearch}>

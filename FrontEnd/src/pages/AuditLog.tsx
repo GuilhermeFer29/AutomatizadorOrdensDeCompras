@@ -135,7 +135,7 @@ export default function AuditLog() {
                         placeholder="Filtrar por SKU..."
                         value={searchSku}
                         onChange={(e) => setSearchSku(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                         className="w-48"
                     />
                     <Button variant="outline" onClick={handleSearch}>

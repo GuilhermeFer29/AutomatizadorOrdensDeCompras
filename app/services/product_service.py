@@ -53,6 +53,8 @@ def update_product(session: Session, product_id: int, product_data: dict):
     field_mapping = {
         'name': 'nome',
         'stock': 'estoque_atual',
+        'categoria': 'categoria',
+        'estoque_minimo': 'estoque_minimo',
     }
 
     for key, value in product_data.items():
@@ -81,3 +83,20 @@ def update_product(session: Session, product_id: int, product_data: dict):
     session.commit()
     session.refresh(product)
     return product
+
+
+def delete_product(session: Session, product_id: int) -> bool:
+    """Remove um produto e seu histórico de preços."""
+    product = session.get(Produto, product_id)
+    if not product:
+        return False
+
+    # Remove histórico de preços associado
+    from sqlmodel import delete as sql_delete
+    session.exec(
+        sql_delete(PrecosHistoricos).where(PrecosHistoricos.produto_id == product_id)
+    )
+
+    session.delete(product)
+    session.commit()
+    return True

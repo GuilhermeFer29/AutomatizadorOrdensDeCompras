@@ -44,6 +44,8 @@ export function CreateProductModal({ trigger }: CreateProductModalProps) {
             name: formData.name,
             price: parseFloat(formData.price) || 0,
             stock: parseInt(formData.stock) || 0,
+            ...(formData.categoria && { categoria: formData.categoria }),
+            ...(formData.estoque_minimo && { estoque_minimo: parseInt(formData.estoque_minimo) || 0 }),
         });
 
         // Reset form and close modal

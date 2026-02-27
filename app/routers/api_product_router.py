@@ -8,7 +8,7 @@ from sqlmodel import Session, select
 from app.core.security import get_current_user
 from app.core.tenant import get_tenant_session
 from app.models.models import PrecosHistoricos, Produto
-from app.services.product_service import create_product, get_product_by_id, get_products, update_product
+from app.services.product_service import create_product, delete_product, get_product_by_id, get_products, update_product
 
 logger = logging.getLogger(__name__)
 
@@ -17,11 +17,15 @@ class ProductCreate(BaseModel):
     name: str
     price: float
     stock: int
+    categoria: str | None = None
+    estoque_minimo: int | None = None
 
 class ProductUpdate(BaseModel):
     name: str | None = None
     price: float | None = None
     stock: int | None = None
+    categoria: str | None = None
+    estoque_minimo: int | None = None
 
 router = APIRouter(prefix="/api/products", tags=["api-products"])
 
@@ -48,38 +52,59 @@ def sync_rag_background():
 def read_products(search: str | None = None, session: Session = Depends(get_tenant_session), current_user=Depends(get_current_user)):
     """
     Retorna lista de produtos com preço atual e fornecedor padrão.
+
+    Utiliza batch queries para evitar N+1.
     """
     from collections import Counter
+    from datetime import datetime, timedelta
 
-    from sqlalchemy import desc
+    from sqlalchemy import desc, func
 
     produtos = get_products(session, search)
+    if not produtos:
+        return []
+
+    produto_ids = [p.id for p in produtos]
+
+    # --- Batch: preço mais recente por produto (subquery) ---
+    latest_ts_sub = (
+        select(PrecosHistoricos.produto_id, func.max(PrecosHistoricos.coletado_em).label("max_ts"))
+        .where(PrecosHistoricos.produto_id.in_(produto_ids))
+        .group_by(PrecosHistoricos.produto_id)
+        .subquery()
+    )
+    latest_prices_rows = session.exec(
+        select(PrecosHistoricos)
+        .join(
+            latest_ts_sub,
+            (PrecosHistoricos.produto_id == latest_ts_sub.c.produto_id)
+            & (PrecosHistoricos.coletado_em == latest_ts_sub.c.max_ts),
+        )
+    ).all()
+    latest_price_map: dict[int, float] = {
+        p.produto_id: float(p.preco) for p in latest_prices_rows
+    }
+
+    # --- Batch: preços dos últimos 30 dias ---
+    data_limite = datetime.now(UTC) - timedelta(days=30)
+    recent_prices = list(session.exec(
+        select(PrecosHistoricos)
+        .where(PrecosHistoricos.produto_id.in_(produto_ids))
+        .where(PrecosHistoricos.coletado_em >= data_limite)
+    ))
+
+    # Agrupar por produto_id
+    prices_by_product: dict[int, list] = {}
+    for p in recent_prices:
+        prices_by_product.setdefault(p.produto_id, []).append(p)
 
     result = []
     for produto in produtos:
-        # Buscar preço mais recente
-        preco_recente = session.exec(
-            select(PrecosHistoricos)
-            .where(PrecosHistoricos.produto_id == produto.id)
-            .order_by(desc(PrecosHistoricos.coletado_em))
-            .limit(1)
-        ).first()
-
-        preco_atual = float(preco_recente.preco) if preco_recente else 0.0
-
-        # Calcular preço médio dos últimos 30 dias
-        from datetime import datetime, timedelta
-        data_limite = datetime.now(UTC) - timedelta(days=30)
-        precos_recentes = list(session.exec(
-            select(PrecosHistoricos)
-            .where(PrecosHistoricos.produto_id == produto.id)
-            .where(PrecosHistoricos.coletado_em >= data_limite)
-        ))
+        preco_atual = latest_price_map.get(produto.id, 0.0)
+        precos_recentes = prices_by_product.get(produto.id, [])
 
         if precos_recentes:
             preco_medio = sum(float(p.preco) for p in precos_recentes) / len(precos_recentes)
-
-            # Determinar fornecedor mais comum
             fornecedores = [p.fornecedor for p in precos_recentes if p.fornecedor]
             if fornecedores:
                 fornecedor_counter = Counter(fornecedores)
@@ -158,6 +183,26 @@ def handle_update_product(
     logger.info(f"🔄 Produto atualizado: ID {product_id} - RAG será sincronizado")
 
     return updated_product
+
+
+@router.delete("/{product_id}", status_code=204)
+def handle_delete_product(
+    product_id: int,
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_tenant_session),
+    current_user=Depends(get_current_user),
+):
+    """
+    Remove um produto e sincroniza RAG automaticamente.
+    """
+    deleted = delete_product(session, product_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    background_tasks.add_task(sync_rag_background)
+    logger.info(f"🗑️ Produto removido: ID {product_id} - RAG será sincronizado")
+
+    return None
 
 
 @router.get("/{sku}/price-history")

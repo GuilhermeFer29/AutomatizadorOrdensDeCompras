@@ -37,10 +37,11 @@ export const useChat = (sessionId: number | null) => {
       setHasAsyncTask(hasAsync);
     });
 
-    // Setup WebSocket with dynamic URL and JWT auth token
+    // Setup WebSocket with dynamic URL and JWT auth via Sec-WebSocket-Protocol
     const token = localStorage.getItem('token');
-    const wsPath = `/api/chat/ws/${sessionId}${token ? `?token=${token}` : ''}`;
-    const ws = new WebSocket(buildWsUrl(wsPath));
+    const wsPath = `/api/chat/ws/${sessionId}`;
+    const wsOptions = token ? ['access_token', token] : undefined;
+    const ws = new WebSocket(buildWsUrl(wsPath), wsOptions);
     websocket.current = ws;
 
     ws.onopen = () => {

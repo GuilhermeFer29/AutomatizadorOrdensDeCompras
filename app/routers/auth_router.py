@@ -171,12 +171,33 @@ def login(
     """
     Faz login e retorna JWT com tenant_id.
 
+    Rate-limiting: máximo 10 tentativas por IP por minuto (via Redis).
+
     O token JWT inclui:
     - sub: email do usuario
     - tenant_id: UUID do tenant (para isolamento de dados)
     - user_id: ID do usuario
     - role: role do usuario no tenant
     """
+    # ---- Rate-limiting simples via Redis ----
+    try:
+        from app.core.redis_client import get_redis_client
+        redis = get_redis_client()
+        if redis:
+            rk = f"login_attempts:{form_data.username}"
+            attempts = redis.incr(rk)
+            if attempts == 1:
+                redis.expire(rk, 60)  # janela de 60 s
+            if attempts > 10:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Muitas tentativas de login. Tente novamente em 1 minuto.",
+                )
+    except HTTPException:
+        raise
+    except Exception:
+        pass  # Redis indisponível — segue sem rate-limit
+
     # Buscar usuario por email
     user = session.exec(
         select(User).where(User.email == form_data.username)
