@@ -234,9 +234,9 @@ class AuditoriaDecisao(TenantMixin, SQLModel, table=True):
     agente_nome: str = Field(index=True)
     sku: str = Field(index=True)
     acao: str = Field(index=True)  # recommend_supplier, reject_purchase, approve_order
-    decisao: str  # JSON com detalhes da decisão
-    raciocinio: str  # Raciocínio completo do agente
-    contexto: str  # Contexto da solicitação
+    decisao: str = Field(sa_column=Column(Text))  # JSON com detalhes da decisão
+    raciocinio: str = Field(sa_column=Column(Text))  # Raciocínio completo do agente
+    contexto: str = Field(sa_column=Column(Text))  # Contexto da solicitação
     usuario_id: Optional[str] = Field(default=None, index=True)
     data_decisao: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), index=True)
     ip_origem: Optional[str] = Field(default=None)

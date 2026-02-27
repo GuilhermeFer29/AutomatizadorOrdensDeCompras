@@ -1,37 +1,15 @@
-"""Pytest configuration and fixtures for API testing."""
+"""
+Root conftest.py — seta variáveis de ambiente para testes.
 
-import pytest
-from fastapi.testclient import TestClient
-from sqlmodel import Session, create_engine, SQLModel
-from sqlmodel.pool import StaticPool
+Todas as fixtures reais estão em tests/conftest.py.
+"""
 
-from app.main import create_application
-from app.core.database import get_session
+import os
 
-
-@pytest.fixture(name="session")
-def session_fixture():
-    """Create a test database session using SQLite in-memory."""
-    engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    SQLModel.metadata.create_all(engine)
-    with Session(engine) as session:
-        yield session
-
-
-@pytest.fixture(name="client")
-def client_fixture(session: Session):
-    """Create a test client with dependency override."""
-    def get_session_override():
-        return session
-
-    app = create_application()
-    app.dependency_overrides[get_session] = get_session_override
-    
-    with TestClient(app) as client:
-        yield client
-    
-    app.dependency_overrides.clear()
+# Env vars de teste DEVEM ser setadas antes de qualquer import da app
+os.environ.setdefault("APP_ENV", "development")
+os.environ.setdefault("ALLOW_DEFAULT_DB", "false")
+os.environ.setdefault("DATABASE_URL", "sqlite://")
+os.environ.setdefault("PROMETHEUS_ENABLED", "false")
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-e2e-tests-only-123456")
+os.environ.setdefault("CACHE_REDIS_URL", "")

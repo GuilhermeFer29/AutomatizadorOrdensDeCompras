@@ -1,8 +1,11 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 
 // Configuração da instância do Axios
+// Em produção (Docker): VITE_API_BASE_URL="" → usa URLs relativas (via nginx proxy)
+// Em dev com Vite proxy: VITE_API_BASE_URL="" → usa Vite proxy em localhost:8080
+// Em dev sem proxy: VITE_API_BASE_URL="http://localhost:8000"
 const api: AxiosInstance = axios.create({
-baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
+baseURL: import.meta.env.VITE_API_BASE_URL ?? '',
 timeout: Number(import.meta.env.VITE_API_TIMEOUT) || 30000,
 headers: {
 'Content-Type': 'application/json',

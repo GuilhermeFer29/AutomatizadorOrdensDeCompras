@@ -94,9 +94,6 @@ def get_conversational_agent(session_id: str) -> Agent:
         session_id=session_id, # Recupera contexto anterior
         add_history_to_context=True, # Envia histórico para o LLM
         num_history_messages=5, # Mantém últimas 5 trocas
-
-        # Configuração de Saída
-        markdown=True,
     )
 
     return agent

@@ -223,7 +223,7 @@ def update_supplier(
         raise HTTPException(status_code=404, detail="Fornecedor não encontrado")
 
     # Atualizar apenas campos fornecidos
-    update_data = supplier_data.dict(exclude_unset=True)
+    update_data = supplier_data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         if value is not None:
             setattr(supplier, key, value)

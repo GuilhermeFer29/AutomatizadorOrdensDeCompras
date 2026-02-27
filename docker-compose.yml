@@ -113,7 +113,7 @@ services:
       - rabbitmq_data:/var/lib/rabbitmq
     networks: [pmi-network]
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
       timeout: 10s
       retries: 5

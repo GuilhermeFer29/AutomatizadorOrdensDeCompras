@@ -13,6 +13,7 @@ export default function Register() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [companyName, setCompanyName] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
@@ -27,8 +28,23 @@ export default function Register() {
       return;
     }
 
-    if (password.length < 6) {
-      setError("A senha deve ter pelo menos 6 caracteres");
+    if (password.length < 8) {
+      setError("A senha deve ter pelo menos 8 caracteres");
+      return;
+    }
+
+    if (!/[A-Z]/.test(password)) {
+      setError("A senha deve conter pelo menos uma letra maiúscula");
+      return;
+    }
+
+    if (!/[a-z]/.test(password)) {
+      setError("A senha deve conter pelo menos uma letra minúscula");
+      return;
+    }
+
+    if (!/[0-9]/.test(password)) {
+      setError("A senha deve conter pelo menos um número");
       return;
     }
 
@@ -39,6 +55,7 @@ export default function Register() {
         email,
         password,
         full_name: fullName,
+        company_name: companyName,
       });
 
       if (response.data) {
@@ -49,9 +66,15 @@ export default function Register() {
       }
     } catch (err: any) {
       if (err.response?.status === 400) {
-        setError("Este email já está cadastrado");
+        setError(err.response.data?.detail || "Este email já está cadastrado");
       } else if (err.response?.status === 422) {
-        setError("Por favor, preencha todos os campos corretamente");
+        // Extrai mensagem de validação do backend
+        const details = err.response.data?.details || err.response.data?.detail;
+        if (Array.isArray(details) && details.length > 0) {
+          setError(details[0].msg || "Por favor, preencha todos os campos corretamente");
+        } else {
+          setError("Por favor, preencha todos os campos corretamente");
+        }
       } else if (err.response?.data?.detail) {
         setError(err.response.data.detail);
       } else if (err.code === "ERR_NETWORK") {
@@ -89,6 +112,20 @@ export default function Register() {
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="companyName">Nome da Empresa</Label>
+              <Input
+                id="companyName"
+                type="text"
+                placeholder="Nome da sua empresa"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                required
+                minLength={2}
+                disabled={isLoading}
+              />
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
@@ -106,10 +143,11 @@ export default function Register() {
               <Input
                 id="password"
                 type="password"
-                placeholder="Mínimo 6 caracteres"
+                placeholder="Mín. 8 caracteres (A-Z, a-z, 0-9)"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                minLength={8}
                 disabled={isLoading}
               />
             </div>

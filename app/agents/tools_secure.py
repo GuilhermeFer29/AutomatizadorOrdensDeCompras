@@ -24,48 +24,51 @@ import logging
 from datetime import UTC
 from decimal import Decimal
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func, select
+from sqlmodel import Session
 
-from app.core.database import get_async_session
+from app.core.database import get_sync_engine
 from app.core.tenant_context import TenantContext
-from app.models.models import Fornecedor, OfertaProduto, OrdemDeCompra, PrecosHistoricos, Produto
+from app.models.models import (
+    Fornecedor,
+    OfertaProduto,
+    OrdemDeCompra,
+    PrecosHistoricos,
+    Produto,
+    VendasHistoricas,
+)
 
 LOGGER = logging.getLogger(__name__)
 
 
 # ============================================================================
-# HELPER: Async Context Manager para Tools
+# HELPER: Sync Context Manager para Tools (Celery-safe)
 # ============================================================================
 
-class TenantAwareSession:
+class TenantAwareSyncSession:
     """
-    Context manager que fornece sessão async com filtro de tenant.
-
-    Uso:
-        async with TenantAwareSession() as session:
-            result = await session.execute(
-                select(Produto).where(Produto.tenant_id == TenantContext.get_current_tenant())
-            )
+    Context manager síncrono para sessões tenant-aware.
+    
+    Usa engine síncrono - IDEAL PARA CELERY WORKERS (sem event loop issues).
     """
-
+    
     def __init__(self):
-        self.session: AsyncSession | None = None
+        self.session: Session | None = None
         self.tenant_id = TenantContext.get_current_tenant()
-        self._session_gen = None
-
-    async def __aenter__(self) -> AsyncSession:
-        # Usa o generator get_async_session()
-        self._session_gen = get_async_session()
-        self.session = await self._session_gen.__anext__()
+    
+    def __enter__(self) -> Session:
+        self.session = Session(get_sync_engine())
         return self.session
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self._session_gen:
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.session:
             try:
-                await self._session_gen.__anext__()
-            except StopAsyncIteration:
-                pass
+                if exc_type is None:
+                    self.session.commit()
+                else:
+                    self.session.rollback()
+            finally:
+                self.session.close()
         return False
 
 
@@ -107,64 +110,59 @@ def get_product_info(product_sku: str) -> str:
     Returns:
         str: JSON com sku, nome, estoque_atual, estoque_minimo, etc.
     """
-    import asyncio
+    # Usa sessão síncrona diretamente (evita problemas com event loops em Celery)
+    tenant_id = TenantContext.get_current_tenant()
 
-    async def _query():
-        tenant_id = TenantContext.get_current_tenant()
+    with TenantAwareSyncSession() as session:
+        query = select(Produto).where(Produto.sku == product_sku)
+        if tenant_id:
+            query = query.where(Produto.tenant_id == tenant_id)
 
-        async with TenantAwareSession() as session:
-            # Query com filtro de tenant
-            query = select(Produto).where(Produto.sku == product_sku)
-            if tenant_id:
-                query = query.where(Produto.tenant_id == tenant_id)
+        result = session.execute(query)
+        produto = result.scalar_one_or_none()
 
-            result = await session.execute(query)
-            produto = result.scalar_one_or_none()
+        if not produto:
+            return json.dumps({"erro": f"Produto {product_sku} não encontrado"}, ensure_ascii=False)
 
-            if not produto:
-                return json.dumps({
-                    "error": f"Produto com SKU {product_sku} não encontrado",
-                    "tenant_filter": "aplicado" if tenant_id else "superuser"
-                }, ensure_ascii=False)
+        # Busca último preço do histórico
+        preco_query = (
+            select(PrecosHistoricos.preco)
+            .where(PrecosHistoricos.produto_id == produto.id)
+            .order_by(PrecosHistoricos.coletado_em.desc())
+            .limit(1)
+        )
+        preco_result = session.execute(preco_query).scalar_one_or_none()
+        preco_atual = float(preco_result) if preco_result else 0.0
 
-            # Busca último preço
-            preco_query = (
-                select(PrecosHistoricos)
-                .where(PrecosHistoricos.produto_id == produto.id)
-                .order_by(PrecosHistoricos.coletado_em.desc())
-                .limit(1)
+        # Calcula consumo médio diário dos últimos 30 dias
+        from datetime import datetime, timedelta, timezone
+        data_inicio = datetime.now(timezone.utc) - timedelta(days=30)
+        consumo_query = (
+            select(func.avg(VendasHistoricas.quantidade))
+            .where(
+                VendasHistoricas.produto_id == produto.id,
+                VendasHistoricas.data_venda >= data_inicio,
             )
-            preco_result = await session.execute(preco_query)
-            ultimo_preco = preco_result.scalar_one_or_none()
+        )
+        consumo_medio = session.execute(consumo_query).scalar_one_or_none()
+        consumo_medio_diario = float(consumo_medio) if consumo_medio else 0.01
 
-            info = {
-                "sku": produto.sku,
-                "nome": produto.nome,
-                "categoria": produto.categoria,
-                "estoque_atual": produto.estoque_atual,
-                "estoque_minimo": produto.estoque_minimo,
-                "preco_atual": float(ultimo_preco.preco) if ultimo_preco else 0.0,
-                "status_reposicao": "ALERTA" if produto.estoque_atual <= produto.estoque_minimo else "OK",
-                "cobertura_dias": round(
-                    produto.estoque_atual / max(1, produto.estoque_minimo) * 30, 1
-                ) if produto.estoque_minimo > 0 else 999,
-            }
+        est_atual = produto.estoque_atual or 0
+        est_min = produto.estoque_minimo or 0
 
-            return json.dumps(info, ensure_ascii=False)
+        info = {
+            "sku": produto.sku,
+            "nome": produto.nome,
+            "categoria": produto.categoria,
+            "estoque_atual": est_atual,
+            "estoque_minimo": est_min,
+            "preco_atual": preco_atual,
+            "unidade": "UN",
+            "status_reposicao": "Urgente" if est_atual < est_min else "OK",
+            "cobertura_dias": round(est_atual / consumo_medio_diario, 1) if consumo_medio_diario > 0 else 999,
+        }
 
-    # Executa async de forma síncrona (compatibilidade Agno)
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # Se já tem event loop, usa thread pool
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                future = pool.submit(asyncio.run, _query())
-                return future.result()
-        else:
-            return asyncio.run(_query())
-    except RuntimeError:
-        return asyncio.run(_query())
+        return json.dumps(info, ensure_ascii=False)
 
 
 def list_all_products(
@@ -186,83 +184,68 @@ def list_all_products(
     Returns:
         str: JSON com lista de produtos, resumo e alertas
     """
-    import asyncio
+    tenant_id = TenantContext.get_current_tenant()
 
-    async def _query():
-        tenant_id = TenantContext.get_current_tenant()
+    with TenantAwareSyncSession() as session:
+        # Query base com filtro de tenant
+        query = select(Produto)
+        if tenant_id:
+            query = query.where(Produto.tenant_id == tenant_id)
 
-        async with TenantAwareSession() as session:
-            # Query base com filtro de tenant
-            query = select(Produto)
-            if tenant_id:
-                query = query.where(Produto.tenant_id == tenant_id)
+        # Filtros adicionais
+        if category:
+            query = query.where(Produto.categoria == category)
 
-            # Filtros adicionais
-            if category:
-                query = query.where(Produto.categoria == category)
+        result = session.execute(query)
+        produtos = result.scalars().all()
 
-            result = await session.execute(query)
-            produtos = result.scalars().all()
+        # Classifica produtos
+        estoque_ok = []
+        estoque_alerta = []
+        estoque_critico = []
 
-            # Classifica produtos
-            estoque_ok = []
-            estoque_alerta = []
-            estoque_critico = []
-
-            for p in produtos:
-                item = {
-                    "sku": p.sku,
-                    "nome": p.nome,
-                    "categoria": p.categoria or "Sem categoria",
-                    "estoque_atual": p.estoque_atual,
-                    "estoque_minimo": p.estoque_minimo,
-                }
-
-                # Classifica por status
-                if p.estoque_atual <= 0:
-                    item["status"] = "CRÍTICO"
-                    item["urgencia"] = "IMEDIATA"
-                    estoque_critico.append(item)
-                elif p.estoque_atual <= p.estoque_minimo:
-                    item["status"] = "ALERTA"
-                    item["urgencia"] = "ALTA"
-                    estoque_alerta.append(item)
-                else:
-                    item["status"] = "OK"
-                    item["urgencia"] = None
-                    if not only_low_stock:
-                        estoque_ok.append(item)
-
-            # Monta resposta
-            response = {
-                "total_produtos": len(produtos),
-                "tenant_id": str(tenant_id) if tenant_id else "superuser",
-                "resumo": {
-                    "estoque_ok": len(estoque_ok),
-                    "estoque_alerta": len(estoque_alerta),
-                    "estoque_critico": len(estoque_critico),
-                },
-                "alertas_prioritarios": estoque_critico + estoque_alerta,
+        for p in produtos:
+            item = {
+                "sku": p.sku,
+                "nome": p.nome,
+                "categoria": p.categoria or "Sem categoria",
+                "estoque_atual": p.estoque_atual,
+                "estoque_minimo": p.estoque_minimo,
             }
 
-            if not only_low_stock:
-                response["produtos"] = estoque_ok + estoque_alerta + estoque_critico
+            # Classifica por status
+            if p.estoque_atual <= 0:
+                item["status"] = "CRÍTICO"
+                item["urgencia"] = "IMEDIATA"
+                estoque_critico.append(item)
+            elif p.estoque_atual <= p.estoque_minimo:
+                item["status"] = "ALERTA"
+                item["urgencia"] = "ALTA"
+                estoque_alerta.append(item)
             else:
-                response["produtos"] = estoque_critico + estoque_alerta
+                item["status"] = "OK"
+                item["urgencia"] = None
+                if not only_low_stock:
+                    estoque_ok.append(item)
 
-            return json.dumps(response, ensure_ascii=False)
+        # Monta resposta
+        response = {
+            "total_produtos": len(produtos),
+            "tenant_id": str(tenant_id) if tenant_id else "superuser",
+            "resumo": {
+                "estoque_ok": len(estoque_ok),
+                "estoque_alerta": len(estoque_alerta),
+                "estoque_critico": len(estoque_critico),
+            },
+            "alertas_prioritarios": estoque_critico + estoque_alerta,
+        }
 
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                future = pool.submit(asyncio.run, _query())
-                return future.result()
+        if not only_low_stock:
+            response["produtos"] = estoque_ok + estoque_alerta + estoque_critico
         else:
-            return asyncio.run(_query())
-    except RuntimeError:
-        return asyncio.run(_query())
+            response["produtos"] = estoque_critico + estoque_alerta
+
+        return json.dumps(response, ensure_ascii=False)
 
 
 def get_price_forecast_for_sku(sku: str, days_ahead: int = 7) -> str:
@@ -280,64 +263,51 @@ def get_price_forecast_for_sku(sku: str, days_ahead: int = 7) -> str:
     Returns:
         str: JSON com previsões de preço, datas e métricas
     """
-    import asyncio
+    tenant_id = TenantContext.get_current_tenant()
 
-    async def _query():
-        tenant_id = TenantContext.get_current_tenant()
+    # Valida que SKU pertence ao tenant
+    with TenantAwareSyncSession() as session:
+        query = select(Produto).where(Produto.sku == sku)
+        if tenant_id:
+            query = query.where(Produto.tenant_id == tenant_id)
 
-        # Primeiro valida que SKU pertence ao tenant
-        async with TenantAwareSession() as session:
-            query = select(Produto).where(Produto.sku == sku)
-            if tenant_id:
-                query = query.where(Produto.tenant_id == tenant_id)
+        result = session.execute(query)
+        produto = result.scalar_one_or_none()
 
-            result = await session.execute(query)
-            produto = result.scalar_one_or_none()
-
-            if not produto:
-                return json.dumps({
-                    "error": f"Produto SKU {sku} não encontrado ou não pertence ao seu tenant",
-                    "access_denied": True
-                }, ensure_ascii=False)
-
-        # Se validou, chama serviço de ML
-        try:
-            from app.ml.prediction import predict_prices_for_product
-            result = predict_prices_for_product(sku=sku, days_ahead=days_ahead)
-
-            if "error" in result:
-                return json.dumps({"error": result["error"]}, ensure_ascii=False)
-
-            prices = result.get("prices", [])
-            if len(prices) >= 2:
-                trend = "alta" if prices[-1] > prices[0] else "baixa"
-                var_percent = ((prices[-1] - prices[0]) / prices[0]) * 100
-            else:
-                trend = "estável"
-                var_percent = 0.0
-
+        if not produto:
             return json.dumps({
-                "sku": sku,
-                "previsoes": prices,
-                "datas": result.get("dates", []),
-                "tendencia": trend,
-                "variacao_percentual": round(var_percent, 2),
-                "modelo_usado": result.get("model_used", "desconhecido"),
-                "metricas": result.get("metrics", {})
+                "error": f"Produto SKU {sku} não encontrado ou não pertence ao seu tenant",
+                "access_denied": True
             }, ensure_ascii=False)
 
-        except Exception as e:
-            return json.dumps({"error": str(e)}, ensure_ascii=False)
-
+    # Se validou, chama serviço de ML
     try:
-        return asyncio.run(_query())
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            return loop.run_until_complete(_query())
-        finally:
-            loop.close()
+        from app.ml.prediction import predict_prices_for_product
+        result = predict_prices_for_product(sku=sku, days_ahead=days_ahead)
+
+        if "error" in result:
+            return json.dumps({"error": result["error"]}, ensure_ascii=False)
+
+        prices = result.get("prices", [])
+        if len(prices) >= 2:
+            trend = "alta" if prices[-1] > prices[0] else "baixa"
+            var_percent = ((prices[-1] - prices[0]) / prices[0]) * 100
+        else:
+            trend = "estável"
+            var_percent = 0.0
+
+        return json.dumps({
+            "sku": sku,
+            "previsoes": prices,
+            "datas": result.get("dates", []),
+            "tendencia": trend,
+            "variacao_percentual": round(var_percent, 2),
+            "modelo_usado": result.get("model_used", "desconhecido"),
+            "metricas": result.get("metrics", {})
+        }, ensure_ascii=False)
+
+    except Exception as e:
+        return json.dumps({"error": str(e)}, ensure_ascii=False)
 
 
 def find_supplier_offers_for_sku(sku: str) -> str:
@@ -352,77 +322,64 @@ def find_supplier_offers_for_sku(sku: str) -> str:
     Returns:
         str: JSON com ofertas ordenadas por preço
     """
-    import asyncio
+    tenant_id = TenantContext.get_current_tenant()
 
-    async def _query():
-        tenant_id = TenantContext.get_current_tenant()
+    with TenantAwareSyncSession() as session:
+        # Busca produto
+        query = select(Produto).where(Produto.sku == sku)
+        if tenant_id:
+            query = query.where(Produto.tenant_id == tenant_id)
 
-        async with TenantAwareSession() as session:
-            # Busca produto
-            query = select(Produto).where(Produto.sku == sku)
-            if tenant_id:
-                query = query.where(Produto.tenant_id == tenant_id)
+        result = session.execute(query)
+        produto = result.scalar_one_or_none()
 
-            result = await session.execute(query)
-            produto = result.scalar_one_or_none()
-
-            if not produto:
-                return json.dumps({
-                    "error": f"Produto {sku} não encontrado",
-                }, ensure_ascii=False)
-
-            # Busca ofertas
-            ofertas_query = (
-                select(OfertaProduto, Fornecedor)
-                .join(Fornecedor, OfertaProduto.fornecedor_id == Fornecedor.id)
-                .where(OfertaProduto.produto_id == produto.id)
-                .where(OfertaProduto.estoque_disponivel > 0)
-            )
-
-            if tenant_id:
-                ofertas_query = ofertas_query.where(OfertaProduto.tenant_id == tenant_id)
-
-            ofertas_query = ofertas_query.order_by(OfertaProduto.preco_ofertado.asc())
-
-            result = await session.execute(ofertas_query)
-            ofertas = result.all()
-
-            if not ofertas:
-                return json.dumps({
-                    "sku": sku,
-                    "ofertas": [],
-                    "mensagem": "Nenhuma oferta disponível no momento"
-                }, ensure_ascii=False)
-
-            ofertas_list = []
-            for oferta, fornecedor in ofertas:
-                ofertas_list.append({
-                    "fornecedor": fornecedor.nome,
-                    "preco": float(oferta.preco_ofertado),
-                    "prazo_entrega_dias": fornecedor.prazo_entrega_dias,
-                    "estoque_disponivel": oferta.estoque_disponivel,
-                    "validade_oferta": oferta.validade_oferta.isoformat() if oferta.validade_oferta else None
-                })
-
-            melhor = ofertas_list[0]
-
+        if not produto:
             return json.dumps({
-                "sku": sku,
-                "produto": produto.nome,
-                "total_ofertas": len(ofertas_list),
-                "melhor_oferta": melhor,
-                "todas_ofertas": ofertas_list
+                "error": f"Produto {sku} não encontrado",
             }, ensure_ascii=False)
 
-    try:
-        return asyncio.run(_query())
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            return loop.run_until_complete(_query())
-        finally:
-            loop.close()
+        # Busca ofertas
+        ofertas_query = (
+            select(OfertaProduto, Fornecedor)
+            .join(Fornecedor, OfertaProduto.fornecedor_id == Fornecedor.id)
+            .where(OfertaProduto.produto_id == produto.id)
+            .where(OfertaProduto.estoque_disponivel > 0)
+        )
+
+        if tenant_id:
+            ofertas_query = ofertas_query.where(OfertaProduto.tenant_id == tenant_id)
+
+        ofertas_query = ofertas_query.order_by(OfertaProduto.preco_ofertado.asc())
+
+        result = session.execute(ofertas_query)
+        ofertas = result.all()
+
+        if not ofertas:
+            return json.dumps({
+                "sku": sku,
+                "ofertas": [],
+                "mensagem": "Nenhuma oferta disponível no momento"
+            }, ensure_ascii=False)
+
+        ofertas_list = []
+        for oferta, fornecedor in ofertas:
+            ofertas_list.append({
+                "fornecedor": fornecedor.nome,
+                "preco": float(oferta.preco_ofertado),
+                "prazo_entrega_dias": fornecedor.prazo_entrega_dias,
+                "estoque_disponivel": oferta.estoque_disponivel,
+                "validade_oferta": oferta.validade_oferta.isoformat() if oferta.validade_oferta else None
+            })
+
+        melhor = ofertas_list[0]
+
+        return json.dumps({
+            "sku": sku,
+            "produto": produto.nome,
+            "total_ofertas": len(ofertas_list),
+            "melhor_oferta": melhor,
+            "todas_ofertas": ofertas_list
+        }, ensure_ascii=False)
 
 
 def run_full_purchase_analysis(sku: str) -> str:
@@ -514,104 +471,92 @@ def create_purchase_order_tool(
     Returns:
         str: JSON com detalhes da ordem criada
     """
-    import asyncio
     from datetime import datetime
 
-    async def _create():
-        tenant_id = TenantContext.get_current_tenant()
+    tenant_id = TenantContext.get_current_tenant()
 
-        if not tenant_id:
+    if not tenant_id:
+        return json.dumps({
+            "error": "Operação de escrita requer contexto de tenant",
+            "action": "Faça login novamente"
+        }, ensure_ascii=False)
+
+    with TenantAwareSyncSession() as session:
+        # Busca produto
+        query = (
+            select(Produto)
+            .where(Produto.sku == sku)
+            .where(Produto.tenant_id == tenant_id)
+        )
+        result = session.execute(query)
+        produto = result.scalar_one_or_none()
+
+        if not produto:
             return json.dumps({
-                "error": "Operação de escrita requer contexto de tenant",
-                "action": "Faça login novamente"
+                "error": f"Produto {sku} não encontrado"
             }, ensure_ascii=False)
 
-        async with TenantAwareSession() as session:
-            # Busca produto
-            query = (
-                select(Produto)
-                .where(Produto.sku == sku)
-                .where(Produto.tenant_id == tenant_id)
+        # Se não informou fornecedor, busca melhor oferta
+        selected_fornecedor_id = fornecedor_id
+        if selected_fornecedor_id is None:
+            ofertas_query = (
+                select(OfertaProduto)
+                .where(OfertaProduto.produto_id == produto.id)
+                .where(OfertaProduto.tenant_id == tenant_id)
+                .where(OfertaProduto.estoque_disponivel > 0)
+                .order_by(OfertaProduto.preco_ofertado.asc())
+                .limit(1)
             )
-            result = await session.execute(query)
-            produto = result.scalar_one_or_none()
+            result = session.execute(ofertas_query)
+            melhor_oferta = result.scalar_one_or_none()
 
-            if not produto:
-                return json.dumps({
-                    "error": f"Produto {sku} não encontrado"
-                }, ensure_ascii=False)
-
-            # Se não informou fornecedor, busca melhor oferta
-            selected_fornecedor_id = fornecedor_id
-            if selected_fornecedor_id is None:
-                ofertas_query = (
-                    select(OfertaProduto)
-                    .where(OfertaProduto.produto_id == produto.id)
-                    .where(OfertaProduto.tenant_id == tenant_id)
-                    .where(OfertaProduto.estoque_disponivel > 0)
-                    .order_by(OfertaProduto.preco_ofertado.asc())
-                    .limit(1)
-                )
-                result = await session.execute(ofertas_query)
-                melhor_oferta = result.scalar_one_or_none()
-
-                if melhor_oferta:
-                    selected_fornecedor_id = melhor_oferta.fornecedor_id
-                    preco_unitario = melhor_oferta.preco_ofertado
-                else:
-                    return json.dumps({
-                        "error": "Nenhuma oferta disponível para este produto"
-                    }, ensure_ascii=False)
+            if melhor_oferta:
+                selected_fornecedor_id = melhor_oferta.fornecedor_id
+                preco_unitario = melhor_oferta.preco_ofertado
             else:
-                # Busca preço do fornecedor informado
-                oferta_query = (
-                    select(OfertaProduto)
-                    .where(OfertaProduto.produto_id == produto.id)
-                    .where(OfertaProduto.fornecedor_id == selected_fornecedor_id)
-                    .where(OfertaProduto.tenant_id == tenant_id)
-                )
-                result = await session.execute(oferta_query)
-                oferta = result.scalar_one_or_none()
-                preco_unitario = oferta.preco_ofertado if oferta else Decimal("0.00")
-
-            # Cria ordem de compra
-            valor_total = preco_unitario * quantidade
-            ordem = OrdemDeCompra(
-                tenant_id=tenant_id,
-                produto_id=produto.id,
-                fornecedor_id=selected_fornecedor_id,
-                quantidade=quantidade,
-                valor=valor_total,
-                status="pending",
-                origem="Automática",
-                data_criacao=datetime.now(UTC)
+                return json.dumps({
+                    "error": "Nenhuma oferta disponível para este produto"
+                }, ensure_ascii=False)
+        else:
+            # Busca preço do fornecedor informado
+            oferta_query = (
+                select(OfertaProduto)
+                .where(OfertaProduto.produto_id == produto.id)
+                .where(OfertaProduto.fornecedor_id == selected_fornecedor_id)
+                .where(OfertaProduto.tenant_id == tenant_id)
             )
+            result = session.execute(oferta_query)
+            oferta = result.scalar_one_or_none()
+            preco_unitario = oferta.preco_ofertado if oferta else Decimal("0.00")
 
-            session.add(ordem)
-            await session.flush()
-            await session.refresh(ordem)
+        # Cria ordem de compra
+        valor_total = preco_unitario * quantidade
+        ordem = OrdemDeCompra(
+            tenant_id=tenant_id,
+            produto_id=produto.id,
+            fornecedor_id=selected_fornecedor_id,
+            quantidade=quantidade,
+            valor=valor_total,
+            status="pending",
+            origem="Automática",
+            data_criacao=datetime.now(UTC)
+        )
 
-            return json.dumps({
-                "success": True,
-                "ordem_id": ordem.id,
-                "produto": produto.nome,
-                "sku": sku,
-                "quantidade": quantidade,
-                "preco_unitario": float(preco_unitario),
-                "valor_total": float(valor_total),
-                "status": "pending",
-                "mensagem": f"Ordem #{ordem.id} criada com sucesso!"
-            }, ensure_ascii=False)
+        session.add(ordem)
+        session.flush()
+        session.refresh(ordem)
 
-    try:
-        return asyncio.run(_create())
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            return loop.run_until_complete(_create())
-        finally:
-            loop.close()
+        return json.dumps({
+            "success": True,
+            "ordem_id": ordem.id,
+            "produto": produto.nome,
+            "sku": sku,
+            "quantidade": quantidade,
+            "preco_unitario": float(preco_unitario),
+            "valor_total": float(valor_total),
+            "status": "pending",
+            "mensagem": f"Ordem #{ordem.id} criada com sucesso!"
+        }, ensure_ascii=False)
 
 
 # ============================================================================
@@ -630,45 +575,32 @@ def search_market_price(product_sku: str) -> str:
     Returns:
         str: Preço encontrado ou mensagem de erro
     """
-    import asyncio
+    tenant_id = TenantContext.get_current_tenant()
 
-    async def _search():
-        tenant_id = TenantContext.get_current_tenant()
+    # Valida acesso ao SKU
+    with TenantAwareSyncSession() as session:
+        query = select(Produto).where(Produto.sku == product_sku)
+        if tenant_id:
+            query = query.where(Produto.tenant_id == tenant_id)
 
-        # Valida acesso ao SKU
-        async with TenantAwareSession() as session:
-            query = select(Produto).where(Produto.sku == product_sku)
-            if tenant_id:
-                query = query.where(Produto.tenant_id == tenant_id)
+        result = session.execute(query)
+        produto = result.scalar_one_or_none()
 
-            result = await session.execute(query)
-            produto = result.scalar_one_or_none()
+        if not produto:
+            return f"Produto com SKU {product_sku} não encontrado ou não autorizado."
 
-            if not produto:
-                return f"Produto com SKU {product_sku} não encontrado ou não autorizado."
-
-        # Se autorizado, executa scraping
-        try:
-            from app.services.scraping_service import scrape_and_save_price
-            preco = scrape_and_save_price(produto.id)
-
-            if preco:
-                return f"Preço de mercado encontrado via scraping: R$ {preco:.2f}"
-            else:
-                return "Não foi possível encontrar preço de mercado no momento."
-        except Exception as e:
-            LOGGER.error(f"Erro no scraping para {product_sku}: {e}")
-            return f"Erro ao buscar preço de mercado: {str(e)}"
-
+    # Se autorizado, executa scraping
     try:
-        return asyncio.run(_search())
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            return loop.run_until_complete(_search())
-        finally:
-            loop.close()
+        from app.services.scraping_service import scrape_and_save_price
+        preco = scrape_and_save_price(produto.id)
+
+        if preco:
+            return f"Preço de mercado encontrado via scraping: R$ {preco:.2f}"
+        else:
+            return "Não foi possível encontrar preço de mercado no momento."
+    except Exception as e:
+        LOGGER.error(f"Erro no scraping para {product_sku}: {e}")
+        return f"Erro ao buscar preço de mercado: {str(e)}"
 
 
 def get_forecast_tool(product_sku: str) -> str:

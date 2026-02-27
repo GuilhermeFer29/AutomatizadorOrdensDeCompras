@@ -3,7 +3,9 @@ FROM node:18-alpine as build-stage
 WORKDIR /app
 COPY package*.json ./
 RUN npm install
-COPY . . 
+COPY . .
+# API_BASE_URL vazio = usa URLs relativas (via nginx proxy)
+ENV VITE_API_BASE_URL=""
 RUN npm run build
 
 # production stage

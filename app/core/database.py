@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.pool import NullPool
 from sqlmodel import Session, SQLModel, create_engine
 
 LOGGER = logging.getLogger(__name__)
@@ -45,8 +46,11 @@ def _get_database_url(async_mode: bool = False) -> str:
         else:
             raise RuntimeError("DATABASE_URL não configurada.")
 
-    if async_mode and "pymysql" in database_url:
-        database_url = database_url.replace("pymysql", "aiomysql")
+    # Converte qualquer driver MySQL síncrono para aiomysql (async)
+    if async_mode and database_url.startswith("mysql+"):
+        # Suporta: mysql+pymysql, mysql+mysqlconnector, mysql+mysqldb, etc.
+        import re
+        database_url = re.sub(r'^mysql\+\w+://', 'mysql+aiomysql://', database_url)
 
     return database_url
 
@@ -62,14 +66,25 @@ def get_sync_engine() -> Engine:
     """Retorna engine síncrono (singleton)."""
     global _sync_engine
     if _sync_engine is None:
-        _sync_engine = create_engine(
-            _get_database_url(async_mode=False),
-            pool_pre_ping=True,
-            pool_recycle=1800,
-            pool_size=5,
-            max_overflow=10,
-            echo=os.getenv("SQL_ECHO", "false").lower() == "true",
-        )
+        url = _get_database_url(async_mode=False)
+        kwargs: dict = {
+            "echo": os.getenv("SQL_ECHO", "false").lower() == "true",
+        }
+        # SQLite não suporta pool_size / max_overflow / pool_recycle
+        if not url.startswith("sqlite"):
+            kwargs.update(
+                pool_pre_ping=True,
+                pool_recycle=1800,
+                pool_size=5,
+                max_overflow=10,
+            )
+        else:
+            from sqlmodel.pool import StaticPool
+            kwargs.update(
+                connect_args={"check_same_thread": False},
+                poolclass=StaticPool,
+            )
+        _sync_engine = create_engine(url, **kwargs)
     return _sync_engine
 
 
@@ -139,13 +154,31 @@ def get_async_engine() -> AsyncEngine:
     """Retorna AsyncEngine (singleton)."""
     global _async_engine
     if _async_engine is None:
+        # Detecta se está em worker Celery (multiprocessing + event loops)
+        is_celery = os.getenv("CELERY_BROKER_URL") is not None
+        
+        engine_kwargs = {
+            "echo": os.getenv("SQL_ECHO", "false").lower() == "true",
+        }
+        
+        if is_celery:
+            # Celery workers: sem pooling (evita event loop cleanup issues)
+            # NullPool cria/fecha conexão a cada requisição
+            LOGGER.info("🔧 Async engine: NullPool (Celery worker mode)")
+            engine_kwargs["poolclass"] = NullPool
+        else:
+            # API/outros: pooling normal para performance
+            LOGGER.info("🔧 Async engine: AsyncPool (normal mode)")
+            engine_kwargs.update({
+                "pool_pre_ping": True,
+                "pool_recycle": 1800,
+                "pool_size": 10,
+                "max_overflow": 20,
+            })
+        
         _async_engine = create_async_engine(
             _get_database_url(async_mode=True),
-            pool_pre_ping=True,
-            pool_recycle=1800,
-            pool_size=10,
-            max_overflow=20,
-            echo=os.getenv("SQL_ECHO", "false").lower() == "true",
+            **engine_kwargs,
         )
     return _async_engine
 

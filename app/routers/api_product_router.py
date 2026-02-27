@@ -127,7 +127,7 @@ def handle_create_product(
 
     A sincronização do RAG acontece em background para não atrasar a resposta.
     """
-    created_product = create_product(session, product.dict())
+    created_product = create_product(session, product.model_dump())
 
     # Sincroniza RAG em background
     background_tasks.add_task(sync_rag_background)
@@ -149,7 +149,7 @@ def handle_update_product(
 
     A sincronização do RAG acontece em background para não atrasar a resposta.
     """
-    updated_product = update_product(session, product_id, product.dict(exclude_unset=True))
+    updated_product = update_product(session, product_id, product.model_dump(exclude_unset=True))
     if not updated_product:
         raise HTTPException(status_code=404, detail="Product not found")
 

@@ -69,8 +69,10 @@ def _get_allowed_origins() -> list[str]:
         return [
             "http://localhost:5173",
             "http://localhost:3000",
+            "http://localhost:8080",
             "http://127.0.0.1:5173",
             "http://127.0.0.1:3000",
+            "http://127.0.0.1:8080",
         ]
 
     return []
@@ -203,14 +205,12 @@ def _register_routers(app: FastAPI) -> None:
 
     # Routers principais
     from app.routers.agent_router import router as agent_router
-    from app.routers.dashboard_router import router as dashboard_router
     from app.routers.ml_router import router as ml_router
     from app.routers.sales_router import router as sales_router
     from app.routers.tasks_router import router as tasks_router
 
     app.include_router(tasks_router)
     app.include_router(sales_router)
-    app.include_router(dashboard_router)
     app.include_router(ml_router)
     app.include_router(agent_router)
 
@@ -263,13 +263,23 @@ def _register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
+        # Sanitiza errors para JSON: ctx pode conter objetos não-serializáveis
+        safe_errors = []
+        for err in exc.errors():
+            safe_err = {**err}
+            if "ctx" in safe_err and isinstance(safe_err["ctx"], dict):
+                safe_err["ctx"] = {
+                    k: str(v) if not isinstance(v, (str, int, float, bool, type(None))) else v
+                    for k, v in safe_err["ctx"].items()
+                }
+            safe_errors.append(safe_err)
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content={
                 "error": True,
                 "status_code": 422,
                 "message": "Dados de entrada inválidos",
-                "details": exc.errors(),
+                "details": safe_errors,
                 "path": str(request.url.path)
             }
         )

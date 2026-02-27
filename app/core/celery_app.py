@@ -130,6 +130,11 @@ def create_celery_app() -> Celery:
         task_acks_late=True,           # ACK após execução (retry em crash)
         task_reject_on_worker_lost=True,
 
+        # RabbitMQ: usar QoS per-consumer em vez de global (deprecated)
+        broker_transport_options={
+            "global_qos": False,
+        },
+
         # Timeouts
         task_soft_time_limit=300,      # 5 min soft limit
         task_time_limit=600,           # 10 min hard limit

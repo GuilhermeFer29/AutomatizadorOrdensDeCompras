@@ -17,30 +17,24 @@ def get_agents(session: Session):
     agents = session.exec(select(Agente)).all()
 
     if not agents:
-        default_agents = [
-            Agente(
-                nome="Agente de Previsão de Preços",
-                descricao="Analisa tendências de mercado e prevê flutuações de preços",
-                status="active",
-            ),
-            Agente(
-                nome="Agente de Compras Automáticas",
-                descricao="Executa ordens de compra baseadas nas previsões do modelo",
-                status="active",
-            ),
-            Agente(
-                nome="Agente de Monitoramento de Estoque",
-                descricao="Monitora níveis de estoque e dispara alertas quando necessário",
-                status="inactive",
-            ),
-            Agente(
-                nome="Agente de Análise de Fornecedores",
-                descricao="Avalia performance de fornecedores e identifica oportunidades",
-                status="active",
-            ),
+        from app.core.tenant import get_current_tenant_id
+
+        tid = get_current_tenant_id()
+
+        default_agents_data = [
+            ("Agente de Previsão de Preços", "Analisa tendências de mercado e prevê flutuações de preços", "active"),
+            ("Agente de Compras Automáticas", "Executa ordens de compra baseadas nas previsões do modelo", "active"),
+            ("Agente de Monitoramento de Estoque", "Monitora níveis de estoque e dispara alertas quando necessário", "inactive"),
+            ("Agente de Análise de Fornecedores", "Avalia performance de fornecedores e identifica oportunidades", "active"),
         ]
 
-        session.add_all(default_agents)
+        for nome, descricao, agent_status in default_agents_data:
+            existing = session.exec(
+                select(Agente).where(Agente.nome == nome, Agente.tenant_id == tid)
+            ).first()
+            if not existing:
+                session.add(Agente(nome=nome, descricao=descricao, status=agent_status, tenant_id=tid))
+
         session.commit()
         agents = session.exec(select(Agente)).all()
 

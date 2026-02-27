@@ -112,12 +112,10 @@ def create_supply_chain_team() -> Team:
     analista_demanda = Agent(
         name="AnalistaDemanda",
         role="Especialista em previsão de demanda e análise de estoque",
-        description="Analisa dados de estoque e previsões para determinar necessidade de reposição",
+        description="Analisa dados de estoque e previsões para determinar necessidade de reposição. Retorna JSON: {need_restock: bool, rationale: str}",
         model=fast_llm,  # ⚡ Flash - processamento rápido de dados estruturados
         instructions=[ANALISTA_DEMANDA_PROMPT],
         tools=shared_tools, # Disponibiliza todas as ferramentas relevantes
-        output_schema=DemandAnalysisOutput,
-        markdown=True,
     )
 
     # ✅ AGENTE 2: Pesquisador de Mercado (RÁPIDO)
@@ -125,12 +123,10 @@ def create_supply_chain_team() -> Team:
     pesquisador_mercado = Agent(
         name="PesquisadorMercado",
         role="Especialista em inteligência competitiva e análise de preços",
-        description="Pesquisa ofertas de fornecedores e compara preços de mercado",
+        description="Pesquisa ofertas de fornecedores e compara preços de mercado. Retorna JSON com market_price e supplier_offers",
         model=fast_llm,  # ⚡ Flash - busca e comparação rápida de ofertas
         instructions=[PESQUISADOR_MERCADO_PROMPT],
         tools=shared_tools,
-        output_schema=MarketResearchOutput,
-        markdown=True,
     )
 
     # ✅ AGENTE 3: Analista de Logística (RÁPIDO)
@@ -138,12 +134,10 @@ def create_supply_chain_team() -> Team:
     analista_logistica = Agent(
         name="AnalistaLogistica",
         role="Especialista em otimização de cadeia de suprimentos e logística",
-        description="Avalia fornecedores por custo total, prazo e confiabilidade",
+        description="Avalia fornecedores por custo total, prazo e confiabilidade. Retorna JSON com selected_offer e analysis_notes",
         model=fast_llm,  # ⚡ Flash - cálculos logísticos rápidos
         instructions=[ANALISTA_LOGISTICA_PROMPT],
         tools=shared_tools,
-        output_schema=LogisticsAnalysisOutput,
-        markdown=True,
     )
 
     # ✅ AGENTE 4: Gerente de Compras (PRECISO)
@@ -151,11 +145,9 @@ def create_supply_chain_team() -> Team:
     gerente_compras = Agent(
         name="GerenteCompras",
         role="Responsável pela decisão final de aquisição",
-        description="Sintetiza análises e toma decisão final de compra",
+        description="Sintetiza análises e toma decisão final de compra. Retorna JSON com decision, supplier, price, quantity_recommended",
         model=decision_llm,  # 🎯 Pro - raciocínio profundo para decisões críticas
         instructions=[GERENTE_COMPRAS_PROMPT],
-        output_schema=PurchaseRecommendationOutput,
-        markdown=True,
     )
 
     # ✅ COORDENAÇÃO AUTOMÁTICA: Agno Team gerencia delegação entre agentes

@@ -115,7 +115,6 @@ export default function Orders() {
                 <SelectItem value="cancelled">Canceladas</SelectItem>
               </SelectContent>
             </Select>
-            <Input type="date" placeholder="Filtrar por data" />
           </div>
         </CardContent>
       </Card>
